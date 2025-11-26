@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { ConfigProvider } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
@@ -11,8 +12,20 @@ import LeaderAdd from './pages/LeaderAdd'
 import ConfigPage from './pages/ConfigPage'
 import PositionList from './pages/PositionList'
 import Statistics from './pages/Statistics'
+import { wsManager } from './services/websocket'
 
 function App() {
+  // 应用启动时立即建立全局 WebSocket 连接
+  useEffect(() => {
+    // 立即建立连接（如果还未连接）
+    if (!wsManager.isConnected()) {
+      wsManager.connect()
+    }
+    
+    // 注意：应用不会卸载，所以不需要在 cleanup 中断开连接
+    // WebSocket 连接会在整个应用生命周期中保持，并自动重连
+  }, [])
+  
   return (
     <ConfigProvider locale={zhCN}>
       <BrowserRouter>

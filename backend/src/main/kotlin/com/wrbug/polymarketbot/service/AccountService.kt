@@ -24,9 +24,9 @@ class AccountService(
     private val blockchainService: BlockchainService,
     private val apiKeyService: PolymarketApiKeyService
 ) {
-    
+
     private val logger = LoggerFactory.getLogger(AccountService::class.java)
-    
+
     /**
      * 通过私钥导入账户
      */
@@ -37,19 +37,19 @@ class AccountService(
             if (!isValidWalletAddress(request.walletAddress)) {
                 return Result.failure(IllegalArgumentException("无效的钱包地址格式"))
             }
-            
+
             // 2. 检查地址是否已存在
             if (accountRepository.existsByWalletAddress(request.walletAddress)) {
                 return Result.failure(IllegalArgumentException("该钱包地址已存在"))
             }
-            
+
             // 3. 验证私钥和地址的对应关系
             // 注意：前端已经验证了私钥和地址的对应关系，这里只做格式验证
             // 如果需要更严格的验证，可以使用以太坊库（如 web3j）进行验证
             if (!isValidPrivateKey(request.privateKey)) {
                 return Result.failure(IllegalArgumentException("无效的私钥格式"))
             }
-            
+
             // 4. 自动获取或创建 API Key（必须成功，否则导入失败）
             logger.info("开始自动获取或创建 API Key: ${request.walletAddress}")
             val apiKeyCreds = runBlocking {
@@ -58,7 +58,7 @@ class AccountService(
                     walletAddress = request.walletAddress,
                     chainId = 137L  // Polygon 主网
                 )
-                
+
                 if (result.isSuccess) {
                     val creds = result.getOrNull()
                     if (creds != null) {
@@ -74,7 +74,7 @@ class AccountService(
                     throw IllegalStateException("自动获取 API Key 失败: ${error?.message}。请确保私钥有效且账户已激活")
                 }
             }
-            
+
             // 5. 如果设置为默认账户，取消其他账户的默认状态
             if (request.isDefault) {
                 accountRepository.findByIsDefaultTrue()?.let { defaultAccount ->
@@ -82,7 +82,7 @@ class AccountService(
                     accountRepository.save(updated)
                 }
             }
-            
+
             // 6. 获取代理地址（必须成功，否则导入失败）
             val proxyAddress = runBlocking {
                 val proxyResult = blockchainService.getProxyAddress(request.walletAddress)
@@ -101,7 +101,7 @@ class AccountService(
                     throw IllegalStateException("获取代理地址失败: ${error?.message}。请确保已配置 Ethereum RPC URL 且 RPC 节点可用")
                 }
             }
-            
+
             // 7. 创建账户
             val account = Account(
                 privateKey = request.privateKey,
@@ -115,17 +115,17 @@ class AccountService(
                 createdAt = System.currentTimeMillis(),
                 updatedAt = System.currentTimeMillis()
             )
-            
+
             val saved = accountRepository.save(account)
             logger.info("成功导入账户: ${saved.id}, ${saved.walletAddress}, 代理地址: ${saved.proxyAddress}")
-            
+
             Result.success(toDto(saved))
         } catch (e: Exception) {
             logger.error("导入账户失败", e)
             Result.failure(e)
         }
     }
-    
+
     /**
      * 更新账户信息
      */
@@ -134,10 +134,10 @@ class AccountService(
         return try {
             val account = accountRepository.findById(request.accountId)
                 .orElse(null) ?: return Result.failure(IllegalArgumentException("账户不存在"))
-            
+
             // 更新账户名称
             val updatedAccountName = request.accountName ?: account.accountName
-            
+
             // 如果设置为默认账户，取消其他账户的默认状态
             val updatedIsDefault = request.isDefault ?: account.isDefault
             if (updatedIsDefault && !account.isDefault) {
@@ -146,23 +146,23 @@ class AccountService(
                     accountRepository.save(updated)
                 }
             }
-            
+
             val updated = account.copy(
                 accountName = updatedAccountName,
                 isDefault = updatedIsDefault,
                 updatedAt = System.currentTimeMillis()
             )
-            
+
             val saved = accountRepository.save(updated)
             logger.info("成功更新账户: ${saved.id}")
-            
+
             Result.success(toDto(saved))
         } catch (e: Exception) {
             logger.error("更新账户失败", e)
             Result.failure(e)
         }
     }
-    
+
     /**
      * 删除账户
      */
@@ -171,15 +171,15 @@ class AccountService(
         return try {
             val account = accountRepository.findById(accountId)
                 .orElse(null) ?: return Result.failure(IllegalArgumentException("账户不存在"))
-            
+
             // 注意：不再检查活跃订单，允许用户删除有活跃订单的账户
             // 前端会显示确认提示框，由用户决定是否删除
-            
+
             // 如果删除的是默认账户，需要先设置其他账户为默认
             if (account.isDefault) {
                 val otherAccounts = accountRepository.findAllByOrderByCreatedAtAsc()
                     .filter { it.id != accountId }
-                
+
                 if (otherAccounts.isNotEmpty()) {
                     val newDefault = otherAccounts.first().copy(
                         isDefault = true,
@@ -190,17 +190,17 @@ class AccountService(
                     return Result.failure(IllegalStateException("不能删除最后一个账户"))
                 }
             }
-            
+
             accountRepository.delete(account)
             logger.info("成功删除账户: $accountId")
-            
+
             Result.success(Unit)
         } catch (e: Exception) {
             logger.error("删除账户失败", e)
             Result.failure(e)
         }
     }
-    
+
     /**
      * 查询账户列表
      */
@@ -208,17 +208,19 @@ class AccountService(
         return try {
             val accounts = accountRepository.findAllByOrderByCreatedAtAsc()
             val accountDtos = accounts.map { toDto(it) }
-            
-            Result.success(AccountListResponse(
-                list = accountDtos,
-                total = accountDtos.size.toLong()
-            ))
+
+            Result.success(
+                AccountListResponse(
+                    list = accountDtos,
+                    total = accountDtos.size.toLong()
+                )
+            )
         } catch (e: Exception) {
             logger.error("查询账户列表失败", e)
             Result.failure(e)
         }
     }
-    
+
     /**
      * 查询账户详情
      */
@@ -229,16 +231,16 @@ class AccountService(
             } else {
                 accountRepository.findByIsDefaultTrue()
             }
-            
+
             account ?: return Result.failure(IllegalArgumentException("账户不存在"))
-            
+
             Result.success(toDto(account))
         } catch (e: Exception) {
             logger.error("查询账户详情失败", e)
             Result.failure(e)
         }
     }
-    
+
     /**
      * 查询账户余额
      * 通过链上 RPC 查询 USDC 余额，并通过 Subgraph API 查询持仓信息
@@ -250,15 +252,15 @@ class AccountService(
             } else {
                 accountRepository.findByIsDefaultTrue()
             }
-            
+
             account ?: return Result.failure(IllegalArgumentException("账户不存在"))
-            
+
             // 检查代理地址是否存在
             if (account.proxyAddress.isBlank()) {
                 logger.error("账户 ${account.id} 的代理地址为空，无法查询余额")
                 return Result.failure(IllegalStateException("账户代理地址不存在，无法查询余额。请重新导入账户以获取代理地址"))
             }
-            
+
             // 查询 USDC 余额和持仓信息
             val balanceResult = runBlocking {
                 try {
@@ -280,7 +282,7 @@ class AccountService(
                         logger.warn("持仓信息查询失败: ${positionsResult.exceptionOrNull()?.message}")
                         emptyList()
                     }
-                    
+
                     // 使用 /value 接口获取仓位总价值（而不是累加）
                     val positionBalanceResult = blockchainService.getTotalValue(account.proxyAddress)
                     val positionBalance = if (positionBalanceResult.isSuccess) {
@@ -289,7 +291,7 @@ class AccountService(
                         logger.warn("仓位总价值查询失败: ${positionBalanceResult.exceptionOrNull()?.message}")
                         "0"
                     }
-                    
+
                     // 查询可用余额（通过 RPC 查询 USDC 余额）
                     // 必须使用代理地址查询
                     val availableBalanceResult = blockchainService.getUsdcBalance(
@@ -304,10 +306,10 @@ class AccountService(
                         logger.error("USDC 可用余额 RPC 查询失败: ${error?.message}")
                         throw Exception("USDC 可用余额查询失败: ${error?.message}。请确保已配置 Ethereum RPC URL")
                     }
-                    
+
                     // 计算总余额 = 可用余额 + 仓位余额
                     val totalBalance = availableBalance.toSafeBigDecimal().add(positionBalance.toSafeBigDecimal())
-                    
+
                     AccountBalanceResponse(
                         availableBalance = availableBalance,
                         positionBalance = positionBalance,
@@ -319,14 +321,14 @@ class AccountService(
                     throw e
                 }
             }
-            
+
             Result.success(balanceResult)
         } catch (e: Exception) {
             logger.error("查询账户余额失败", e)
             Result.failure(e)
         }
     }
-    
+
     /**
      * 设置默认账户
      */
@@ -335,7 +337,7 @@ class AccountService(
         return try {
             val account = accountRepository.findById(accountId)
                 .orElse(null) ?: return Result.failure(IllegalArgumentException("账户不存在"))
-            
+
             // 取消其他账户的默认状态
             accountRepository.findByIsDefaultTrue()?.let { defaultAccount ->
                 if (defaultAccount.id != account.id) {
@@ -343,11 +345,11 @@ class AccountService(
                     accountRepository.save(updated)
                 }
             }
-            
+
             // 设置当前账户为默认
             val updated = account.copy(isDefault = true, updatedAt = System.currentTimeMillis())
             accountRepository.save(updated)
-            
+
             logger.info("成功设置默认账户: $accountId")
             Result.success(Unit)
         } catch (e: Exception) {
@@ -355,7 +357,7 @@ class AccountService(
             Result.failure(e)
         }
     }
-    
+
     /**
      * 转换为 DTO
      * 包含交易统计数据（总订单数、总盈亏、活跃订单数、已完成订单数、持仓数量）
@@ -379,7 +381,7 @@ class AccountService(
             )
         }
     }
-    
+
     /**
      * 获取账户交易统计数据
      */
@@ -388,27 +390,27 @@ class AccountService(
             // 如果账户没有配置 API 凭证，无法查询统计数据
             if (account.apiKey == null || account.apiSecret == null || account.apiPassphrase == null) {
                 return AccountStatistics(
-                    totalOrders = null, 
+                    totalOrders = null,
                     totalPnl = null,
                     activeOrders = null,
                     completedOrders = null,
                     positionCount = null
                 )
             }
-            
+
             // 使用 API 凭证（直接使用，无需解密）
             val apiKey = account.apiKey
             val apiSecret = account.apiSecret
             val apiPassphrase = account.apiPassphrase
-            
+
             // 创建带认证的 API 客户端（需要钱包地址用于 POLY_ADDRESS 请求头）
             val clobApi = retrofitFactory.createClobApi(apiKey, apiSecret, apiPassphrase, account.walletAddress)
-            
+
             // 1. 查询活跃订单数量（open/active 状态）
             val activeOrdersResult = try {
                 var totalActiveOrders = 0L
                 var nextCursor: String? = null
-                
+
                 // 分页查询所有活跃订单
                 do {
                     val response = clobApi.getActiveOrders(
@@ -425,13 +427,13 @@ class AccountService(
                         break
                     }
                 } while (nextCursor != null && nextCursor.isNotEmpty())
-                
+
                 Result.success(totalActiveOrders)
             } catch (e: Exception) {
                 logger.warn("查询活跃订单失败: ${e.message}", e)
                 Result.failure(e)
             }
-            
+
             // 2. 查询已完成订单数
             // 注意：交易记录数不等于已完成订单数，因为一个订单可能产生多笔交易
             // 已完成订单应该是指已完全成交或已关闭的订单
@@ -442,7 +444,7 @@ class AccountService(
                 // 使用代理地址查询交易记录（作为 maker 的交易）
                 var allTrades = mutableListOf<TradeResponse>()
                 var nextCursor: String? = null
-                
+
                 // 分页查询所有交易（作为 maker）
                 do {
                     val response = clobApi.getTrades(
@@ -457,22 +459,22 @@ class AccountService(
                         break
                     }
                 } while (nextCursor != null && nextCursor.isNotEmpty())
-                
+
                 // 注意：Polymarket API 的 getTrades 接口只支持查询 maker_address，
                 // 如果需要查询作为 taker 的交易，可能需要使用其他接口或查询方式
                 // 目前只统计作为 maker 的交易记录
-                
+
                 // 由于 TradeResponse 没有 orderId 字段，我们无法直接去重订单
                 // 这里使用交易记录数作为已完成订单数的近似值
                 // 更准确的方式需要查询所有订单并统计状态为 "filled" 的订单
                 val completedOrdersCount = allTrades.size.toLong()
-                
+
                 Result.success(completedOrdersCount)
             } catch (e: Exception) {
                 logger.warn("查询交易记录失败: ${e.message}", e)
                 Result.failure(e)
             }
-            
+
             // 3. 查询仓位信息计算总盈亏（已实现盈亏）和持仓数量
             val positionsResult = try {
                 val positions = blockchainService.getPositions(account.proxyAddress)
@@ -496,13 +498,13 @@ class AccountService(
                 logger.warn("查询仓位信息失败: ${e.message}", e)
                 Result.failure(e)
             }
-            
+
             val activeOrders = activeOrdersResult.getOrNull() ?: 0L
             val completedOrders = completedOrdersResult.getOrNull() ?: 0L
             // 总订单数 = 活跃订单数 + 已完成订单数
             val totalOrders = activeOrders + completedOrders
             val (totalPnl, positionCount) = positionsResult.getOrNull() ?: Pair(null, null)
-            
+
             AccountStatistics(
                 totalOrders = totalOrders,
                 totalPnl = totalPnl,
@@ -513,7 +515,7 @@ class AccountService(
         } catch (e: Exception) {
             logger.warn("获取账户统计数据失败: ${e.message}", e)
             AccountStatistics(
-                totalOrders = null, 
+                totalOrders = null,
                 totalPnl = null,
                 activeOrders = null,
                 completedOrders = null,
@@ -521,7 +523,7 @@ class AccountService(
             )
         }
     }
-    
+
     /**
      * 账户统计数据
      */
@@ -532,7 +534,7 @@ class AccountService(
         val completedOrders: Long?,
         val positionCount: Long?
     )
-    
+
     /**
      * 验证钱包地址格式
      */
@@ -540,7 +542,7 @@ class AccountService(
         // 以太坊地址格式：0x 开头，42 位字符
         return address.startsWith("0x") && address.length == 42 && address.matches(Regex("^0x[0-9a-fA-F]{40}$"))
     }
-    
+
     /**
      * 验证私钥格式
      */
@@ -549,7 +551,7 @@ class AccountService(
         val cleanKey = if (privateKey.startsWith("0x")) privateKey.substring(2) else privateKey
         return cleanKey.length == 64 && cleanKey.matches(Regex("^[0-9a-fA-F]{64}$"))
     }
-    
+
     /**
      * 查询所有账户的仓位列表
      * 返回所有账户的仓位信息，包括账户信息
@@ -559,24 +561,24 @@ class AccountService(
             val accounts = accountRepository.findAll()
             val currentPositions = mutableListOf<AccountPositionDto>()
             val historyPositions = mutableListOf<AccountPositionDto>()
-            
+
             // 遍历所有账户，查询每个账户的仓位
             accounts.forEach { account ->
                 if (account.proxyAddress.isNotBlank()) {
                     try {
                         // 查询所有仓位（不限制 sortBy，获取当前和历史仓位）
-                        val positionsResult = blockchainService.getPositions(account.proxyAddress, sortBy = null)
+                        val positionsResult = blockchainService.getPositions(account.proxyAddress)
                         if (positionsResult.isSuccess) {
                             val positions = positionsResult.getOrNull() ?: emptyList()
                             // 遍历所有仓位，区分当前仓位和历史仓位
                             positions.forEach { pos ->
                                 val currentValue = pos.currentValue?.toSafeBigDecimal() ?: BigDecimal.ZERO
                                 val curPrice = pos.curPrice?.toSafeBigDecimal() ?: BigDecimal.ZERO
-                                
+
                                 // 判断是否为当前仓位：currentValue != 0 且 curPrice != 0
                                 // 使用 eq 方法判断值是否等于 0
                                 val isCurrent = !currentValue.eq(BigDecimal.ZERO) && !curPrice.eq(BigDecimal.ZERO)
-                                
+
                                 val positionDto = AccountPositionDto(
                                     accountId = account.id!!,
                                     accountName = account.accountName,
@@ -601,7 +603,7 @@ class AccountService(
                                     endDate = pos.endDate,
                                     isCurrent = isCurrent  // 标识是当前仓位还是历史仓位
                                 )
-                                
+
                                 // 根据 isCurrent 分别添加到对应的列表
                                 if (isCurrent) {
                                     currentPositions.add(positionDto)
@@ -615,19 +617,21 @@ class AccountService(
                     }
                 }
             }
-            
+
             // 按照接口返回的顺序返回，不进行排序
             // 前端负责本地排序
-            Result.success(PositionListResponse(
-                currentPositions = currentPositions,
-                historyPositions = historyPositions
-            ))
+            Result.success(
+                PositionListResponse(
+                    currentPositions = currentPositions,
+                    historyPositions = historyPositions
+                )
+            )
         } catch (e: Exception) {
             logger.error("查询所有仓位失败: ${e.message}", e)
             Result.failure(e)
         }
     }
-    
+
     /**
      * 检查账户是否有活跃订单
      * 使用账户的 API Key 查询该账户的活跃订单
@@ -639,15 +643,15 @@ class AccountService(
                 logger.debug("账户 ${account.id} 未配置 API 凭证，无法查询活跃订单，允许删除")
                 return false
             }
-            
+
             // 使用 API 凭证（直接使用，无需解密）
             val apiKey = account.apiKey
             val apiSecret = account.apiSecret
             val apiPassphrase = account.apiPassphrase
-            
+
             // 创建带认证的 API 客户端（需要钱包地址用于 POLY_ADDRESS 请求头）
             val clobApi = retrofitFactory.createClobApi(apiKey, apiSecret, apiPassphrase, account.walletAddress)
-            
+
             // 查询活跃订单（只查询第一条，用于判断是否有订单）
             // 使用 next_cursor 参数进行分页，这里只查询第一页
             val response = clobApi.getActiveOrders(
@@ -656,7 +660,7 @@ class AccountService(
                 asset_id = null,
                 next_cursor = null  // null 表示从第一页开始
             )
-            
+
             if (response.isSuccessful && response.body() != null) {
                 val ordersResponse = response.body()!!
                 val hasOrders = ordersResponse.data.isNotEmpty()

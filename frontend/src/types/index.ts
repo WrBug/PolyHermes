@@ -187,3 +187,26 @@ export interface PositionListResponse {
   historyPositions: AccountPosition[]
 }
 
+/**
+ * 仓位推送消息类型
+ */
+export type PositionPushMessageType = 'FULL' | 'INCREMENTAL'
+
+/**
+ * 仓位推送消息
+ */
+export interface PositionPushMessage {
+  type: PositionPushMessageType  // 消息类型：FULL（全量）或 INCREMENTAL（增量）
+  timestamp: number  // 消息时间戳
+  currentPositions?: AccountPosition[]  // 当前仓位列表（全量或增量）
+  historyPositions?: AccountPosition[]  // 历史仓位列表（全量或增量）
+  removedPositionKeys?: string[]  // 已删除的仓位键（仅增量推送时使用）
+}
+
+/**
+ * 获取仓位唯一键
+ */
+export function getPositionKey(position: AccountPosition): string {
+  return `${position.accountId}-${position.marketId}-${position.side}`
+}
+

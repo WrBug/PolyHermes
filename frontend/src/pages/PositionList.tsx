@@ -2,8 +2,11 @@ import { useEffect, useState, useMemo } from 'react'
 import { Card, Table, Tag, message, Space, Input, Radio, Select, Button, Row, Col, Empty } from 'antd'
 import { SearchOutlined, AppstoreOutlined, UnorderedListOutlined, UpOutlined, DownOutlined } from '@ant-design/icons'
 import { apiService } from '../services/api'
-import type { AccountPosition, Account } from '../types'
+import type { AccountPosition, Account, PositionPushMessage } from '../types'
+import { getPositionKey } from '../types'
 import { useMediaQuery } from 'react-responsive'
+import { useWebSocketSubscription } from '../hooks/useWebSocket'
+import { wsManager } from '../services/websocket'
 
 type PositionFilter = 'current' | 'historical'
 type ViewMode = 'card' | 'list'
@@ -20,11 +23,117 @@ const PositionList: React.FC = () => {
   const [selectedAccountId, setSelectedAccountId] = useState<number | undefined>(undefined)
   const [viewMode, setViewMode] = useState<ViewMode>(isMobile ? 'card' : 'list')
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set())
+  const [wsConnected, setWsConnected] = useState(false)
   
   useEffect(() => {
     fetchAccounts()
-    fetchPositions()
+    // 完全依赖 WebSocket 推送，不主动请求接口
+    // 连接建立后会立即收到全量数据推送
+    setLoading(true)  // 显示加载状态，等待 WebSocket 全量推送
+    
+    // 监听连接状态（WebSocket 连接在 App.tsx 中全局初始化，全局共享）
+    const removeListener = wsManager.onConnectionChange((connected) => {
+      setWsConnected(connected)
+    })
+    
+    // 获取当前连接状态
+    setWsConnected(wsManager.isConnected())
+    
+    return () => {
+      removeListener()
+    }
   }, [])
+  
+  // 订阅仓位推送
+  const { connected: positionConnected } = useWebSocketSubscription<PositionPushMessage>(
+    'position',
+    (message) => {
+      handlePositionPushMessage(message)
+    }
+  )
+  
+  // 更新连接状态（使用订阅的连接状态）
+  useEffect(() => {
+    setWsConnected(positionConnected)
+  }, [positionConnected])
+  
+  /**
+   * 处理仓位推送消息
+   */
+  const handlePositionPushMessage = (message: PositionPushMessage) => {
+    if (message.type === 'FULL') {
+      // 全量推送：直接替换（这是首次连接时的数据，完全以推送数据为准）
+      setCurrentPositions(message.currentPositions || [])
+      setHistoryPositions(message.historyPositions || [])
+      setLoading(false)
+      console.log('收到仓位全量推送:', {
+        current: message.currentPositions?.length || 0,
+        history: message.historyPositions?.length || 0
+      })
+    } else if (message.type === 'INCREMENTAL') {
+      // 增量推送：合并数据（始终以推送数据为准）
+      setCurrentPositions(prev => mergePositions(prev, message.currentPositions || [], message.removedPositionKeys || []))
+      setHistoryPositions(prev => mergePositions(prev, message.historyPositions || [], message.removedPositionKeys || []))
+      console.log('收到仓位增量推送:', {
+        current: message.currentPositions?.length || 0,
+        history: message.historyPositions?.length || 0,
+        removed: message.removedPositionKeys?.length || 0
+      })
+    }
+  }
+  
+  /**
+   * 合并仓位数据
+   * 新增的仓位插入到列表顶部，更新的仓位更新现有数据并保持位置，删除的仓位从列表中移除
+   */
+  const mergePositions = (
+    prev: AccountPosition[],
+    updates: AccountPosition[],
+    removedKeys: string[]
+  ): AccountPosition[] => {
+    // 创建现有仓位的键集合，用于快速判断是新增还是更新
+    const existingKeys = new Set(prev.map(pos => getPositionKey(pos)))
+    
+    // 区分新增和更新的仓位
+    const newPositions: AccountPosition[] = []
+    const updateMap = new Map<string, AccountPosition>()
+    
+    updates.forEach(update => {
+      const key = getPositionKey(update)
+      if (existingKeys.has(key)) {
+        // 已存在的仓位，记录更新
+        updateMap.set(key, update)
+      } else {
+        // 新增的仓位，插入到顶部
+        newPositions.push(update)
+      }
+    })
+    
+    // 构建结果数组
+    const result: AccountPosition[] = []
+    
+    // 1. 先添加新增的仓位（在顶部）
+    result.push(...newPositions)
+    
+    // 2. 遍历原有仓位，应用更新或保持不变
+    prev.forEach(pos => {
+      const key = getPositionKey(pos)
+      
+      // 如果被删除，跳过
+      if (removedKeys.includes(key)) {
+        return
+      }
+      
+      // 如果有更新，使用新数据；否则保持原数据
+      if (updateMap.has(key)) {
+        result.push(updateMap.get(key)!)
+      } else {
+        result.push(pos)
+      }
+    })
+    
+    return result
+  }
   
   const fetchAccounts = async () => {
     setAccountsLoading(true)
@@ -42,22 +151,7 @@ const PositionList: React.FC = () => {
     }
   }
   
-  const fetchPositions = async () => {
-    setLoading(true)
-    try {
-      const response = await apiService.accounts.positionsList()
-      if (response.data.code === 0 && response.data.data) {
-        setCurrentPositions(response.data.data.currentPositions || [])
-        setHistoryPositions(response.data.data.historyPositions || [])
-      } else {
-        message.error(response.data.msg || '获取仓位列表失败')
-      }
-    } catch (error: any) {
-      message.error(error.message || '获取仓位列表失败')
-    } finally {
-      setLoading(false)
-    }
-  }
+  // 已移除 fetchPositions 函数，完全依赖 WebSocket 推送更新数据
   
   // 根据筛选器选择对应的仓位列表
   const basePositions = useMemo(() => {
@@ -657,7 +751,25 @@ const PositionList: React.FC = () => {
     <div>
       <div style={{ marginBottom: '16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '12px' }}>
-          <h2 style={{ margin: 0 }}>仓位管理</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <h2 style={{ margin: 0 }}>仓位管理</h2>
+            {/* WebSocket 连接状态指示器 */}
+            <Tag 
+              color={wsConnected ? 'green' : 'orange'} 
+              style={{ margin: 0 }}
+            >
+              <span style={{ 
+                display: 'inline-block', 
+                width: '8px', 
+                height: '8px', 
+                borderRadius: '50%', 
+                backgroundColor: wsConnected ? '#52c41a' : '#fa8c16', 
+                marginRight: '6px', 
+                animation: wsConnected ? 'pulse 2s infinite' : 'pulse 1s infinite'
+              }}></span>
+              {wsConnected ? '实时更新' : '连接中...'}
+            </Tag>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: isMobile ? '1 1 100%' : '0 0 auto', flexWrap: 'wrap' }}>
             <Input
               placeholder="搜索账户、市场、方向..."
