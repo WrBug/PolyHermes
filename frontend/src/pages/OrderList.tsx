@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Card, Table, Tag, Space, message } from 'antd'
+import { Card, Table, Tag, message } from 'antd'
 import { apiService } from '../services/api'
 import type { CopyOrder } from '../types'
 import { useMediaQuery } from 'react-responsive'

@@ -21,6 +21,9 @@ export interface Account {
   balance?: string
   totalOrders?: number
   totalPnl?: string
+  activeOrders?: number
+  completedOrders?: number
+  positionCount?: number
 }
 
 /**
@@ -38,9 +41,6 @@ export interface AccountImportRequest {
   privateKey: string
   walletAddress: string
   accountName?: string
-  apiKey?: string
-  apiSecret?: string
-  apiPassphrase?: string
   isDefault?: boolean
 }
 
@@ -50,9 +50,6 @@ export interface AccountImportRequest {
 export interface AccountUpdateRequest {
   accountId: number
   accountName?: string
-  apiKey?: string
-  apiSecret?: string
-  apiPassphrase?: string
   isDefault?: boolean
 }
 

@@ -29,6 +29,16 @@ interface PolymarketDataApi {
         @Query("sortDirection") sortDirection: String? = null,
         @Query("title") title: String? = null
     ): Response<List<PositionResponse>>
+    
+    /**
+     * 获取用户仓位总价值
+     * 文档: https://docs.polymarket.com/api-reference/core/get-total-value-of-a-users-positions
+     */
+    @GET("/value")
+    suspend fun getTotalValue(
+        @Query("user") user: String,
+        @Query("market") market: List<String>? = null
+    ): Response<List<ValueResponse>>
 }
 
 /**
@@ -60,6 +70,14 @@ data class PositionResponse(
     val oppositeAsset: String? = null,
     val endDate: String? = null,
     val negativeRisk: Boolean? = null
+)
+
+/**
+ * 仓位价值响应（根据 Polymarket Data API 文档）
+ */
+data class ValueResponse(
+    val user: String,
+    val value: Double
 )
 
 

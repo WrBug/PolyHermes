@@ -5,6 +5,7 @@ import com.wrbug.polymarketbot.api.JsonRpcRequest
 import com.wrbug.polymarketbot.api.JsonRpcResponse
 import com.wrbug.polymarketbot.api.PolymarketDataApi
 import com.wrbug.polymarketbot.api.PositionResponse
+import com.wrbug.polymarketbot.api.ValueResponse
 import com.wrbug.polymarketbot.util.EthereumUtils
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.createClient
@@ -235,6 +236,40 @@ class BlockchainService(
             }
         } catch (e: Exception) {
             logger.error("查询持仓信息失败: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * 获取用户仓位总价值
+     * 通过 Polymarket Data API 查询
+     * 文档: https://docs.polymarket.com/api-reference/core/get-total-value-of-a-users-positions
+     */
+    suspend fun getTotalValue(proxyWalletAddress: String): Result<String> {
+        return try {
+            // 使用代理钱包地址查询仓位总价值
+            val response = dataApi.getTotalValue(
+                user = proxyWalletAddress,
+                market = null
+            )
+            
+            if (response.isSuccessful && response.body() != null) {
+                val values = response.body()!!
+                // 根据文档，返回的是数组，通常只有一个元素
+                val totalValue = if (values.isNotEmpty()) {
+                    values.first().value
+                } else {
+                    0.0
+                }
+                logger.debug("查询到仓位总价值: $totalValue")
+                Result.success(totalValue.toString())
+            } else {
+                val errorMsg = "Data API 请求失败: ${response.code()} ${response.message()}"
+                logger.error(errorMsg)
+                Result.failure(Exception(errorMsg))
+            }
+        } catch (e: Exception) {
+            logger.error("查询仓位总价值失败: ${e.message}", e)
             Result.failure(e)
         }
     }

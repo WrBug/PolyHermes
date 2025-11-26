@@ -7,9 +7,6 @@ data class AccountImportRequest(
     val privateKey: String,  // 私钥（前端加密后传输）
     val walletAddress: String,  // 钱包地址（前端从私钥推导，用于验证）
     val accountName: String? = null,
-    val apiKey: String? = null,  // Polymarket API Key（可选）
-    val apiSecret: String? = null,  // Polymarket API Secret（可选）
-    val apiPassphrase: String? = null,  // Polymarket API Passphrase（可选）
     val isDefault: Boolean = false
 )
 
@@ -19,9 +16,6 @@ data class AccountImportRequest(
 data class AccountUpdateRequest(
     val accountId: Long,
     val accountName: String? = null,
-    val apiKey: String? = null,
-    val apiSecret: String? = null,
-    val apiPassphrase: String? = null,
     val isDefault: Boolean? = null
 )
 
@@ -66,7 +60,10 @@ data class AccountDto(
     val apiPassphraseConfigured: Boolean,  // API Passphrase 是否已配置
     val balance: String? = null,  // 账户余额（可选）
     val totalOrders: Long? = null,  // 总订单数（可选）
-    val totalPnl: String? = null  // 总盈亏（可选）
+    val totalPnl: String? = null,  // 总盈亏（可选）
+    val activeOrders: Long? = null,  // 活跃订单数（可选）
+    val completedOrders: Long? = null,  // 已完成订单数（可选）
+    val positionCount: Long? = null  // 持仓数量（可选）
 )
 
 /**

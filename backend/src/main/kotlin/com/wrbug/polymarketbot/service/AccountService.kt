@@ -1,9 +1,9 @@
 package com.wrbug.polymarketbot.service
 
+import com.wrbug.polymarketbot.api.TradeResponse
 import com.wrbug.polymarketbot.dto.*
 import com.wrbug.polymarketbot.entity.Account
 import com.wrbug.polymarketbot.repository.AccountRepository
-import com.wrbug.polymarketbot.util.CryptoUtils
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.toSafeBigDecimal
 import kotlinx.coroutines.runBlocking
@@ -18,10 +18,10 @@ import java.math.BigDecimal
 @Service
 class AccountService(
     private val accountRepository: AccountRepository,
-    private val cryptoUtils: CryptoUtils,
     private val clobService: PolymarketClobService,
     private val retrofitFactory: RetrofitFactory,
-    private val blockchainService: BlockchainService
+    private val blockchainService: BlockchainService,
+    private val apiKeyService: PolymarketApiKeyService
 ) {
     
     private val logger = LoggerFactory.getLogger(AccountService::class.java)
@@ -49,11 +49,30 @@ class AccountService(
                 return Result.failure(IllegalArgumentException("无效的私钥格式"))
             }
             
-            // 4. 加密私钥和 API 凭证
-            val encryptedPrivateKey = cryptoUtils.encrypt(request.privateKey)
-            val encryptedApiKey = request.apiKey?.let { cryptoUtils.encrypt(it) }
-            val encryptedApiSecret = request.apiSecret?.let { cryptoUtils.encrypt(it) }
-            val encryptedApiPassphrase = request.apiPassphrase?.let { cryptoUtils.encrypt(it) }
+            // 4. 自动获取或创建 API Key（必须成功，否则导入失败）
+            logger.info("开始自动获取或创建 API Key: ${request.walletAddress}")
+            val apiKeyCreds = runBlocking {
+                val result = apiKeyService.createOrDeriveApiKey(
+                    privateKey = request.privateKey,
+                    walletAddress = request.walletAddress,
+                    chainId = 137L  // Polygon 主网
+                )
+                
+                if (result.isSuccess) {
+                    val creds = result.getOrNull()
+                    if (creds != null) {
+                        logger.info("成功自动获取 API Key: ${request.walletAddress}")
+                        creds
+                    } else {
+                        logger.error("自动获取 API Key 返回空值")
+                        throw IllegalStateException("自动获取 API Key 失败：返回值为空")
+                    }
+                } else {
+                    val error = result.exceptionOrNull()
+                    logger.error("自动获取 API Key 失败: ${error?.message}")
+                    throw IllegalStateException("自动获取 API Key 失败: ${error?.message}。请确保私钥有效且账户已激活")
+                }
+            }
             
             // 5. 如果设置为默认账户，取消其他账户的默认状态
             if (request.isDefault) {
@@ -84,12 +103,12 @@ class AccountService(
             
             // 7. 创建账户
             val account = Account(
-                privateKey = encryptedPrivateKey,
+                privateKey = request.privateKey,
                 walletAddress = request.walletAddress,
                 proxyAddress = proxyAddress,
-                apiKey = encryptedApiKey,
-                apiSecret = encryptedApiSecret,
-                apiPassphrase = encryptedApiPassphrase,
+                apiKey = apiKeyCreds.apiKey,
+                apiSecret = apiKeyCreds.secret,
+                apiPassphrase = apiKeyCreds.passphrase,
                 accountName = request.accountName,
                 isDefault = request.isDefault,
                 createdAt = System.currentTimeMillis(),
@@ -118,23 +137,6 @@ class AccountService(
             // 更新账户名称
             val updatedAccountName = request.accountName ?: account.accountName
             
-            // 更新 API 凭证
-            val updatedApiKey = if (request.apiKey != null) {
-                cryptoUtils.encrypt(request.apiKey)
-            } else {
-                account.apiKey
-            }
-            val updatedApiSecret = if (request.apiSecret != null) {
-                cryptoUtils.encrypt(request.apiSecret)
-            } else {
-                account.apiSecret
-            }
-            val updatedApiPassphrase = if (request.apiPassphrase != null) {
-                cryptoUtils.encrypt(request.apiPassphrase)
-            } else {
-                account.apiPassphrase
-            }
-            
             // 如果设置为默认账户，取消其他账户的默认状态
             val updatedIsDefault = request.isDefault ?: account.isDefault
             if (updatedIsDefault && !account.isDefault) {
@@ -146,9 +148,6 @@ class AccountService(
             
             val updated = account.copy(
                 accountName = updatedAccountName,
-                apiKey = updatedApiKey,
-                apiSecret = updatedApiSecret,
-                apiPassphrase = updatedApiPassphrase,
                 isDefault = updatedIsDefault,
                 updatedAt = System.currentTimeMillis()
             )
@@ -262,7 +261,7 @@ class AccountService(
             // 查询 USDC 余额和持仓信息
             val balanceResult = runBlocking {
                 try {
-                    // 先查询持仓信息（用于计算仓位余额和返回持仓列表）
+                    // 查询持仓信息（用于返回持仓列表）
                     // 使用代理地址查询持仓（Polymarket 使用代理地址存储持仓）
                     val positionsResult = blockchainService.getPositions(account.proxyAddress)
                     val positions = if (positionsResult.isSuccess) {
@@ -281,9 +280,13 @@ class AccountService(
                         emptyList()
                     }
                     
-                    // 计算仓位余额（持仓总价值）
-                    val positionBalance = positions.sumOf {
-                        it.currentValue.toSafeBigDecimal()
+                    // 使用 /value 接口获取仓位总价值（而不是累加）
+                    val positionBalanceResult = blockchainService.getTotalValue(account.proxyAddress)
+                    val positionBalance = if (positionBalanceResult.isSuccess) {
+                        positionBalanceResult.getOrNull() ?: "0"
+                    } else {
+                        logger.warn("仓位总价值查询失败: ${positionBalanceResult.exceptionOrNull()?.message}")
+                        "0"
                     }
                     
                     // 查询可用余额（通过 RPC 查询 USDC 余额）
@@ -302,11 +305,11 @@ class AccountService(
                     }
                     
                     // 计算总余额 = 可用余额 + 仓位余额
-                    val totalBalance = availableBalance.toSafeBigDecimal().add(positionBalance)
+                    val totalBalance = availableBalance.toSafeBigDecimal().add(positionBalance.toSafeBigDecimal())
                     
                     AccountBalanceResponse(
                         availableBalance = availableBalance,
-                        positionBalance = positionBalance.toPlainString(),
+                        positionBalance = positionBalance,
                         totalBalance = totalBalance.toPlainString(),
                         positions = positions
                     )
@@ -354,7 +357,7 @@ class AccountService(
     
     /**
      * 转换为 DTO
-     * 包含交易统计数据（总订单数和总盈亏）
+     * 包含交易统计数据（总订单数、总盈亏、活跃订单数、已完成订单数、持仓数量）
      */
     private fun toDto(account: Account): AccountDto {
         return runBlocking {
@@ -368,7 +371,10 @@ class AccountService(
                 apiSecretConfigured = account.apiSecret != null,
                 apiPassphraseConfigured = account.apiPassphrase != null,
                 totalOrders = statistics.totalOrders,
-                totalPnl = statistics.totalPnl
+                totalPnl = statistics.totalPnl,
+                activeOrders = statistics.activeOrders,
+                completedOrders = statistics.completedOrders,
+                positionCount = statistics.positionCount
             )
         }
     }
@@ -380,82 +386,138 @@ class AccountService(
         return try {
             // 如果账户没有配置 API 凭证，无法查询统计数据
             if (account.apiKey == null || account.apiSecret == null || account.apiPassphrase == null) {
-                return AccountStatistics(totalOrders = null, totalPnl = null)
+                return AccountStatistics(
+                    totalOrders = null, 
+                    totalPnl = null,
+                    activeOrders = null,
+                    completedOrders = null,
+                    positionCount = null
+                )
             }
             
-            // 解密 API 凭证
-            val apiKey = cryptoUtils.decrypt(account.apiKey)
-            val apiSecret = cryptoUtils.decrypt(account.apiSecret)
-            val apiPassphrase = cryptoUtils.decrypt(account.apiPassphrase)
+            // 使用 API 凭证（直接使用，无需解密）
+            val apiKey = account.apiKey
+            val apiSecret = account.apiSecret
+            val apiPassphrase = account.apiPassphrase
             
-            // 创建带认证的 API 客户端
-            val clobApi = retrofitFactory.createClobApi(apiKey, apiSecret, apiPassphrase)
+            // 创建带认证的 API 客户端（需要钱包地址用于 POLY_ADDRESS 请求头）
+            val clobApi = retrofitFactory.createClobApi(apiKey, apiSecret, apiPassphrase, account.walletAddress)
             
-            // 1. 查询交易记录数量（总订单数）
-            val tradesResult = runBlocking {
-                try {
-                    // 使用代理地址查询交易记录
+            // 1. 查询活跃订单数量（open/active 状态）
+            val activeOrdersResult = try {
+                var totalActiveOrders = 0L
+                var nextCursor: String? = null
+                
+                // 分页查询所有活跃订单
+                do {
+                    val response = clobApi.getActiveOrders(
+                        id = null,
+                        market = null,
+                        asset_id = null,
+                        next_cursor = nextCursor
+                    )
+                    if (response.isSuccessful && response.body() != null) {
+                        val ordersResponse = response.body()!!
+                        totalActiveOrders += ordersResponse.data.size
+                        nextCursor = ordersResponse.next_cursor
+                    } else {
+                        break
+                    }
+                } while (nextCursor != null && nextCursor.isNotEmpty())
+                
+                Result.success(totalActiveOrders)
+            } catch (e: Exception) {
+                logger.warn("查询活跃订单失败: ${e.message}", e)
+                Result.failure(e)
+            }
+            
+            // 2. 查询已完成订单数
+            // 注意：交易记录数不等于已完成订单数，因为一个订单可能产生多笔交易
+            // 已完成订单应该是指已完全成交或已关闭的订单
+            // 由于 Polymarket CLOB API 没有直接查询所有订单（包括已完成）的接口，
+            // 我们通过查询交易记录来估算已完成订单数
+            // 但更准确的方式是统计去重后的订单ID数量
+            val completedOrdersResult = try {
+                // 使用代理地址查询交易记录（作为 maker 的交易）
+                var allTrades = mutableListOf<TradeResponse>()
+                var nextCursor: String? = null
+                
+                // 分页查询所有交易（作为 maker）
+                do {
                     val response = clobApi.getTrades(
                         maker_address = account.proxyAddress,
-                        next_cursor = null
+                        next_cursor = nextCursor
                     )
                     if (response.isSuccessful && response.body() != null) {
                         val tradesResponse = response.body()!!
-                        // 统计所有交易（需要分页查询所有）
-                        var totalTrades = tradesResponse.data.size
-                        var nextCursor = tradesResponse.next_cursor
-                        
-                        // 分页查询所有交易
-                        while (nextCursor != null && nextCursor.isNotEmpty()) {
-                            val nextResponse = clobApi.getTrades(
-                                maker_address = account.proxyAddress,
-                                next_cursor = nextCursor
-                            )
-                            if (nextResponse.isSuccessful && nextResponse.body() != null) {
-                                val nextTradesResponse = nextResponse.body()!!
-                                totalTrades += nextTradesResponse.data.size
-                                nextCursor = nextTradesResponse.next_cursor
-                            } else {
-                                break
-                            }
-                        }
-                        Result.success(totalTrades.toLong())
+                        allTrades.addAll(tradesResponse.data)
+                        nextCursor = tradesResponse.next_cursor
                     } else {
-                        Result.failure(Exception("查询交易记录失败: ${response.code()} ${response.message()}"))
+                        break
                     }
-                } catch (e: Exception) {
-                    logger.warn("查询交易记录失败: ${e.message}", e)
-                    Result.failure(e)
-                }
+                } while (nextCursor != null && nextCursor.isNotEmpty())
+                
+                // 注意：Polymarket API 的 getTrades 接口只支持查询 maker_address，
+                // 如果需要查询作为 taker 的交易，可能需要使用其他接口或查询方式
+                // 目前只统计作为 maker 的交易记录
+                
+                // 由于 TradeResponse 没有 orderId 字段，我们无法直接去重订单
+                // 这里使用交易记录数作为已完成订单数的近似值
+                // 更准确的方式需要查询所有订单并统计状态为 "filled" 的订单
+                val completedOrdersCount = allTrades.size.toLong()
+                
+                Result.success(completedOrdersCount)
+            } catch (e: Exception) {
+                logger.warn("查询交易记录失败: ${e.message}", e)
+                Result.failure(e)
             }
             
-            // 2. 查询仓位信息计算总盈亏（已实现盈亏）
-            val totalPnlResult = runBlocking {
-                try {
-                    val positionsResult = blockchainService.getPositions(account.proxyAddress)
-                    if (positionsResult.isSuccess) {
-                        val positions = positionsResult.getOrNull() ?: emptyList()
-                        // 汇总所有仓位的已实现盈亏
-                        val totalRealizedPnl = positions.sumOf { pos ->
-                            pos.realizedPnl?.toSafeBigDecimal() ?: BigDecimal.ZERO
-                        }
-                        Result.success(totalRealizedPnl.toPlainString())
-                    } else {
-                        Result.failure(Exception("查询仓位信息失败"))
+            // 3. 查询仓位信息计算总盈亏（已实现盈亏）和持仓数量
+            val positionsResult = try {
+                val positions = blockchainService.getPositions(account.proxyAddress)
+                if (positions.isSuccess) {
+                    val positionList = positions.getOrNull() ?: emptyList()
+                    // 汇总所有仓位的已实现盈亏
+                    val totalRealizedPnl = positionList.sumOf { pos ->
+                        pos.realizedPnl?.toSafeBigDecimal() ?: BigDecimal.ZERO
                     }
-                } catch (e: Exception) {
-                    logger.warn("查询仓位盈亏失败: ${e.message}", e)
-                    Result.failure(e)
+                    // 统计持仓数量（所有非零持仓，包括正负仓位）
+                    // size 可能为正数（做多）或负数（做空），都应该统计
+                    val positionCount = positionList.count { pos ->
+                        val size = pos.size?.toSafeBigDecimal() ?: BigDecimal.ZERO
+                        size != BigDecimal.ZERO  // 统计所有非零持仓
+                    }
+                    Result.success(Pair(totalRealizedPnl.toPlainString(), positionCount.toLong()))
+                } else {
+                    Result.failure(Exception("查询仓位信息失败"))
                 }
+            } catch (e: Exception) {
+                logger.warn("查询仓位信息失败: ${e.message}", e)
+                Result.failure(e)
             }
+            
+            val activeOrders = activeOrdersResult.getOrNull() ?: 0L
+            val completedOrders = completedOrdersResult.getOrNull() ?: 0L
+            // 总订单数 = 活跃订单数 + 已完成订单数
+            val totalOrders = activeOrders + completedOrders
+            val (totalPnl, positionCount) = positionsResult.getOrNull() ?: Pair(null, null)
             
             AccountStatistics(
-                totalOrders = tradesResult.getOrNull(),
-                totalPnl = totalPnlResult.getOrNull()
+                totalOrders = totalOrders,
+                totalPnl = totalPnl,
+                activeOrders = activeOrders,
+                completedOrders = completedOrders,  // 已完成订单数 = 交易记录数（已成交的订单）
+                positionCount = positionCount
             )
         } catch (e: Exception) {
             logger.warn("获取账户统计数据失败: ${e.message}", e)
-            AccountStatistics(totalOrders = null, totalPnl = null)
+            AccountStatistics(
+                totalOrders = null, 
+                totalPnl = null,
+                activeOrders = null,
+                completedOrders = null,
+                positionCount = null
+            )
         }
     }
     
@@ -464,7 +526,10 @@ class AccountService(
      */
     private data class AccountStatistics(
         val totalOrders: Long?,
-        val totalPnl: String?
+        val totalPnl: String?,
+        val activeOrders: Long?,
+        val completedOrders: Long?,
+        val positionCount: Long?
     )
     
     /**
@@ -496,13 +561,13 @@ class AccountService(
                 return false
             }
             
-            // 解密 API 凭证（前面已检查不为 null）
-            val apiKey = cryptoUtils.decrypt(account.apiKey)
-            val apiSecret = cryptoUtils.decrypt(account.apiSecret)
-            val apiPassphrase = cryptoUtils.decrypt(account.apiPassphrase)
+            // 使用 API 凭证（直接使用，无需解密）
+            val apiKey = account.apiKey
+            val apiSecret = account.apiSecret
+            val apiPassphrase = account.apiPassphrase
             
-            // 创建带认证的 API 客户端
-            val clobApi = retrofitFactory.createClobApi(apiKey, apiSecret, apiPassphrase)
+            // 创建带认证的 API 客户端（需要钱包地址用于 POLY_ADDRESS 请求头）
+            val clobApi = retrofitFactory.createClobApi(apiKey, apiSecret, apiPassphrase, account.walletAddress)
             
             // 查询活跃订单（只查询第一条，用于判断是否有订单）
             // 使用 next_cursor 参数进行分页，这里只查询第一页

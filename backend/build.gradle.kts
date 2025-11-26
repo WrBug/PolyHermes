@@ -54,6 +54,9 @@ dependencies {
     // Keccak-256 for Ethereum function selector
     implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
     
+    // Web3j for Ethereum wallet and EIP-712 signing
+    implementation("org.web3j:core:5.0.0")
+    
     // Logging
     implementation("org.slf4j:slf4j-api")
     

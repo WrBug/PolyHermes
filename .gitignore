@@ -38,7 +38,7 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 .pnpm-store/
-
+polymarket-trading-bot/
 # Frontend build
 frontend/dist/
 frontend/.vite/

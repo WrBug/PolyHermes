@@ -110,6 +110,29 @@ interface PolymarketClobApi {
         @Query("after") after: String? = null,
         @Query("next_cursor") next_cursor: String? = null
     ): Response<GetTradesResponse>
+    
+    /**
+     * 创建 API Key（L1 认证）
+     * 端点: /auth/api-key
+     * 需要 L1 认证头（POLY_ADDRESS, POLY_SIGNATURE, POLY_TIMESTAMP, POLY_NONCE）
+     */
+    @POST("/auth/api-key")
+    suspend fun createApiKey(): Response<ApiKeyResponse>
+    
+    /**
+     * 获取现有 API Key（L1 认证）
+     * 端点: /auth/derive-api-key
+     * 需要 L1 认证头（POLY_ADDRESS, POLY_SIGNATURE, POLY_TIMESTAMP, POLY_NONCE）
+     */
+    @GET("/auth/derive-api-key")
+    suspend fun deriveApiKey(): Response<ApiKeyResponse>
+    
+    /**
+     * 获取服务器时间
+     * 端点: /time
+     */
+    @GET("/time")
+    suspend fun getServerTime(): Response<ServerTimeResponse>
 }
 
 // 请求和响应数据类
@@ -203,5 +226,21 @@ data class GetActiveOrdersResponse(
 data class GetTradesResponse(
     val data: List<TradeResponse>,
     val next_cursor: String? = null
+)
+
+/**
+ * API Key 响应
+ */
+data class ApiKeyResponse(
+    val apiKey: String,
+    val secret: String,
+    val passphrase: String
+)
+
+/**
+ * 服务器时间响应
+ */
+data class ServerTimeResponse(
+    val timestamp: Long
 )
 

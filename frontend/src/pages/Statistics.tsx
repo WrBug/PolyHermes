@@ -3,10 +3,8 @@ import { Card, Row, Col, Statistic, message } from 'antd'
 import { ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons'
 import { apiService } from '../services/api'
 import type { Statistics as StatisticsType } from '../types'
-import { useMediaQuery } from 'react-responsive'
 
 const Statistics: React.FC = () => {
-  const isMobile = useMediaQuery({ maxWidth: 768 })
   const [stats, setStats] = useState<StatisticsType | null>(null)
   const [loading, setLoading] = useState(false)
   

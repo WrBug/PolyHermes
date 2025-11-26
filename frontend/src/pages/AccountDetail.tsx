@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Card, Descriptions, Button, Space, Tag, Spin, message, Typography, Divider } from 'antd'
+import { Card, Descriptions, Button, Space, Tag, Spin, message, Typography, Divider, Modal, Form, Input, Checkbox, Alert } from 'antd'
 import { ArrowLeftOutlined, ReloadOutlined, EditOutlined } from '@ant-design/icons'
 import { useAccountStore } from '../store/accountStore'
 import type { Account } from '../types'
@@ -14,11 +14,14 @@ const AccountDetail: React.FC = () => {
   const isMobile = useMediaQuery({ maxWidth: 768 })
   const accountId = searchParams.get('id')
   
-  const { fetchAccountDetail, fetchAccountBalance } = useAccountStore()
+  const { fetchAccountDetail, fetchAccountBalance, updateAccount } = useAccountStore()
   const [account, setAccount] = useState<Account | null>(null)
   const [balance, setBalance] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [balanceLoading, setBalanceLoading] = useState(false)
+  const [editModalVisible, setEditModalVisible] = useState(false)
+  const [editForm] = Form.useForm()
+  const [editLoading, setEditLoading] = useState(false)
   
   useEffect(() => {
     if (accountId) {
@@ -51,13 +54,53 @@ const AccountDetail: React.FC = () => {
     setBalanceLoading(true)
     try {
       const balanceData = await fetchAccountBalance(Number(accountId))
-      setBalance(balanceData.balance || null)
+      setBalance(balanceData.totalBalance || null)
     } catch (error: any) {
       console.error('获取余额失败:', error)
       // 余额查询失败不显示错误，只显示 "-"
       setBalance(null)
     } finally {
       setBalanceLoading(false)
+    }
+  }
+  
+  const handleEditSubmit = async (values: any) => {
+    if (!account) return
+    
+    setEditLoading(true)
+    try {
+      // 构建更新请求，空字符串转换为 undefined（不修改）
+      const updateData: any = {
+        accountId: account.id,
+        accountName: values.accountName || undefined,
+        isDefault: values.isDefault || false
+      }
+      
+      // 只有非空字符串才更新 API 凭证
+      if (values.apiKey && values.apiKey.trim()) {
+        updateData.apiKey = values.apiKey.trim()
+      }
+      if (values.apiSecret && values.apiSecret.trim()) {
+        updateData.apiSecret = values.apiSecret.trim()
+      }
+      if (values.apiPassphrase && values.apiPassphrase.trim()) {
+        updateData.apiPassphrase = values.apiPassphrase.trim()
+      }
+      
+      await updateAccount(updateData)
+      
+      message.success('更新账户成功')
+      setEditModalVisible(false)
+      editForm.resetFields()
+      
+      // 刷新账户详情
+      if (accountId) {
+        await loadAccountDetail()
+      }
+    } catch (error: any) {
+      message.error(error.message || '更新账户失败')
+    } finally {
+      setEditLoading(false)
     }
   }
   
@@ -113,7 +156,16 @@ const AccountDetail: React.FC = () => {
           <Button
             type="primary"
             icon={<EditOutlined />}
-            onClick={() => navigate(`/accounts/edit?id=${account.id}`)}
+            onClick={() => {
+              setEditModalVisible(true)
+              editForm.setFieldsValue({
+                accountName: account.accountName || '',
+                apiKey: '',  // 不显示实际值，留空表示不修改
+                apiSecret: '',  // 不显示实际值，留空表示不修改
+                apiPassphrase: '',  // 不显示实际值，留空表示不修改
+                isDefault: account.isDefault || false
+              })
+            }}
             size={isMobile ? 'middle' : 'large'}
             block={isMobile}
             style={isMobile ? { minHeight: '44px' } : undefined}
@@ -210,7 +262,9 @@ const AccountDetail: React.FC = () => {
         </Descriptions>
       </Card>
       
-      {account.totalOrders !== undefined || account.totalPnl !== undefined ? (
+      {(account.totalOrders !== undefined || account.totalPnl !== undefined || 
+        account.activeOrders !== undefined || 
+        account.completedOrders !== undefined || account.positionCount !== undefined) ? (
         <>
           <Divider style={{ margin: isMobile ? '12px 0' : '16px 0' }} />
           <Card 
@@ -232,6 +286,21 @@ const AccountDetail: React.FC = () => {
                   {account.totalOrders}
                 </Descriptions.Item>
               )}
+              {account.activeOrders !== undefined && (
+                <Descriptions.Item label="活跃订单数">
+                  <Tag color={account.activeOrders > 0 ? 'orange' : 'default'}>{account.activeOrders}</Tag>
+                </Descriptions.Item>
+              )}
+              {account.completedOrders !== undefined && (
+                <Descriptions.Item label="已完成订单数">
+                  <Tag color="success">{account.completedOrders}</Tag>
+                </Descriptions.Item>
+              )}
+              {account.positionCount !== undefined && (
+                <Descriptions.Item label="持仓数量">
+                  <Tag color={account.positionCount > 0 ? 'blue' : 'default'}>{account.positionCount}</Tag>
+                </Descriptions.Item>
+              )}
               {account.totalPnl !== undefined && (
                 <Descriptions.Item label="总盈亏">
                   <span style={{ 
@@ -246,6 +315,106 @@ const AccountDetail: React.FC = () => {
           </Card>
         </>
       ) : null}
+      
+      {/* 编辑账户 Modal */}
+      <Modal
+        title={account ? `编辑账户 - ${account.accountName || `账户 ${account.id}`}` : '编辑账户'}
+        open={editModalVisible}
+        onCancel={() => {
+          setEditModalVisible(false)
+          editForm.resetFields()
+        }}
+        footer={null}
+        width={isMobile ? '95%' : 600}
+        style={{ top: isMobile ? 20 : 50 }}
+        destroyOnClose
+        maskClosable
+        closable
+      >
+        {account ? (
+          <Form
+            form={editForm}
+            layout="vertical"
+            onFinish={handleEditSubmit}
+            size={isMobile ? 'middle' : 'large'}
+          >
+            <Alert
+              message="编辑提示"
+              description="API 凭证字段留空表示不修改。如需更新 API 凭证，请输入新值；如需保持原值不变，请留空。"
+              type="info"
+              showIcon
+              style={{ marginBottom: '24px' }}
+            />
+            
+            <Form.Item
+              label="账户名称"
+              name="accountName"
+            >
+              <Input placeholder="账户名称（可选）" />
+            </Form.Item>
+            
+            <Form.Item
+              label="API Key"
+              name="apiKey"
+              help="留空表示不修改，输入新值将更新 API Key"
+            >
+              <Input.Password placeholder="留空表示不修改" />
+            </Form.Item>
+            
+            <Form.Item
+              label="API Secret"
+              name="apiSecret"
+              help="留空表示不修改，输入新值将更新 API Secret"
+            >
+              <Input.Password placeholder="留空表示不修改" />
+            </Form.Item>
+            
+            <Form.Item
+              label="API Passphrase"
+              name="apiPassphrase"
+              help="留空表示不修改，输入新值将更新 API Passphrase"
+            >
+              <Input.Password placeholder="留空表示不修改" />
+            </Form.Item>
+            
+            <Form.Item
+              name="isDefault"
+              valuePropName="checked"
+            >
+              <Checkbox>设为默认账户</Checkbox>
+            </Form.Item>
+            
+            <Form.Item>
+              <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+                <Button 
+                  onClick={() => {
+                    setEditModalVisible(false)
+                    editForm.resetFields()
+                  }}
+                  size={isMobile ? 'middle' : 'large'}
+                  style={isMobile ? { minHeight: '44px' } : undefined}
+                >
+                  取消
+                </Button>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  loading={editLoading}
+                  size={isMobile ? 'middle' : 'large'}
+                  style={isMobile ? { minHeight: '44px' } : undefined}
+                >
+                  保存
+                </Button>
+              </Space>
+            </Form.Item>
+          </Form>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '20px' }}>
+            <Spin size="large" />
+            <div style={{ marginTop: '16px' }}>加载中...</div>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

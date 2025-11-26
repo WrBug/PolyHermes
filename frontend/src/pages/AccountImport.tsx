@@ -13,7 +13,7 @@ import {
 } from '../utils/ethers'
 import { useMediaQuery } from 'react-responsive'
 
-const { Title, Text } = Typography
+const { Title } = Typography
 
 type ImportType = 'privateKey' | 'mnemonic'
 
@@ -27,7 +27,7 @@ const AccountImport: React.FC = () => {
   const [addressError, setAddressError] = useState<string>('')
   
   // 当私钥输入时，自动推导地址
-  const handlePrivateKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePrivateKeyChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const privateKey = e.target.value.trim()
     if (!privateKey) {
       setDerivedAddress('')
@@ -56,7 +56,7 @@ const AccountImport: React.FC = () => {
   }
   
   // 当助记词输入时，自动推导地址
-  const handleMnemonicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMnemonicChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const mnemonic = e.target.value.trim()
     if (!mnemonic) {
       setDerivedAddress('')
@@ -136,9 +136,6 @@ const AccountImport: React.FC = () => {
         privateKey: privateKey,
         walletAddress: walletAddress,
         accountName: values.accountName,
-        apiKey: values.apiKey,
-        apiSecret: values.apiSecret,
-        apiPassphrase: values.apiPassphrase,
         isDefault: values.isDefault || false
       })
       
@@ -165,7 +162,7 @@ const AccountImport: React.FC = () => {
       <Card>
         <Alert
           message="安全提示"
-          description="私钥将加密存储在后端，请确保网络连接安全。建议使用 HTTPS 连接。"
+          description="私钥将存储在后端数据库中，请确保数据库访问安全。建议使用 HTTPS 连接。"
           type="warning"
           showIcon
           style={{ marginBottom: '24px' }}
@@ -305,29 +302,13 @@ const AccountImport: React.FC = () => {
             <Input placeholder="可选，用于标识账户" />
           </Form.Item>
           
-          <Form.Item
-            label="API Key"
-            name="apiKey"
-            help="Polymarket API Key（可选，用于 L2 API 认证）"
-          >
-            <Input.Password placeholder="可选，Polymarket API Key" />
-          </Form.Item>
-          
-          <Form.Item
-            label="API Secret"
-            name="apiSecret"
-            help="Polymarket API Secret（可选，用于 HMAC 签名）"
-          >
-            <Input.Password placeholder="可选，Polymarket API Secret" />
-          </Form.Item>
-          
-          <Form.Item
-            label="API Passphrase"
-            name="apiPassphrase"
-            help="Polymarket API Passphrase（可选，用于加密/解密密钥）"
-          >
-            <Input.Password placeholder="可选，Polymarket API Passphrase" />
-          </Form.Item>
+          <Alert
+            message="API Key 自动获取"
+            description="系统将自动从 Polymarket 获取或创建 API Key，无需手动输入。"
+            type="info"
+            showIcon
+            style={{ marginBottom: '24px' }}
+          />
           
           <Form.Item
             name="isDefault"

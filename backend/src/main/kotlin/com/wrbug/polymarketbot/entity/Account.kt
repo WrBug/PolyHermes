@@ -14,7 +14,7 @@ data class Account(
     val id: Long? = null,
     
     @Column(name = "private_key", nullable = false, length = 500)
-    val privateKey: String,  // 私钥（加密存储）
+    val privateKey: String,  // 私钥（明文存储）
     
     @Column(name = "wallet_address", unique = true, nullable = false, length = 42)
     val walletAddress: String,  // 钱包地址（从私钥推导）
@@ -23,13 +23,13 @@ data class Account(
     val proxyAddress: String,  // Polymarket 代理钱包地址（从合约获取，必须）
     
     @Column(name = "api_key", length = 500)
-    val apiKey: String? = null,  // Polymarket API Key（可选，加密存储）
+    val apiKey: String? = null,  // Polymarket API Key（可选，明文存储）
     
     @Column(name = "api_secret", length = 500)
-    val apiSecret: String? = null,  // Polymarket API Secret（可选，加密存储）
+    val apiSecret: String? = null,  // Polymarket API Secret（可选，明文存储）
     
     @Column(name = "api_passphrase", length = 500)
-    val apiPassphrase: String? = null,  // Polymarket API Passphrase（可选，加密存储）
+    val apiPassphrase: String? = null,  // Polymarket API Passphrase（可选，明文存储）
     
     @Column(name = "account_name", length = 100)
     val accountName: String? = null,

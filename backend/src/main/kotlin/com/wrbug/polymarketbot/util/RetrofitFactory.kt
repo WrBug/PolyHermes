@@ -22,14 +22,16 @@ class RetrofitFactory(
      * @param apiKey API Key
      * @param apiSecret API Secret
      * @param apiPassphrase API Passphrase
+     * @param walletAddress 钱包地址（用于 POLY_ADDRESS 请求头）
      * @return PolymarketClobApi 客户端
      */
     fun createClobApi(
         apiKey: String,
         apiSecret: String,
-        apiPassphrase: String
+        apiPassphrase: String,
+        walletAddress: String
     ): PolymarketClobApi {
-        val authInterceptor = PolymarketAuthInterceptor(apiKey, apiSecret, apiPassphrase)
+        val authInterceptor = PolymarketAuthInterceptor(apiKey, apiSecret, apiPassphrase, walletAddress)
         
         val okHttpClient = createClient()
             .addInterceptor(authInterceptor)

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Card, Form, Input, Button, Switch, Radio, InputNumber, message, Typography, Space } from 'antd'
+import { Card, Form, Button, Switch, Radio, InputNumber, message, Typography } from 'antd'
 import { SaveOutlined } from '@ant-design/icons'
 import { apiService } from '../services/api'
 import type { CopyTradingConfig } from '../types'
@@ -11,7 +11,7 @@ const ConfigPage: React.FC = () => {
   const isMobile = useMediaQuery({ maxWidth: 768 })
   const [form] = Form.useForm()
   const [loading, setLoading] = useState(false)
-  const [config, setConfig] = useState<CopyTradingConfig | null>(null)
+  const [, setConfig] = useState<CopyTradingConfig | null>(null)
   
   useEffect(() => {
     fetchConfig()

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Card, Table, Button, Space, Tag, Popconfirm, message, Typography, Spin, Modal, Descriptions, Divider } from 'antd'
-import { PlusOutlined, StarOutlined, StarFilled, ReloadOutlined } from '@ant-design/icons'
+import { Card, Table, Button, Space, Tag, Popconfirm, message, Typography, Spin, Modal, Descriptions, Divider, Form, Input, Checkbox, Alert } from 'antd'
+import { PlusOutlined, StarOutlined, StarFilled, ReloadOutlined, EditOutlined } from '@ant-design/icons'
 import { useAccountStore } from '../store/accountStore'
 import type { Account } from '../types'
 import { useMediaQuery } from 'react-responsive'
@@ -11,13 +11,17 @@ const { Title } = Typography
 const AccountList: React.FC = () => {
   const navigate = useNavigate()
   const isMobile = useMediaQuery({ maxWidth: 768 })
-  const { accounts, loading, fetchAccounts, deleteAccount, setDefaultAccount, fetchAccountBalance, fetchAccountDetail } = useAccountStore()
+  const { accounts, loading, fetchAccounts, deleteAccount, setDefaultAccount, fetchAccountBalance, fetchAccountDetail, updateAccount } = useAccountStore()
   const [balanceMap, setBalanceMap] = useState<Record<number, { total: string; available: string; position: string }>>({})
   const [balanceLoading, setBalanceLoading] = useState<Record<number, boolean>>({})
   const [detailModalVisible, setDetailModalVisible] = useState(false)
   const [detailAccount, setDetailAccount] = useState<Account | null>(null)
   const [detailBalance, setDetailBalance] = useState<{ total: string; available: string; position: string; positions: any[] } | null>(null)
   const [detailBalanceLoading, setDetailBalanceLoading] = useState(false)
+  const [editModalVisible, setEditModalVisible] = useState(false)
+  const [editAccount, setEditAccount] = useState<Account | null>(null)
+  const [editForm] = Form.useForm()
+  const [editLoading, setEditLoading] = useState(false)
   
   useEffect(() => {
     fetchAccounts()
@@ -137,6 +141,75 @@ const AccountList: React.FC = () => {
     }
   }
   
+  const handleShowEdit = async (account: Account) => {
+    try {
+      setEditModalVisible(true)
+      setEditAccount(account)
+      
+      // 加载账户详情并设置表单初始值
+      const accountDetail = await fetchAccountDetail(account.id)
+      setEditAccount(accountDetail)
+      
+      editForm.setFieldsValue({
+        accountName: accountDetail.accountName || '',
+        apiKey: '',  // 不显示实际值，留空表示不修改
+        apiSecret: '',  // 不显示实际值，留空表示不修改
+        apiPassphrase: '',  // 不显示实际值，留空表示不修改
+        isDefault: accountDetail.isDefault || false
+      })
+    } catch (error: any) {
+      console.error('打开编辑失败:', error)
+      message.error(error.message || '获取账户详情失败')
+      setEditModalVisible(false)
+      setEditAccount(null)
+    }
+  }
+  
+  const handleEditSubmit = async (values: any) => {
+    if (!editAccount) return
+    
+    setEditLoading(true)
+    try {
+      // 构建更新请求，空字符串转换为 undefined（不修改）
+      const updateData: any = {
+        accountId: editAccount.id,
+        accountName: values.accountName || undefined,
+        isDefault: values.isDefault || false
+      }
+      
+      // 只有非空字符串才更新 API 凭证
+      if (values.apiKey && values.apiKey.trim()) {
+        updateData.apiKey = values.apiKey.trim()
+      }
+      if (values.apiSecret && values.apiSecret.trim()) {
+        updateData.apiSecret = values.apiSecret.trim()
+      }
+      if (values.apiPassphrase && values.apiPassphrase.trim()) {
+        updateData.apiPassphrase = values.apiPassphrase.trim()
+      }
+      
+      await updateAccount(updateData)
+      
+      message.success('更新账户成功')
+      setEditModalVisible(false)
+      setEditAccount(null)
+      editForm.resetFields()
+      
+      // 刷新账户列表
+      await fetchAccounts()
+      
+      // 如果详情 Modal 打开着，也刷新详情
+      if (detailModalVisible && detailAccount && detailAccount.id === editAccount.id) {
+        const accountDetail = await fetchAccountDetail(editAccount.id)
+        setDetailAccount(accountDetail)
+      }
+    } catch (error: any) {
+      message.error(error.message || '更新账户失败')
+    } finally {
+      setEditLoading(false)
+    }
+  }
+  
   const columns = [
     {
       title: '账户名称',
@@ -192,6 +265,17 @@ const AccountList: React.FC = () => {
       }
     },
     {
+      title: '活跃订单',
+      dataIndex: 'activeOrders',
+      key: 'activeOrders',
+      render: (_: any, record: Account) => {
+        if (record.activeOrders !== undefined && record.activeOrders !== null) {
+          return <Tag color={record.activeOrders > 0 ? 'orange' : 'default'}>{record.activeOrders}</Tag>
+        }
+        return <span style={{ color: '#999' }}>-</span>
+      }
+    },
+    {
       title: '操作',
       key: 'action',
       render: (_: any, record: Account) => (
@@ -202,6 +286,14 @@ const AccountList: React.FC = () => {
             onClick={() => handleShowDetail(record)}
           >
             详情
+          </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => handleShowEdit(record)}
+          >
+            编辑
           </Button>
           <Popconfirm
             title="确定要删除这个账户吗？"
@@ -281,6 +373,18 @@ const AccountList: React.FC = () => {
                 可用: {balanceMap[record.id].available} USDC | 仓位: {balanceMap[record.id].position} USDC
               </div>
             )}
+            {(record.activeOrders !== undefined && record.activeOrders !== null) && (
+              <div style={{ 
+                fontSize: '12px',
+                color: '#666',
+                marginTop: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                活跃订单: <Tag color={record.activeOrders > 0 ? 'orange' : 'default'} style={{ margin: 0 }}>{record.activeOrders}</Tag>
+              </div>
+            )}
           </div>
         )
       }
@@ -299,6 +403,15 @@ const AccountList: React.FC = () => {
             style={{ minHeight: '32px' }}
           >
             查看详情
+          </Button>
+          <Button
+            size="small"
+            block
+            icon={<EditOutlined />}
+            onClick={() => handleShowEdit(record)}
+            style={{ minHeight: '32px' }}
+          >
+            编辑
           </Button>
           {!record.isDefault && (
             <Button
@@ -420,6 +533,20 @@ const AccountList: React.FC = () => {
             刷新余额
           </Button>,
           <Button 
+            key="edit" 
+            type="primary"
+            icon={<EditOutlined />} 
+            onClick={() => {
+              if (detailAccount) {
+                setDetailModalVisible(false)
+                handleShowEdit(detailAccount)
+              }
+            }}
+            disabled={!detailAccount}
+          >
+            编辑
+          </Button>,
+          <Button 
             key="close" 
             onClick={() => {
               setDetailModalVisible(false)
@@ -532,7 +659,9 @@ const AccountList: React.FC = () => {
               </Descriptions.Item>
             </Descriptions>
             
-            {(detailAccount.totalOrders !== undefined || detailAccount.totalPnl !== undefined) && (
+            {(detailAccount.totalOrders !== undefined || detailAccount.totalPnl !== undefined || 
+              detailAccount.activeOrders !== undefined || 
+              detailAccount.completedOrders !== undefined || detailAccount.positionCount !== undefined) && (
               <>
                 <Divider />
                 <Descriptions
@@ -544,6 +673,21 @@ const AccountList: React.FC = () => {
                   {detailAccount.totalOrders !== undefined && (
                     <Descriptions.Item label="总订单数">
                       {detailAccount.totalOrders}
+                    </Descriptions.Item>
+                  )}
+                  {detailAccount.activeOrders !== undefined && (
+                    <Descriptions.Item label="活跃订单数">
+                      <Tag color={detailAccount.activeOrders > 0 ? 'orange' : 'default'}>{detailAccount.activeOrders}</Tag>
+                    </Descriptions.Item>
+                  )}
+                  {detailAccount.completedOrders !== undefined && (
+                    <Descriptions.Item label="已完成订单数">
+                      <Tag color="success">{detailAccount.completedOrders}</Tag>
+                    </Descriptions.Item>
+                  )}
+                  {detailAccount.positionCount !== undefined && (
+                    <Descriptions.Item label="持仓数量">
+                      <Tag color={detailAccount.positionCount > 0 ? 'blue' : 'default'}>{detailAccount.positionCount}</Tag>
                     </Descriptions.Item>
                   )}
                   {detailAccount.totalPnl !== undefined && (
@@ -560,6 +704,108 @@ const AccountList: React.FC = () => {
               </>
             )}
           </div>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '20px' }}>
+            <Spin size="large" />
+            <div style={{ marginTop: '16px' }}>加载中...</div>
+          </div>
+        )}
+      </Modal>
+      
+      {/* 编辑账户 Modal */}
+      <Modal
+        title={editAccount ? `编辑账户 - ${editAccount.accountName || `账户 ${editAccount.id}`}` : '编辑账户'}
+        open={editModalVisible}
+        onCancel={() => {
+          setEditModalVisible(false)
+          setEditAccount(null)
+          editForm.resetFields()
+        }}
+        footer={null}
+        width={isMobile ? '95%' : 600}
+        style={{ top: isMobile ? 20 : 50 }}
+        destroyOnClose
+        maskClosable
+        closable
+      >
+        {editAccount ? (
+          <Form
+            form={editForm}
+            layout="vertical"
+            onFinish={handleEditSubmit}
+            size={isMobile ? 'middle' : 'large'}
+          >
+            <Alert
+              message="编辑提示"
+              description="API 凭证字段留空表示不修改。如需更新 API 凭证，请输入新值；如需保持原值不变，请留空。"
+              type="info"
+              showIcon
+              style={{ marginBottom: '24px' }}
+            />
+            
+            <Form.Item
+              label="账户名称"
+              name="accountName"
+            >
+              <Input placeholder="账户名称（可选）" />
+            </Form.Item>
+            
+            <Form.Item
+              label="API Key"
+              name="apiKey"
+              help="留空表示不修改，输入新值将更新 API Key"
+            >
+              <Input.Password placeholder="留空表示不修改" />
+            </Form.Item>
+            
+            <Form.Item
+              label="API Secret"
+              name="apiSecret"
+              help="留空表示不修改，输入新值将更新 API Secret"
+            >
+              <Input.Password placeholder="留空表示不修改" />
+            </Form.Item>
+            
+            <Form.Item
+              label="API Passphrase"
+              name="apiPassphrase"
+              help="留空表示不修改，输入新值将更新 API Passphrase"
+            >
+              <Input.Password placeholder="留空表示不修改" />
+            </Form.Item>
+            
+            <Form.Item
+              name="isDefault"
+              valuePropName="checked"
+            >
+              <Checkbox>设为默认账户</Checkbox>
+            </Form.Item>
+            
+            <Form.Item>
+              <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+                <Button 
+                  onClick={() => {
+                    setEditModalVisible(false)
+                    setEditAccount(null)
+                    editForm.resetFields()
+                  }}
+                  size={isMobile ? 'middle' : 'large'}
+                  style={isMobile ? { minHeight: '44px' } : undefined}
+                >
+                  取消
+                </Button>
+                <Button
+                  type="primary"
+                  htmlType="submit"
+                  loading={editLoading}
+                  size={isMobile ? 'middle' : 'large'}
+                  style={isMobile ? { minHeight: '44px' } : undefined}
+                >
+                  保存
+                </Button>
+              </Space>
+            </Form.Item>
+          </Form>
         ) : (
           <div style={{ textAlign: 'center', padding: '20px' }}>
             <Spin size="large" />
