@@ -9,6 +9,7 @@ import AccountDetail from './pages/AccountDetail'
 import AccountEdit from './pages/AccountEdit'
 import LeaderList from './pages/LeaderList'
 import LeaderAdd from './pages/LeaderAdd'
+import LeaderEdit from './pages/LeaderEdit'
 import ConfigPage from './pages/ConfigPage'
 import PositionList from './pages/PositionList'
 import Statistics from './pages/Statistics'
@@ -129,6 +130,7 @@ function App() {
             <Route path="/accounts/edit" element={<AccountEdit />} />
             <Route path="/leaders" element={<LeaderList />} />
             <Route path="/leaders/add" element={<LeaderAdd />} />
+            <Route path="/leaders/edit" element={<LeaderEdit />} />
             <Route path="/templates" element={<TemplateList />} />
             <Route path="/templates/add" element={<TemplateAdd />} />
             <Route path="/templates/edit/:id" element={<TemplateEdit />} />

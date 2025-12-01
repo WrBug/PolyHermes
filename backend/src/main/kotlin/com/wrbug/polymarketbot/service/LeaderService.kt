@@ -186,9 +186,10 @@ class LeaderService(
     
     /**
      * 验证钱包地址格式
+     * 必须是 0x 开头的 42 位十六进制字符串
      */
     private fun isValidWalletAddress(address: String): Boolean {
-        return address.startsWith("0x") && address.length == 42
+        return address.matches(Regex("^0x[a-fA-F0-9]{40}$"))
     }
 }
 

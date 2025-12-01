@@ -1,9 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Card, Table, Button, Space, Tag, Popconfirm, message } from 'antd'
+import { Card, Table, Button, Space, Tag, Popconfirm, message, List, Empty, Spin, Divider } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
 import { apiService } from '../services/api'
-import { useState } from 'react'
 import type { Leader } from '../types'
 import { useMediaQuery } from 'react-responsive'
 
@@ -59,7 +58,9 @@ const LeaderList: React.FC = () => {
       dataIndex: 'leaderAddress',
       key: 'leaderAddress',
       render: (address: string) => (
-        <span style={{ fontFamily: 'monospace' }}>{address}</span>
+        <span style={{ fontFamily: 'monospace', fontSize: isMobile ? '12px' : '14px' }}>
+          {isMobile ? `${address.slice(0, 6)}...${address.slice(-4)}` : address}
+        </span>
       )
     },
     {
@@ -71,24 +72,30 @@ const LeaderList: React.FC = () => {
       ) : <Tag>全部</Tag>
     },
     {
-      title: '状态',
-      dataIndex: 'enabled',
-      key: 'enabled',
-      render: (enabled: boolean) => (
-        <Tag color={enabled ? 'success' : 'default'}>
-          {enabled ? '启用' : '禁用'}
-        </Tag>
-      )
+      title: '跟单关系数',
+      dataIndex: 'copyTradingCount',
+      key: 'copyTradingCount',
+      render: (count: number) => <Tag>{count}</Tag>
     },
     {
-      title: '跟单比例',
-      dataIndex: 'copyRatio',
-      key: 'copyRatio',
-      render: (ratio: string) => `${ratio}x`
+      title: '创建时间',
+      dataIndex: 'createdAt',
+      key: 'createdAt',
+      render: (timestamp: number) => {
+        const date = new Date(timestamp)
+        return date.toLocaleString('zh-CN', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+      }
     },
     {
       title: '操作',
       key: 'action',
+      width: isMobile ? 120 : 150,
       render: (_: any, record: Leader) => (
         <Space size="small">
           <Button
@@ -101,6 +108,7 @@ const LeaderList: React.FC = () => {
           </Button>
           <Popconfirm
             title="确定要删除这个 Leader 吗？"
+            description={record.copyTradingCount > 0 ? `该 Leader 还有 ${record.copyTradingCount} 个跟单关系，请先删除跟单关系` : undefined}
             onConfirm={() => handleDelete(record.id)}
             okText="确定"
             cancelText="取消"
@@ -124,7 +132,7 @@ const LeaderList: React.FC = () => {
         flexWrap: 'wrap',
         gap: '12px'
       }}>
-        <h2>Leader 管理</h2>
+        <h2 style={{ margin: 0 }}>Leader 管理</h2>
         <Button
           type="primary"
           icon={<PlusOutlined />}
@@ -136,16 +144,128 @@ const LeaderList: React.FC = () => {
       </div>
       
       <Card>
-        <Table
-          dataSource={leaders}
-          columns={columns}
-          rowKey="id"
-          loading={loading}
-          pagination={{
-            pageSize: isMobile ? 10 : 20,
-            showSizeChanger: !isMobile
-          }}
-        />
+        {isMobile ? (
+          // 移动端卡片布局
+          <div>
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '40px' }}>
+                <Spin size="large" />
+              </div>
+            ) : leaders.length === 0 ? (
+              <Empty description="暂无 Leader 数据" />
+            ) : (
+              <List
+                dataSource={leaders}
+                renderItem={(leader) => {
+                  const date = new Date(leader.createdAt)
+                  const formattedDate = date.toLocaleString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })
+                  
+                  return (
+                    <Card
+                      key={leader.id}
+                      style={{
+                        marginBottom: '12px',
+                        borderRadius: '12px',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                        border: '1px solid #e8e8e8'
+                      }}
+                      bodyStyle={{ padding: '16px' }}
+                    >
+                      {/* Leader 名称和地址 */}
+                      <div style={{ marginBottom: '12px' }}>
+                        <div style={{ 
+                          fontSize: '16px', 
+                          fontWeight: 'bold', 
+                          marginBottom: '8px',
+                          color: '#1890ff'
+                        }}>
+                          {leader.leaderName || `Leader ${leader.id}`}
+                        </div>
+                        <div style={{ 
+                          fontSize: '12px', 
+                          color: '#666',
+                          fontFamily: 'monospace',
+                          wordBreak: 'break-all'
+                        }}>
+                          {leader.leaderAddress}
+                        </div>
+                      </div>
+                      
+                      <Divider style={{ margin: '12px 0' }} />
+                      
+                      {/* 分类和跟单关系数 */}
+                      <div style={{ marginBottom: '12px' }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
+                          {leader.category ? (
+                            <Tag color={leader.category === 'sports' ? 'blue' : 'green'}>
+                              {leader.category}
+                            </Tag>
+                          ) : (
+                            <Tag>全部</Tag>
+                          )}
+                          <Tag>{leader.copyTradingCount} 个跟单关系</Tag>
+                        </div>
+                      </div>
+                      
+                      {/* 创建时间 */}
+                      <div style={{ marginBottom: '12px', fontSize: '12px', color: '#999' }}>
+                        创建时间: {formattedDate}
+                      </div>
+                      
+                      {/* 操作按钮 */}
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <Button
+                          type="link"
+                          size="small"
+                          icon={<EditOutlined />}
+                          onClick={() => navigate(`/leaders/edit?id=${leader.id}`)}
+                          style={{ flex: 1 }}
+                        >
+                          编辑
+                        </Button>
+                        <Popconfirm
+                          title="确定要删除这个 Leader 吗？"
+                          description={leader.copyTradingCount > 0 ? `该 Leader 还有 ${leader.copyTradingCount} 个跟单关系，请先删除跟单关系` : undefined}
+                          onConfirm={() => handleDelete(leader.id)}
+                          okText="确定"
+                          cancelText="取消"
+                        >
+                          <Button 
+                            type="link" 
+                            size="small" 
+                            danger 
+                            icon={<DeleteOutlined />}
+                            style={{ flex: 1 }}
+                          >
+                            删除
+                          </Button>
+                        </Popconfirm>
+                      </div>
+                    </Card>
+                  )
+                }}
+              />
+            )}
+          </div>
+        ) : (
+          // 桌面端表格布局
+          <Table
+            dataSource={leaders}
+            columns={columns}
+            rowKey="id"
+            loading={loading}
+            pagination={{
+              pageSize: 20,
+              showSizeChanger: true
+            }}
+          />
+        )}
       </Card>
     </div>
   )
