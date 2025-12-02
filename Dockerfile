@@ -32,7 +32,7 @@ COPY backend/src ./src
 RUN gradle bootJar --no-daemon
 
 # 阶段3：运行环境
-FROM openjdk:17-jre-slim
+FROM eclipse-temurin:17-jre-jammy
 
 WORKDIR /app
 

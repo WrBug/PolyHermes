@@ -18,7 +18,7 @@ COPY src ./src
 RUN gradle bootJar --no-daemon
 
 # 阶段2：运行应用
-FROM openjdk:17-jre-slim
+FROM eclipse-temurin:17-jre-jammy
 
 WORKDIR /app
 
