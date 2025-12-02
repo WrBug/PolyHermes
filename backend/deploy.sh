@@ -131,7 +131,7 @@ deploy_docker() {
         warn ".env 文件不存在，创建示例文件..."
         cat > .env <<EOF
 # 数据库配置
-DB_URL=jdbc:mysql://mysql:3306/polyhermes?useSSL=false&serverTimezone=UTC&characterEncoding=utf8mb4
+DB_URL=jdbc:mysql://mysql:3306/polyhermes?useSSL=false&serverTimezone=UTC&characterEncoding=utf8&allowPublicKeyRetrieval=true
 DB_USERNAME=root
 DB_PASSWORD=your_password_here
 

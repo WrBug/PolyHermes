@@ -41,7 +41,7 @@
 ```bash
 # 创建 .env 文件
 cat > .env <<EOF
-DB_URL=jdbc:mysql://mysql:3306/polyhermes?useSSL=false&serverTimezone=UTC&characterEncoding=utf8mb4
+DB_URL=jdbc:mysql://mysql:3306/polyhermes?useSSL=false&serverTimezone=UTC&characterEncoding=utf8&allowPublicKeyRetrieval=true
 DB_USERNAME=root
 DB_PASSWORD=your_password_here
 SPRING_PROFILES_ACTIVE=prod
@@ -180,7 +180,7 @@ cd backend
 ```bash
 # 创建 .env 文件
 cat > .env <<EOF
-DB_URL=jdbc:mysql://mysql:3306/polyhermes?useSSL=false&serverTimezone=UTC&characterEncoding=utf8mb4
+DB_URL=jdbc:mysql://mysql:3306/polyhermes?useSSL=false&serverTimezone=UTC&characterEncoding=utf8&allowPublicKeyRetrieval=true
 DB_USERNAME=root
 DB_PASSWORD=your_password_here
 SPRING_PROFILES_ACTIVE=prod
@@ -213,7 +213,7 @@ docker run -d \
   --name polyhermes-backend \
   -p 8000:8000 \
   -e SPRING_PROFILES_ACTIVE=prod \
-  -e DB_URL=jdbc:mysql://host.docker.internal:3306/polyhermes?useSSL=false \
+  -e DB_URL=jdbc:mysql://host.docker.internal:3306/polyhermes?useSSL=false&allowPublicKeyRetrieval=true \
   -e DB_USERNAME=root \
   -e DB_PASSWORD=your_password \
   -e JWT_SECRET=your-jwt-secret \
