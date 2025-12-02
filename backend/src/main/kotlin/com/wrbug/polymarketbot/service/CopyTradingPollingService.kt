@@ -78,6 +78,9 @@ class CopyTradingPollingService(
         cachedTradeIds[leaderId] = mutableSetOf()
         // 首次轮询标志，用于缓存数据而不处理
         isFirstPoll[leaderId] = true
+        
+        // 如果轮询任务没有运行，启动它
+        startPolling()
     }
     
     /**
@@ -87,6 +90,11 @@ class CopyTradingPollingService(
         monitoredLeaders.remove(leaderId)
         cachedTradeIds.remove(leaderId)
         isFirstPoll.remove(leaderId)
+        
+        // 如果没有需要监听的Leader了，停止轮询任务
+        if (monitoredLeaders.isEmpty()) {
+            stopPolling()
+        }
     }
     
     /**
