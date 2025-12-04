@@ -239,7 +239,7 @@ export const apiService = {
     /**
      * 获取市场价格（通过 Gamma API）
      */
-    getMarketPrice: (data: { marketId: string }) => 
+    getMarketPrice: (data: { marketId: string; outcomeIndex?: number }) => 
       apiClient.post<ApiResponse<any>>('/copy-trading/markets/price', data),
     
     /**

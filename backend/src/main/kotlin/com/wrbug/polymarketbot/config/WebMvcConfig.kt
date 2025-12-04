@@ -13,25 +13,16 @@ class WebMvcConfig(
     private val jwtAuthenticationInterceptor: JwtAuthenticationInterceptor,
     private val localeInterceptor: LocaleInterceptor
 ) : WebMvcConfigurer {
-    
+
     override fun addInterceptors(registry: InterceptorRegistry) {
         // 先注册语言拦截器（优先级更高）
         registry.addInterceptor(localeInterceptor)
             .addPathPatterns("/api/**")
-        
         // 再注册JWT认证拦截器
         registry.addInterceptor(jwtAuthenticationInterceptor)
             .addPathPatterns("/api/**")
-    }
-}
-
-
         registry.addInterceptor(jwtAuthenticationInterceptor)
             .addPathPatterns("/api/**")
-    }
-}
-
-
         registry.addInterceptor(jwtAuthenticationInterceptor)
             .addPathPatterns("/api/**")
     }

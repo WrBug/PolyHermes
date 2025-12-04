@@ -367,7 +367,10 @@ const PositionList: React.FC = () => {
     
     // 加载市场价格
     try {
-      const response = await apiService.markets.getMarketPrice({ marketId: position.marketId })
+      const response = await apiService.markets.getMarketPrice({ 
+        marketId: position.marketId,
+        outcomeIndex: position.outcomeIndex  // 传递结果索引，用于确定需要查询哪个 outcome 的价格
+      })
       if (response.data.code === 0 && response.data.data) {
         setMarketPrice(response.data.data)
         // 默认使用最优买价作为限价

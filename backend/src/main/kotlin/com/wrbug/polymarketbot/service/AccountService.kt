@@ -7,6 +7,7 @@ import com.wrbug.polymarketbot.repository.AccountRepository
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.toSafeBigDecimal
 import com.wrbug.polymarketbot.util.eq
+import com.wrbug.polymarketbot.util.JsonUtils
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -739,19 +740,12 @@ class AccountService(
 
             // 6. 获取 tokenId（从 conditionId 和 outcomeIndex 计算）
             // 需要先获取 tokenId，以便后续通过 CLOB API 获取三元及以上市场的价格
-            // 优先使用 outcomeIndex，如果没有则尝试从 side 推断（仅支持 YES/NO）
+            // 优先使用 outcomeIndex，如果没有则返回错误（不再通过 side 字符串推断）
             val tokenIdResult = if (request.outcomeIndex != null) {
                 blockchainService.getTokenId(request.marketId, request.outcomeIndex)
             } else {
-                // 向后兼容：尝试从 side 推断（仅支持 YES/NO）
-                when (request.side.uppercase()) {
-                    "YES" -> blockchainService.getTokenId(request.marketId, 0)
-                    "NO" -> blockchainService.getTokenId(request.marketId, 1)
-                    else -> {
-                        logger.warn("无法从 side 推断 outcomeIndex，需要提供 outcomeIndex: side=${request.side}")
-                        Result.failure<String>(IllegalArgumentException("无法从 side '${request.side}' 推断 outcomeIndex，请提供 outcomeIndex 参数"))
-                    }
-                }
+                logger.warn("缺少 outcomeIndex 参数，无法计算 tokenId: marketId=${request.marketId}, side=${request.side}")
+                Result.failure<String>(IllegalArgumentException("缺少 outcomeIndex 参数，无法计算 tokenId。请提供 outcomeIndex 参数"))
             }
             val tokenId = tokenIdResult.getOrNull()
 
@@ -879,8 +873,9 @@ class AccountService(
                     )
                 } else {
                     val errorMsg = response.errorMsg ?: "未知错误"
-                    logger.error("创建订单失败: $errorMsg")
-                    Result.failure(Exception("创建订单失败: $errorMsg"))
+                    val fullErrorMsg = "创建订单失败: accountId=${account.id}, marketId=${request.marketId}, side=${request.side}, orderType=${request.orderType}, price=${if (request.orderType == "LIMIT") sellPrice else "MARKET"}, quantity=${sellQuantity.toPlainString()}, errorMsg=$errorMsg"
+                    logger.error(fullErrorMsg)
+                    Result.failure(Exception(fullErrorMsg))
                 }
             } else {
                 val errorBody = try {
@@ -888,12 +883,14 @@ class AccountService(
                 } catch (e: Exception) {
                     null
                 }
-                logger.error("创建订单失败: code=${orderResponse.code()}, message=${orderResponse.message()}, errorBody=$errorBody")
-                Result.failure(Exception("创建订单失败: ${orderResponse.code()} ${orderResponse.message()}${if (errorBody != null) " - $errorBody" else ""}"))
+                val fullErrorMsg = "创建订单失败: accountId=${account.id}, marketId=${request.marketId}, side=${request.side}, orderType=${request.orderType}, price=${if (request.orderType == "LIMIT") sellPrice else "MARKET"}, quantity=${sellQuantity.toPlainString()}, code=${orderResponse.code()}, message=${orderResponse.message()}${if (errorBody != null) ", errorBody=$errorBody" else ""}"
+                logger.error(fullErrorMsg)
+                Result.failure(Exception(fullErrorMsg))
             }
         } catch (e: Exception) {
-            logger.error("卖出仓位异常: ${e.message}", e)
-            Result.failure(e)
+            val fullErrorMsg = "卖出仓位异常: accountId=${request.accountId}, marketId=${request.marketId}, side=${request.side}, orderType=${request.orderType}, error=${e.message}"
+            logger.error(fullErrorMsg, e)
+            Result.failure(Exception(fullErrorMsg))
         }
     }
 
@@ -919,8 +916,10 @@ class AccountService(
     /**
      * 获取市场价格
      * 使用 Gamma API 获取价格信息，因为 Gamma API 支持 condition_ids 参数
+     * @param marketId 市场ID
+     * @param outcomeIndex 结果索引（可选）：0, 1, 2...，用于确定需要查询哪个 outcome 的价格。如果提供了 outcomeIndex 且 > 0，会转换价格（1 - 第一个outcome的价格）
      */
-    suspend fun getMarketPrice(marketId: String): Result<MarketPriceResponse> {
+    suspend fun getMarketPrice(marketId: String, outcomeIndex: Int? = null): Result<MarketPriceResponse> {
         return try {
             // 使用 Gamma API 获取市场信息（支持 condition_ids 参数）
             val gammaApi = retrofitFactory.createGammaApi()
@@ -931,10 +930,36 @@ class AccountService(
                 val market = markets.firstOrNull()
 
                 if (market != null) {
-                    // 从 Gamma API 响应中提取价格信息
-                    val bestBid = market.bestBid?.toString()
-                    val bestAsk = market.bestAsk?.toString()
-                    val lastPrice = market.lastTradePrice?.toString()
+                    // 从 Gamma API 响应中提取价格信息（这些价格通常是针对第一个 outcome，index = 0）
+                    var bestBid = market.bestBid?.toString()
+                    var bestAsk = market.bestAsk?.toString()
+                    var lastPrice = market.lastTradePrice?.toString()
+
+                    // 如果目标 outcome 不是第一个（index != 0），需要转换价格
+                    // 对于二元市场：第二个 outcome 的价格 = 1 - 第一个 outcome 的价格
+                    if (outcomeIndex != null && outcomeIndex > 0) {
+                        val outcomes = JsonUtils.parseStringArray(market.outcomes)
+                        // 只对二元市场进行价格转换
+                        if (outcomes.size == 2) {
+                            // 保存原始第一个 outcome 的价格
+                            val firstOutcomeBestBid = bestBid
+                            val firstOutcomeBestAsk = bestAsk
+                            
+                            // 转换价格：第二个 outcome 的 bestBid = 1 - 第一个 outcome 的 bestAsk
+                            // 第二个 outcome 的 bestAsk = 1 - 第一个 outcome 的 bestBid
+                            bestBid = firstOutcomeBestAsk?.let { 
+                                BigDecimal.ONE.subtract(it.toSafeBigDecimal()).toString()
+                            }
+                            bestAsk = firstOutcomeBestBid?.let { 
+                                BigDecimal.ONE.subtract(it.toSafeBigDecimal()).toString()
+                            }
+                            
+                            // 转换最后成交价：第二个 outcome 的 lastPrice = 1 - 第一个 outcome 的 lastPrice
+                            lastPrice = lastPrice?.let {
+                                BigDecimal.ONE.subtract(it.toSafeBigDecimal()).toString()
+                            }
+                        }
+                    }
 
                     // 计算中间价 = (bestBid + bestAsk) / 2
                     val midpoint = if (bestBid != null && bestAsk != null) {

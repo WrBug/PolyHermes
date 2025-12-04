@@ -348,18 +348,23 @@ class BlockchainService(
     }
     
     /**
-     * 从 condition ID 和 side (YES/NO) 计算 tokenId（向后兼容方法）
+     * 从 condition ID 和 side (YES/NO) 计算 tokenId（已废弃，不推荐使用）
      * 仅支持二元市场（YES/NO）
      * 
+     * @deprecated 禁止使用 "YES"/"NO" 字符串判断 side，请使用 getTokenId(conditionId, outcomeIndex) 方法
      * @param conditionId condition ID（16进制字符串，如 "0x..."）
-     * @param side YES 或 NO
+     * @param side YES 或 NO（不推荐使用，应使用 outcomeIndex）
      * @return tokenId（BigInteger 的字符串表示）
      */
+    @Deprecated("禁止使用 YES/NO 字符串判断 side，请使用 getTokenId(conditionId, outcomeIndex) 方法", ReplaceWith("getTokenId(conditionId, outcomeIndex)"))
     suspend fun getTokenIdBySide(conditionId: String, side: String): Result<String> {
+        // 注意：此方法违反了规范，禁止使用 "YES"/"NO" 字符串判断
+        // 为了向后兼容，暂时保留，但应该尽快迁移到使用 outcomeIndex 的方法
+        logger.warn("使用已废弃的方法 getTokenIdBySide，建议使用 getTokenId(conditionId, outcomeIndex): conditionId=$conditionId, side=$side")
         val outcomeIndex = when (side.uppercase()) {
             "YES" -> 0
             "NO" -> 1
-            else -> return Result.failure(IllegalArgumentException("side 必须是 YES 或 NO（仅支持二元市场）"))
+            else -> return Result.failure(IllegalArgumentException("side 必须是 YES 或 NO（仅支持二元市场）。建议使用 getTokenId(conditionId, outcomeIndex) 方法"))
         }
         return getTokenId(conditionId, outcomeIndex)
     }

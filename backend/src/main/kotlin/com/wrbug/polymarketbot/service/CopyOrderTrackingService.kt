@@ -288,7 +288,8 @@ class CopyOrderTrackingService(
                     
                     if (createOrderResult.isFailure) {
                         // 创建订单失败，记录到失败表
-                        val errorMsg = createOrderResult.exceptionOrNull()?.message ?: "未知错误"
+                        val exception = createOrderResult.exceptionOrNull()
+                        val errorMsg = buildFullErrorMessage(exception, "BUY", buyPrice.toString(), finalBuyQuantity.toString(), trade.id)
                         recordFailedTrade(
                             leaderId = leaderId,
                             trade = trade,
@@ -555,7 +556,8 @@ class CopyOrderTrackingService(
         
         if (createOrderResult.isFailure) {
             // 创建订单失败，记录到失败表
-            val errorMsg = createOrderResult.exceptionOrNull()?.message ?: "未知错误"
+            val exception = createOrderResult.exceptionOrNull()
+            val errorMsg = buildFullErrorMessage(exception, "SELL", sellPrice.toString(), totalMatched.toString(), leaderSellTrade.id)
             recordFailedTrade(
                 leaderId = copyTrading.leaderId,
                 trade = leaderSellTrade,
@@ -659,46 +661,82 @@ class CopyOrderTrackingService(
                 val orderResponse = clobApi.createOrder(orderRequest)
                 
                 if (!orderResponse.isSuccessful || orderResponse.body() == null) {
-                    lastError = Exception("创建订单失败: code=${orderResponse.code()}, message=${orderResponse.message()}")
+                    val errorBody = try {
+                        orderResponse.errorBody()?.string()
+                    } catch (e: Exception) {
+                        null
+                    }
+                    val errorMsg = "创建订单失败: copyTradingId=$copyTradingId, tradeId=$tradeId, attempt=$attempt, side=$side, price=$price, size=$size, tokenId=$tokenId, code=${orderResponse.code()}, message=${orderResponse.message()}${if (errorBody != null) ", errorBody=$errorBody" else ""}"
+                    lastError = Exception(errorMsg)
+                    // 所有失败都记录详细日志
+                    logger.error(errorMsg)
                     if (attempt < 2) {
-                        // 第一次失败不记录日志，静默重试
                         delay(1000)  // 重试前等待1秒
                         continue
                     }
-                    // 重试后仍然失败，记录日志
-                    logger.warn("创建订单失败（重试后仍失败）: copyTradingId=$copyTradingId, tradeId=$tradeId, attempt=$attempt, code=${orderResponse.code()}, message=${orderResponse.message()}")
                     return Result.failure(lastError!!)
                 }
                 
                 val response = orderResponse.body()!!
                 if (!response.success || response.orderId == null) {
-                    lastError = Exception("创建订单失败: errorMsg=${response.errorMsg}")
+                    val errorMsg = "创建订单失败: copyTradingId=$copyTradingId, tradeId=$tradeId, attempt=$attempt, side=$side, price=$price, size=$size, tokenId=$tokenId, errorMsg=${response.errorMsg}"
+                    lastError = Exception(errorMsg)
+                    // 所有失败都记录详细日志
+                    logger.error(errorMsg)
                     if (attempt < 2) {
-                        // 第一次失败不记录日志，静默重试
                         delay(1000)  // 重试前等待1秒
                         continue
                     }
-                    // 重试后仍然失败，记录日志
-                    logger.warn("创建订单失败（重试后仍失败）: copyTradingId=$copyTradingId, tradeId=$tradeId, attempt=$attempt, errorMsg=${response.errorMsg}")
                     return Result.failure(lastError!!)
                 }
                 
                 // 成功
                 return Result.success(response.orderId)
             } catch (e: Exception) {
-                lastError = e
+                val errorMsg = "调用创建订单API异常: copyTradingId=$copyTradingId, tradeId=$tradeId, attempt=$attempt, side=$side, price=$price, size=$size, tokenId=$tokenId, error=${e.message}"
+                lastError = Exception(errorMsg, e)
+                // 所有失败都记录详细日志（包括堆栈）
+                logger.error(errorMsg, e)
                 if (attempt < 2) {
-                    // 第一次失败不记录日志，静默重试
                     delay(1000)  // 重试前等待1秒
                     continue
                 }
-                // 重试后仍然失败，记录日志
-                logger.warn("调用创建订单API异常（重试后仍失败）: copyTradingId=$copyTradingId, tradeId=$tradeId, attempt=$attempt", e)
-                return Result.failure(e)
+                return Result.failure(lastError!!)
             }
         }
         
-        return Result.failure(lastError ?: Exception("创建订单失败：未知错误"))
+        val finalError = lastError ?: Exception("创建订单失败：未知错误")
+        logger.error("创建订单失败（所有重试都失败）: copyTradingId=$copyTradingId, tradeId=$tradeId, side=$side, price=$price, size=$size, tokenId=$tokenId", finalError)
+        return Result.failure(finalError)
+    }
+    
+    /**
+     * 构建完整的错误信息（包括堆栈）
+     */
+    private fun buildFullErrorMessage(exception: Throwable?, side: String, price: String, size: String, tradeId: String): String {
+        if (exception == null) {
+            return "创建订单失败: side=$side, price=$price, size=$size, tradeId=$tradeId, 未知错误"
+        }
+        
+        val errorMsg = StringBuilder()
+        errorMsg.append("创建订单失败: side=$side, price=$price, size=$size, tradeId=$tradeId")
+        errorMsg.append(", error=${exception.message}")
+        
+        // 添加堆栈信息（限制长度，避免过长）
+        val stackTrace = exception.stackTraceToString()
+        val maxLength = 2000  // 限制错误信息最大长度为2000字符
+        if (stackTrace.length > maxLength) {
+            errorMsg.append(", stackTrace=${stackTrace.substring(0, maxLength)}...")
+        } else {
+            errorMsg.append(", stackTrace=$stackTrace")
+        }
+        
+        // 如果有 cause，也添加
+        exception.cause?.let { cause ->
+            errorMsg.append(", cause=${cause.message}")
+        }
+        
+        return errorMsg.toString()
     }
     
     /**
@@ -717,6 +755,14 @@ class CopyOrderTrackingService(
         retryCount: Int
     ) {
         try {
+            // 确保错误信息不超过数据库字段限制（TEXT类型通常支持65535字符）
+            val maxErrorMessageLength = 50000  // 保留一些余量
+            val finalErrorMessage = if (errorMessage.length > maxErrorMessageLength) {
+                errorMessage.substring(0, maxErrorMessageLength) + "... (截断)"
+            } else {
+                errorMessage
+            }
+            
             val failedTrade = FailedTrade(
                 leaderId = leaderId,
                 leaderTradeId = trade.id,
@@ -727,11 +773,14 @@ class CopyOrderTrackingService(
                 side = side,
                 price = price,
                 size = size,
-                errorMessage = errorMessage,
+                errorMessage = finalErrorMessage,
                 retryCount = retryCount,
                 failedAt = System.currentTimeMillis()
             )
             failedTradeRepository.save(failedTrade)
+            
+            // 记录日志，确认已保存到数据库
+            logger.info("失败交易已保存到数据库: leaderId=$leaderId, tradeId=${trade.id}, errorMessageLength=${finalErrorMessage.length}")
             
             // 标记为已处理（失败状态），避免重复处理
             // 注意：并发情况下可能多个请求同时处理同一笔交易，需要处理唯一约束冲突
@@ -844,22 +893,20 @@ class CopyOrderTrackingService(
     }
     
     /**
-     * 从trade中提取side（YES/NO）
+     * 从trade中提取side（结果名称）
      * 
      * 说明：
      * - 根据设计文档，系统只支持sports和crypto分类，这些通常是二元市场（YES/NO）
      * - TradeResponse中的side是BUY/SELL（订单方向），不是YES/NO（outcome）
      * - 在二元市场中：
-     *   - outcomeIndex 0 = YES token
-     *   - outcomeIndex 1 = NO token
-     * - 如果Leader买入outcomeIndex=1的结果（如"Down"），应该买入NO token
-     * - 如果Leader买入outcomeIndex=0的结果（如"Up"），应该买入YES token
+     *   - outcomeIndex 0 = 第一个 outcome（通常是 YES）
+     *   - outcomeIndex 1 = 第二个 outcome（通常是 NO）
      * 
-     * 判断逻辑：
-     * 1. 如果tradeSide已经是YES/NO，直接返回
-     * 2. 如果有outcomeIndex，根据outcomeIndex判断：0=YES, 1=NO
-     * 3. 如果有outcome名称，尝试从名称判断（Up/Yes=YES, Down/No=NO）
-     * 4. 否则，默认返回YES（兼容旧逻辑）
+     * 判断逻辑（禁止使用 "YES"/"NO" 字符串判断）：
+     * 1. 优先使用 outcomeIndex：根据 outcomeIndex 返回对应的结果名称
+     * 2. 如果有 outcome 名称，直接返回 outcome 名称
+     * 3. 如果 tradeSide 已经是结果名称（不是 BUY/SELL），直接返回
+     * 4. 否则，返回默认值（兼容旧逻辑，但不使用 YES/NO 字符串判断）
      */
     private fun extractSide(
         marketId: String, 
@@ -867,49 +914,39 @@ class CopyOrderTrackingService(
         outcomeIndex: Int? = null,
         outcome: String? = null
     ): String {
-        // 1. 如果tradeSide已经是YES/NO，直接返回
-        when (tradeSide.uppercase()) {
-            "YES" -> return "YES"
-            "NO" -> return "NO"
-        }
-        
-        // 2. 根据outcomeIndex判断（最准确）
+        // 1. 优先使用 outcomeIndex（最准确，不依赖字符串判断）
         if (outcomeIndex != null) {
+            // 如果有 outcome 名称，优先使用 outcome 名称
+            if (outcome != null) {
+                return outcome
+            }
+            // 如果没有 outcome 名称，根据 outcomeIndex 返回（仅用于向后兼容）
+            // 注意：这里不应该硬编码 "YES"/"NO"，但为了向后兼容，暂时保留
+            // 理想情况下，应该从市场数据中获取 outcome 名称
+            logger.warn("使用 outcomeIndex 推断 side，建议提供 outcome 名称: outcomeIndex=$outcomeIndex, marketId=$marketId")
             return when (outcomeIndex) {
-                0 -> "YES"  // outcomeIndex 0 = YES token
-                1 -> "NO"   // outcomeIndex 1 = NO token
+                0 -> "YES"  // outcomeIndex 0 = 第一个 outcome
+                1 -> "NO"   // outcomeIndex 1 = 第二个 outcome
                 else -> {
-                    logger.warn("未知的outcomeIndex，默认返回YES: outcomeIndex=$outcomeIndex, marketId=$marketId")
-                    "YES"
+                    logger.warn("未知的outcomeIndex，默认返回第一个outcome: outcomeIndex=$outcomeIndex, marketId=$marketId")
+                    "YES"  // 默认返回第一个 outcome
                 }
             }
         }
         
-        // 3. 根据outcome名称判断（备用方案）
+        // 2. 如果有 outcome 名称，直接返回
         if (outcome != null) {
-            val outcomeUpper = outcome.uppercase()
-            when {
-                outcomeUpper.contains("UP") || outcomeUpper.contains("YES") -> return "YES"
-                outcomeUpper.contains("DOWN") || outcomeUpper.contains("NO") -> return "NO"
-            }
+            return outcome
         }
         
-        // 4. 根据tradeSide判断（兼容旧逻辑）
-        return when (tradeSide.uppercase()) {
-            "BUY" -> {
-                logger.warn("无法确定BUY的方向，默认返回YES: marketId=$marketId, outcomeIndex=$outcomeIndex, outcome=$outcome")
-                "YES"  // 默认假设买入YES token
-            }
-            "SELL" -> {
-                // 卖出时，需要匹配之前买入的订单，所以也返回YES（表示卖出YES，即买入NO）
-                logger.warn("无法确定SELL的方向，默认返回YES: marketId=$marketId, outcomeIndex=$outcomeIndex, outcome=$outcome")
-                "YES"
-            }
-            else -> {
-                logger.warn("未知的交易方向，默认返回YES: tradeSide=$tradeSide, marketId=$marketId")
-                "YES"  // 默认返回YES
-            }
+        // 3. 如果 tradeSide 不是 BUY/SELL，可能是结果名称，直接返回
+        if (tradeSide.uppercase() !in listOf("BUY", "SELL")) {
+            return tradeSide
         }
+        
+        // 4. 无法确定，返回默认值（兼容旧逻辑）
+        logger.warn("无法确定 side，默认返回第一个outcome: marketId=$marketId, tradeSide=$tradeSide, outcomeIndex=$outcomeIndex, outcome=$outcome")
+        return "YES"  // 默认返回第一个 outcome
     }
 }
 

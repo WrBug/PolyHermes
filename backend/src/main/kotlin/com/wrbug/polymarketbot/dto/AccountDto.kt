@@ -160,7 +160,8 @@ data class PositionSellResponse(
  * 市场价格请求
  */
 data class MarketPriceRequest(
-    val marketId: String  // 市场ID
+    val marketId: String,  // 市场ID
+    val outcomeIndex: Int? = null  // 结果索引（可选）：0, 1, 2...，用于确定需要查询哪个 outcome 的价格。如果提供了 outcomeIndex，会转换价格（1 - 第一个outcome的价格）
 )
 
 /**

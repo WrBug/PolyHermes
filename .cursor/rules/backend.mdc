@@ -504,3 +504,34 @@ data class ApiResponse<T>(
 - ❌ 禁止使用GET、PUT、DELETE等方法（统一使用POST）
 - ❌ 禁止返回不符合统一格式的响应
 - ❌ 禁止在响应中直接返回Map类型（使用data class）
+
+### Side 判断规范
+- ❌ **禁止使用 "YES" 或 "NO" 字符串去判断 side**
+- ✅ **必须使用 `outcomeIndex` 来判断方向**（0 = 第一个 outcome，1 = 第二个 outcome，以此类推）
+- ✅ 如果必须使用 side 字符串，应该从市场的 outcomes 数组中获取，而不是硬编码 "YES"/"NO"
+- ✅ 对于二元市场的价格转换，应该通过 `outcomeIndex` 判断是否为第二个 outcome（index = 1），而不是判断 side 是否为 "NO"
+
+```kotlin
+// ❌ 错误：使用字符串比较判断 side
+if (side != null && side.uppercase() == "NO") {
+    // 转换价格
+}
+
+// ❌ 错误：硬编码 "YES"/"NO" 判断
+when (side.uppercase()) {
+    "YES" -> // ...
+    "NO" -> // ...
+}
+
+// ✅ 正确：使用 outcomeIndex 判断
+if (outcomeIndex != null && outcomeIndex == 1) {
+    // 第二个 outcome（在二元市场中通常是 NO），转换价格
+}
+
+// ✅ 正确：从市场 outcomes 获取 side 信息
+val outcomes = JsonUtils.parseStringArray(market.outcomes)
+val targetOutcomeIndex = outcomes.indexOfFirst { it.equals(side, ignoreCase = true) }
+if (targetOutcomeIndex >= 0) {
+    // 使用 targetOutcomeIndex 进行判断
+}
+```

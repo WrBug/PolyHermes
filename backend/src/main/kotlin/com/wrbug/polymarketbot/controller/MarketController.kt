@@ -36,7 +36,7 @@ class MarketController(
                 return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_MARKET_ID_EMPTY, messageSource = messageSource))
             }
             
-            val result = runBlocking { accountService.getMarketPrice(request.marketId) }
+            val result = runBlocking { accountService.getMarketPrice(request.marketId, request.outcomeIndex) }
             result.fold(
                 onSuccess = { response ->
                     ResponseEntity.ok(ApiResponse.success(response))

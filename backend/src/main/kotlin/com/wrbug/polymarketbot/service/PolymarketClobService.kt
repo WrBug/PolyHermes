@@ -242,13 +242,33 @@ class PolymarketClobService(
         return try {
             val response = clobApi.createOrder(request)
             if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
+                val responseBody = response.body()!!
+                if (responseBody.success) {
+                    Result.success(responseBody)
+                } else {
+                    val errorBody = try {
+                        response.errorBody()?.string()
+                    } catch (e: Exception) {
+                        null
+                    }
+                    val errorMsg = "创建订单失败: orderType=${request.orderType}, owner=${request.owner}, errorMsg=${responseBody.errorMsg}${if (errorBody != null) ", errorBody=$errorBody" else ""}"
+                    logger.error(errorMsg)
+                    Result.failure(Exception(errorMsg))
+                }
             } else {
-                Result.failure(Exception("创建订单失败: ${response.code()} ${response.message()}"))
+                val errorBody = try {
+                    response.errorBody()?.string()
+                } catch (e: Exception) {
+                    null
+                }
+                val errorMsg = "创建订单失败: orderType=${request.orderType}, owner=${request.owner}, code=${response.code()}, message=${response.message()}${if (errorBody != null) ", errorBody=$errorBody" else ""}"
+                logger.error(errorMsg)
+                Result.failure(Exception(errorMsg))
             }
         } catch (e: Exception) {
-            logger.error("创建订单异常: ${e.message}", e)
-            Result.failure(e)
+            val errorMsg = "创建订单异常: orderType=${request.orderType}, owner=${request.owner}, error=${e.message}"
+            logger.error(errorMsg, e)
+            Result.failure(Exception(errorMsg, e))
         }
     }
     
