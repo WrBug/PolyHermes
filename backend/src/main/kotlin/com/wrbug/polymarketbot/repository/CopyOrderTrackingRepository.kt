@@ -45,5 +45,10 @@ interface CopyOrderTrackingRepository : JpaRepository<CopyOrderTracking, Long> {
      * 根据Leader交易ID查询订单
      */
     fun findByLeaderBuyTradeId(leaderBuyTradeId: String): CopyOrderTracking?
+    
+    /**
+     * 根据买入订单ID查询订单跟踪记录
+     */
+    fun findByBuyOrderId(buyOrderId: String): List<CopyOrderTracking>
 }
 

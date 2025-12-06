@@ -52,7 +52,13 @@ class CopyTradingService(
                 return Result.failure(IllegalArgumentException("该跟单关系已存在"))
             }
             
-            // 4. 获取配置参数（从模板填充或手动输入）
+            // 4. 验证配置名（强校验：不能为空字符串）
+            val configName = request.configName?.trim()
+            if (configName.isNullOrBlank()) {
+                return Result.failure(IllegalArgumentException("配置名不能为空"))
+            }
+            
+            // 5. 获取配置参数（从模板填充或手动输入）
             val config = if (request.templateId != null) {
                 // 从模板填充
                 val template = templateRepository.findById(request.templateId).orElse(null)
@@ -109,7 +115,7 @@ class CopyTradingService(
                 )
             }
             
-            // 5. 创建跟单配置
+            // 6. 创建跟单配置
             val copyTrading = CopyTrading(
                 accountId = request.accountId,
                 leaderId = request.leaderId,
@@ -132,7 +138,9 @@ class CopyTradingService(
                 maxSpread = config.maxSpread,
                 minOrderbookDepth = config.minOrderbookDepth,
                 minPrice = config.minPrice,
-                maxPrice = config.maxPrice
+                maxPrice = config.maxPrice,
+                configName = configName,
+                pushFailedOrders = request.pushFailedOrders ?: false
             )
             
             val saved = copyTradingRepository.save(copyTrading)
@@ -164,6 +172,17 @@ class CopyTradingService(
             val copyTrading = copyTradingRepository.findById(request.copyTradingId).orElse(null)
                 ?: return Result.failure(IllegalArgumentException("跟单配置不存在"))
             
+            // 验证配置名（如果提供了配置名，进行强校验）
+            val configName = if (request.configName != null) {
+                val trimmed = request.configName.trim()
+                if (trimmed.isBlank()) {
+                    return Result.failure(IllegalArgumentException("配置名不能为空"))
+                }
+                trimmed
+            } else {
+                copyTrading.configName
+            }
+            
             // 更新字段（只更新提供的字段）
             val updated = copyTrading.copy(
                 enabled = request.enabled ?: copyTrading.enabled,
@@ -186,6 +205,8 @@ class CopyTradingService(
                 minOrderbookDepth = request.minOrderbookDepth?.toSafeBigDecimal() ?: copyTrading.minOrderbookDepth,
                 minPrice = request.minPrice?.toSafeBigDecimal() ?: copyTrading.minPrice,
                 maxPrice = request.maxPrice?.toSafeBigDecimal() ?: copyTrading.maxPrice,
+                configName = configName,
+                pushFailedOrders = request.pushFailedOrders ?: copyTrading.pushFailedOrders,
                 updatedAt = System.currentTimeMillis()
             )
             
@@ -390,6 +411,8 @@ class CopyTradingService(
             minOrderbookDepth = copyTrading.minOrderbookDepth?.toPlainString(),
             minPrice = copyTrading.minPrice?.toPlainString(),
             maxPrice = copyTrading.maxPrice?.toPlainString(),
+            configName = copyTrading.configName,
+            pushFailedOrders = copyTrading.pushFailedOrders,
             createdAt = copyTrading.createdAt,
             updatedAt = copyTrading.updatedAt
         )

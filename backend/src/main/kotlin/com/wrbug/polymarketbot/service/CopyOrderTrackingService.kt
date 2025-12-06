@@ -408,50 +408,52 @@ class CopyOrderTrackingService(
                             retryCount = 1  // 已重试一次
                         )
 
-                        // 发送订单失败通知（异步，不阻塞）
-                        notificationScope.launch {
-                            try {
-                                // 获取市场信息（标题和slug）
-                                val marketInfo = withContext(Dispatchers.IO) {
-                                    try {
-                                        val gammaApi = retrofitFactory.createGammaApi()
-                                        val marketResponse = gammaApi.listMarkets(conditionIds = listOf(trade.market))
-                                        if (marketResponse.isSuccessful && marketResponse.body() != null) {
-                                            marketResponse.body()!!.firstOrNull()
-                                        } else {
+                        // 发送订单失败通知（异步，不阻塞，仅在 pushFailedOrders 为 true 时发送）
+                        if (copyTrading.pushFailedOrders) {
+                            notificationScope.launch {
+                                try {
+                                    // 获取市场信息（标题和slug）
+                                    val marketInfo = withContext(Dispatchers.IO) {
+                                        try {
+                                            val gammaApi = retrofitFactory.createGammaApi()
+                                            val marketResponse = gammaApi.listMarkets(conditionIds = listOf(trade.market))
+                                            if (marketResponse.isSuccessful && marketResponse.body() != null) {
+                                                marketResponse.body()!!.firstOrNull()
+                                            } else {
+                                                null
+                                            }
+                                        } catch (e: Exception) {
+                                            logger.warn("获取市场信息失败: ${e.message}", e)
                                             null
                                         }
-                                    } catch (e: Exception) {
-                                        logger.warn("获取市场信息失败: ${e.message}", e)
-                                        null
                                     }
-                                }
 
-                                val marketTitle = marketInfo?.question ?: trade.market
-                                val marketSlug = marketInfo?.slug
+                                    val marketTitle = marketInfo?.question ?: trade.market
+                                    val marketSlug = marketInfo?.slug
 
-                                // 获取当前语言设置（从 LocaleContextHolder）
-                                val locale = try {
-                                    org.springframework.context.i18n.LocaleContextHolder.getLocale()
+                                    // 获取当前语言设置（从 LocaleContextHolder）
+                                    val locale = try {
+                                        org.springframework.context.i18n.LocaleContextHolder.getLocale()
+                                    } catch (e: Exception) {
+                                        java.util.Locale("zh", "CN")  // 默认简体中文
+                                    }
+
+                                    telegramNotificationService?.sendOrderFailureNotification(
+                                        marketTitle = marketTitle,
+                                        marketId = trade.market,
+                                        marketSlug = marketSlug,
+                                        side = "BUY",
+                                        outcome = null,  // 失败时可能没有 outcome
+                                        price = buyPrice.toString(),
+                                        size = finalBuyQuantity.toString(),
+                                        errorMessage = exception?.message.orEmpty(),  // 只传递后端返回的 msg
+                                        accountName = account.accountName,
+                                        walletAddress = account.walletAddress,
+                                        locale = locale
+                                    )
                                 } catch (e: Exception) {
-                                    java.util.Locale("zh", "CN")  // 默认简体中文
+                                    logger.warn("发送订单失败通知失败: ${e.message}", e)
                                 }
-
-                                telegramNotificationService?.sendOrderFailureNotification(
-                                    marketTitle = marketTitle,
-                                    marketId = trade.market,
-                                    marketSlug = marketSlug,
-                                    side = "BUY",
-                                    outcome = null,  // 失败时可能没有 outcome
-                                    price = buyPrice.toString(),
-                                    size = finalBuyQuantity.toString(),
-                                    errorMessage = exception?.message.orEmpty(),  // 只传递后端返回的 msg
-                                    accountName = account.accountName,
-                                    walletAddress = account.walletAddress,
-                                    locale = locale
-                                )
-                            } catch (e: Exception) {
-                                logger.warn("发送订单失败通知失败: ${e.message}", e)
                             }
                         }
 
@@ -531,6 +533,11 @@ class CopyOrderTrackingService(
                             } catch (e: Exception) {
                                 java.util.Locale("zh", "CN")  // 默认简体中文
                             }
+                            
+                            // 获取 Leader 和跟单配置信息
+                            val leader = leaderRepository.findById(copyTrading.leaderId).orElse(null)
+                            val leaderName = leader?.leaderName
+                            val configName = copyTrading.configName
 
                             telegramNotificationService?.sendOrderSuccessNotification(
                                 orderId = realOrderId,
@@ -545,7 +552,9 @@ class CopyOrderTrackingService(
                                 apiSecret = apiSecret,
                                 apiPassphrase = apiPassphrase,
                                 walletAddressForApi = account.walletAddress,
-                                locale = locale
+                                locale = locale,
+                                leaderName = leaderName,
+                                configName = configName
                             )
                         } catch (e: Exception) {
                             logger.warn("发送订单成功通知失败: ${e.message}", e)

@@ -147,6 +147,16 @@ const CopyTradingList: React.FC = () => {
   
   const columns = [
     {
+      title: t('copyTradingList.configName') || '配置名',
+      key: 'configName',
+      width: isMobile ? 100 : 150,
+      render: (_: any, record: CopyTrading) => (
+        <div style={{ fontSize: isMobile ? 13 : 14, fontWeight: 500 }}>
+          {record.configName || t('copyTradingList.configNameNotProvided') || '未提供'}
+        </div>
+      )
+    },
+    {
       title: t('copyTradingList.wallet') || '钱包',
       key: 'account',
       width: isMobile ? 100 : 150,
@@ -454,10 +464,17 @@ const CopyTradingList: React.FC = () => {
                       {/* 基本信息 */}
                       <div style={{ marginBottom: '12px' }}>
                         <div style={{ 
-                          fontSize: '16px', 
+                          fontSize: '18px', 
                           fontWeight: 'bold', 
                           marginBottom: '8px',
                           color: '#1890ff'
+                        }}>
+                          {record.configName || t('copyTradingList.configNameNotProvided') || '未提供'}
+                        </div>
+                        <div style={{ 
+                          fontSize: '14px', 
+                          marginBottom: '8px',
+                          color: '#666'
                         }}>
                           {record.copyMode === 'RATIO' 
                             ? `${t('copyTradingList.ratioMode') || '比例'} ${record.copyRatio}x`

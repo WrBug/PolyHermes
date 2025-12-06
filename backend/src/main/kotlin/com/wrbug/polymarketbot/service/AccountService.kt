@@ -1351,7 +1351,38 @@ class AccountService(
                 )
             }
 
-            // 6. 返回结果
+            // 6. 发送赎回推送通知（异步，不阻塞）
+            notificationScope.launch {
+                try {
+                    // 获取当前语言设置
+                    val locale = try {
+                        org.springframework.context.i18n.LocaleContextHolder.getLocale()
+                    } catch (e: Exception) {
+                        java.util.Locale("zh", "CN")  // 默认简体中文
+                    }
+                    
+                    // 为每个账户发送推送
+                    for (transaction in accountTransactions) {
+                        val account = accounts[transaction.accountId]
+                        if (account != null) {
+                            telegramNotificationService?.sendRedeemNotification(
+                                accountName = account.accountName,
+                                walletAddress = account.walletAddress,
+                                transactionHash = transaction.transactionHash,
+                                totalRedeemedValue = transaction.positions.fold(BigDecimal.ZERO) { sum, info ->
+                                    sum.add(info.value.toSafeBigDecimal())
+                                }.toPlainString(),
+                                positions = transaction.positions,
+                                locale = locale
+                            )
+                        }
+                    }
+                } catch (e: Exception) {
+                    logger.error("发送赎回推送通知失败: ${e.message}", e)
+                }
+            }
+            
+            // 7. 返回结果
             Result.success(
                 com.wrbug.polymarketbot.dto.PositionRedeemResponse(
                     transactions = accountTransactions,

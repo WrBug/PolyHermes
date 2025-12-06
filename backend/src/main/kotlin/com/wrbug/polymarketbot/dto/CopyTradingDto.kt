@@ -34,7 +34,10 @@ data class CopyTradingCreateRequest(
     val maxSpread: String? = null,  // 最大价差（绝对价格），NULL表示不启用
     val minOrderbookDepth: String? = null,  // 最小订单簿深度（USDC金额），NULL表示不启用
     val minPrice: String? = null,  // 最低价格（可选），NULL表示不限制最低价
-    val maxPrice: String? = null  // 最高价格（可选），NULL表示不限制最高价
+    val maxPrice: String? = null,  // 最高价格（可选），NULL表示不限制最高价
+    // 新增配置字段
+    val configName: String? = null,  // 配置名（可选）
+    val pushFailedOrders: Boolean? = null  // 推送失败订单（可选）
 )
 
 /**
@@ -63,7 +66,10 @@ data class CopyTradingUpdateRequest(
     val maxSpread: String? = null,
     val minOrderbookDepth: String? = null,
     val minPrice: String? = null,  // 最低价格（可选），NULL表示不限制最低价
-    val maxPrice: String? = null  // 最高价格（可选），NULL表示不限制最高价
+    val maxPrice: String? = null,  // 最高价格（可选），NULL表示不限制最高价
+    // 新增配置字段
+    val configName: String? = null,  // 配置名（可选，但提供时必须非空）
+    val pushFailedOrders: Boolean? = null  // 推送失败订单（可选）
 )
 
 /**
@@ -130,6 +136,9 @@ data class CopyTradingDto(
     val minOrderbookDepth: String?,
     val minPrice: String?,  // 最低价格（可选），NULL表示不限制最低价
     val maxPrice: String?,  // 最高价格（可选），NULL表示不限制最高价
+    // 新增配置字段
+    val configName: String? = null,  // 配置名（可选）
+    val pushFailedOrders: Boolean = false,  // 推送失败订单（默认关闭）
     val createdAt: Long,
     val updatedAt: Long
 )

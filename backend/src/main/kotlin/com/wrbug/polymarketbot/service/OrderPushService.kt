@@ -26,7 +26,10 @@ class OrderPushService(
     private val objectMapper: ObjectMapper,
     private val clobService: PolymarketClobService,
     private val retrofitFactory: RetrofitFactory,  // 用于创建 Gamma API 客户端（不需要认证）
-    private val cryptoUtils: com.wrbug.polymarketbot.util.CryptoUtils
+    private val cryptoUtils: com.wrbug.polymarketbot.util.CryptoUtils,
+    private val copyOrderTrackingRepository: com.wrbug.polymarketbot.repository.CopyOrderTrackingRepository? = null,  // 可选，避免循环依赖
+    private val copyTradingRepository: com.wrbug.polymarketbot.repository.CopyTradingRepository? = null,  // 可选，避免循环依赖
+    private val leaderRepository: com.wrbug.polymarketbot.repository.LeaderRepository? = null  // 可选，避免循环依赖
 ) {
 
     private val logger = LoggerFactory.getLogger(OrderPushService::class.java)
@@ -316,15 +319,40 @@ class OrderPushService(
             if (eventType == "order") {
                 val orderMessage = objectMapper.readValue(message, OrderMessageDto::class.java)
 
-                // 异步获取订单详情
+                // 异步获取订单详情和跟单信息
                 scope.launch {
                     val orderDetail = fetchOrderDetail(account, orderMessage.id, orderMessage.market)
+                    
+                    // 查询订单是否来自跟单
+                    var leaderName: String? = null
+                    var configName: String? = null
+                    
+                    if (copyOrderTrackingRepository != null && copyTradingRepository != null && leaderRepository != null) {
+                        try {
+                            val trackingList = copyOrderTrackingRepository.findByBuyOrderId(orderMessage.id)
+                            val tracking = trackingList.firstOrNull()
+                            if (tracking != null) {
+                                val copyTrading = copyTradingRepository.findById(tracking.copyTradingId).orElse(null)
+                                if (copyTrading != null) {
+                                    configName = copyTrading.configName
+                                    val leader = leaderRepository.findById(copyTrading.leaderId).orElse(null)
+                                    if (leader != null) {
+                                        leaderName = leader.leaderName
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            logger.warn("查询跟单信息失败: orderId=${orderMessage.id}, ${e.message}", e)
+                        }
+                    }
 
                     val pushMessage = OrderPushMessage(
                         accountId = account.id!!,
                         accountName = account.accountName ?: account.walletAddress,
                         order = orderMessage,
-                        orderDetail = orderDetail
+                        orderDetail = orderDetail,
+                        leaderName = leaderName,
+                        configName = configName
                     )
 
                     // 推送给所有订阅者

@@ -22,10 +22,31 @@ const CopyTradingAdd: React.FC = () => {
   const [templateModalVisible, setTemplateModalVisible] = useState(false)
   const [copyMode, setCopyMode] = useState<'RATIO' | 'FIXED'>('RATIO')
   
+  // 生成默认配置名
+  const generateDefaultConfigName = (): string => {
+    const now = new Date()
+    const dateStr = now.toLocaleDateString('zh-CN', { 
+      year: 'numeric', 
+      month: '2-digit', 
+      day: '2-digit' 
+    }).replace(/\//g, '-')
+    const timeStr = now.toLocaleTimeString('zh-CN', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    })
+    return `跟单配置-${dateStr}-${timeStr}`
+  }
+  
   useEffect(() => {
     fetchAccounts()
     fetchLeaders()
     fetchTemplates()
+    
+    // 生成默认配置名
+    const defaultConfigName = generateDefaultConfigName()
+    form.setFieldsValue({ configName: defaultConfigName })
   }, [])
   
   const fetchLeaders = async () => {
@@ -114,7 +135,9 @@ const CopyTradingAdd: React.FC = () => {
         maxSpread: values.maxSpread?.toString(),
         minOrderbookDepth: values.minOrderbookDepth?.toString(),
         minPrice: values.minPrice?.toString(),
-        maxPrice: values.maxPrice?.toString()
+        maxPrice: values.maxPrice?.toString(),
+        configName: values.configName?.trim(),
+        pushFailedOrders: values.pushFailedOrders ?? false
       }
       
       const response = await apiService.copyTrading.create(request)
@@ -163,10 +186,26 @@ const CopyTradingAdd: React.FC = () => {
             useWebSocket: true,
             websocketReconnectInterval: 5000,
             websocketMaxRetries: 10,
-            supportSell: true
+            supportSell: true,
+            pushFailedOrders: false
           }}
         >
           {/* 基础信息 */}
+          <Form.Item
+            label={t('copyTradingAdd.configName') || '配置名'}
+            name="configName"
+            rules={[
+              { required: true, message: t('copyTradingAdd.configNameRequired') || '请输入配置名' },
+              { whitespace: true, message: t('copyTradingAdd.configNameRequired') || '配置名不能为空' }
+            ]}
+            tooltip={t('copyTradingAdd.configNameTooltip') || '为跟单配置设置一个名称，便于识别和管理'}
+          >
+            <Input 
+              placeholder={t('copyTradingAdd.configNamePlaceholder') || '例如：跟单配置1'} 
+              maxLength={255}
+            />
+          </Form.Item>
+          
           <Form.Item
             label={t('copyTradingAdd.selectWallet') || '选择钱包'}
             name="accountId"
@@ -444,11 +483,23 @@ const CopyTradingAdd: React.FC = () => {
             </Input.Group>
           </Form.Item>
           
-          {/* 跟单卖出 - 表单最底部 */}
+          <Divider>{t('copyTradingAdd.advancedSettings') || '高级设置'}</Divider>
+          
+          {/* 跟单卖出 */}
           <Form.Item
             label={t('copyTradingAdd.supportSell') || '跟单卖出'}
             name="supportSell"
             tooltip={t('copyTradingAdd.supportSellTooltip') || '是否跟单 Leader 的卖出订单'}
+            valuePropName="checked"
+          >
+            <Switch />
+          </Form.Item>
+          
+          {/* 推送失败订单 */}
+          <Form.Item
+            label={t('copyTradingAdd.pushFailedOrders') || '推送失败订单'}
+            name="pushFailedOrders"
+            tooltip={t('copyTradingAdd.pushFailedOrdersTooltip') || '开启后，失败的订单会推送到 Telegram'}
             valuePropName="checked"
           >
             <Switch />

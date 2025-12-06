@@ -58,7 +58,9 @@ const CopyTradingEdit: React.FC = () => {
             maxSpread: found.maxSpread ? parseFloat(found.maxSpread) : undefined,
             minOrderbookDepth: found.minOrderbookDepth ? parseFloat(found.minOrderbookDepth) : undefined,
             minPrice: found.minPrice ? parseFloat(found.minPrice) : undefined,
-            maxPrice: found.maxPrice ? parseFloat(found.maxPrice) : undefined
+            maxPrice: found.maxPrice ? parseFloat(found.maxPrice) : undefined,
+            configName: found.configName || '',
+            pushFailedOrders: found.pushFailedOrders ?? false
           })
         } else {
           message.error(t('copyTradingEdit.fetchFailed') || '跟单配置不存在')
@@ -122,7 +124,9 @@ const CopyTradingEdit: React.FC = () => {
         maxSpread: values.maxSpread?.toString(),
         minOrderbookDepth: values.minOrderbookDepth?.toString(),
         minPrice: values.minPrice?.toString(),
-        maxPrice: values.maxPrice?.toString()
+        maxPrice: values.maxPrice?.toString(),
+        configName: values.configName?.trim() || undefined,
+        pushFailedOrders: values.pushFailedOrders
       }
       
       const response = await apiService.copyTrading.update(request)
@@ -172,6 +176,21 @@ const CopyTradingEdit: React.FC = () => {
           onFinish={handleSubmit}
         >
           {/* 基础信息（只读） */}
+          <Form.Item
+            label={t('copyTradingEdit.configName') || '配置名'}
+            name="configName"
+            rules={[
+              { required: true, message: t('copyTradingEdit.configNameRequired') || '请输入配置名' },
+              { whitespace: true, message: t('copyTradingEdit.configNameRequired') || '配置名不能为空' }
+            ]}
+            tooltip={t('copyTradingEdit.configNameTooltip') || '为跟单配置设置一个名称，便于识别和管理'}
+          >
+            <Input 
+              placeholder={t('copyTradingEdit.configNamePlaceholder') || '例如：跟单配置1'} 
+              maxLength={255}
+            />
+          </Form.Item>
+          
           <Form.Item
             label={t('copyTradingAdd.selectWallet') || t('copyTradingEdit.selectWallet') || '钱包'}
             name="accountId"
@@ -433,11 +452,23 @@ const CopyTradingEdit: React.FC = () => {
             </Input.Group>
           </Form.Item>
           
-          {/* 跟单卖出 - 表单最底部 */}
+          <Divider>{t('copyTradingEdit.advancedSettings') || '高级设置'}</Divider>
+          
+          {/* 跟单卖出 */}
           <Form.Item
             label={t('copyTradingEdit.supportSell') || '跟单卖出'}
             name="supportSell"
             tooltip={t('copyTradingEdit.supportSellTooltip') || '是否跟单 Leader 的卖出订单'}
+            valuePropName="checked"
+          >
+            <Switch />
+          </Form.Item>
+          
+          {/* 推送失败订单 */}
+          <Form.Item
+            label={t('copyTradingEdit.pushFailedOrders') || '推送失败订单'}
+            name="pushFailedOrders"
+            tooltip={t('copyTradingEdit.pushFailedOrdersTooltip') || '开启后，失败的订单会推送到 Telegram'}
             valuePropName="checked"
           >
             <Switch />

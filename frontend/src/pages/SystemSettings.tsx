@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Card, Form, Button, Switch, Input, InputNumber, message, Typography, Space, Alert, Badge, Spin, Row, Col } from 'antd'
-import { SaveOutlined, CheckCircleOutlined, ReloadOutlined, GlobalOutlined } from '@ant-design/icons'
+import { SaveOutlined, CheckCircleOutlined, ReloadOutlined, GlobalOutlined, SettingOutlined } from '@ant-design/icons'
 import { apiService } from '../services/api'
 import { useMediaQuery } from 'react-responsive'
+import { useTranslation } from 'react-i18next'
 
 const { Title, Text } = Typography
 
@@ -35,18 +36,23 @@ interface ApiHealthStatus {
 }
 
 const SystemSettings: React.FC = () => {
+  const { t } = useTranslation()
   const isMobile = useMediaQuery({ maxWidth: 768 })
   const [form] = Form.useForm()
+  const [autoRedeemForm] = Form.useForm()
   const [loading, setLoading] = useState(false)
   const [checking, setChecking] = useState(false)
   const [checkResult, setCheckResult] = useState<ProxyCheckResponse | null>(null)
   const [currentConfig, setCurrentConfig] = useState<ProxyConfig | null>(null)
   const [apiHealthStatus, setApiHealthStatus] = useState<ApiHealthStatus[]>([])
   const [checkingApiHealth, setCheckingApiHealth] = useState(false)
+  const [autoRedeemLoading, setAutoRedeemLoading] = useState(false)
+  const [builderApiKeyConfigured, setBuilderApiKeyConfigured] = useState<boolean>(false)
   
   useEffect(() => {
     fetchConfig()
     checkApiHealth()
+    fetchSystemConfig()
   }, [])
   
   const fetchConfig = async () => {
@@ -158,6 +164,38 @@ const SystemSettings: React.FC = () => {
       return '未配置'
     } else {
       return '异常'
+    }
+  }
+  
+  const fetchSystemConfig = async () => {
+    try {
+      const response = await apiService.systemConfig.get()
+      if (response.data.code === 0 && response.data.data) {
+        const config = response.data.data
+        setBuilderApiKeyConfigured(config.builderApiKeyConfigured)
+        autoRedeemForm.setFieldsValue({
+          autoRedeem: config.autoRedeem
+        })
+      }
+    } catch (error: any) {
+      console.error('获取系统配置失败:', error)
+    }
+  }
+  
+  const handleAutoRedeemSubmit = async (values: { autoRedeem: boolean }) => {
+    setAutoRedeemLoading(true)
+    try {
+      const response = await apiService.systemConfig.updateAutoRedeem({ enabled: values.autoRedeem })
+      if (response.data.code === 0) {
+        message.success(t('systemSettings.autoRedeem.saveSuccess') || '自动赎回配置已更新')
+        fetchSystemConfig()
+      } else {
+        message.error(response.data.msg || t('systemSettings.autoRedeem.saveFailed') || '更新自动赎回配置失败')
+      }
+    } catch (error: any) {
+      message.error(error.message || t('systemSettings.autoRedeem.saveFailed') || '更新自动赎回配置失败')
+    } finally {
+      setAutoRedeemLoading(false)
     }
   }
   
@@ -388,6 +426,65 @@ const SystemSettings: React.FC = () => {
             showIcon
           />
         )}
+      </Card>
+      
+      <Card 
+        title={
+          <Space>
+            <SettingOutlined />
+            <span>{t('systemSettings.autoRedeem.title') || '自动赎回配置'}</span>
+          </Space>
+        }
+        style={{ marginBottom: '16px' }}
+      >
+        <Form
+          form={autoRedeemForm}
+          layout="vertical"
+          onFinish={handleAutoRedeemSubmit}
+          size={isMobile ? 'middle' : 'large'}
+        >
+          <Form.Item
+            label={t('systemSettings.autoRedeem.label') || '自动赎回'}
+            name="autoRedeem"
+            tooltip={t('systemSettings.autoRedeem.tooltip') || '开启后，系统会自动赎回可赎回的仓位。需要配置 Builder API Key 才能生效'}
+            valuePropName="checked"
+          >
+            <Switch />
+          </Form.Item>
+          
+          {!builderApiKeyConfigured && (
+            <Alert
+              message={t('systemSettings.autoRedeem.builderApiKeyNotConfigured') || 'Builder API Key 未配置'}
+              description={
+                <span>
+                  {t('systemSettings.autoRedeem.builderApiKeyNotConfiguredDesc') || '自动赎回功能需要配置 Builder API Key 才能生效。'}
+                  <Button
+                    type="link"
+                    size="small"
+                    onClick={() => window.location.href = '/system-settings/builder-api-key'}
+                    style={{ padding: 0, marginLeft: '8px' }}
+                  >
+                    {t('systemSettings.autoRedeem.goToConfigure') || '前往配置'}
+                  </Button>
+                </span>
+              }
+              type="warning"
+              showIcon
+              style={{ marginBottom: '16px' }}
+            />
+          )}
+          
+          <Form.Item>
+            <Button
+              type="primary"
+              htmlType="submit"
+              icon={<SaveOutlined />}
+              loading={autoRedeemLoading}
+            >
+              {t('common.save') || '保存配置'}
+            </Button>
+          </Form.Item>
+        </Form>
       </Card>
     </div>
   )

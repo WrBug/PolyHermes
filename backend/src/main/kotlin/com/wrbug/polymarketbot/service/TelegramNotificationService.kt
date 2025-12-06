@@ -70,7 +70,9 @@ class TelegramNotificationService(
         apiSecret: String? = null,
         apiPassphrase: String? = null,
         walletAddressForApi: String? = null,
-        locale: java.util.Locale? = null
+        locale: java.util.Locale? = null,
+        leaderName: String? = null,  // Leader 名称（备注）
+        configName: String? = null  // 跟单配置名
     ) {
         // 获取语言设置（优先使用传入的 locale，否则从 LocaleContextHolder 获取）
         val currentLocale = locale ?: try {
@@ -127,7 +129,9 @@ class TelegramNotificationService(
             amount = amount,
             accountName = accountName,
             walletAddress = walletAddress,
-            locale = currentLocale
+            locale = currentLocale,
+            leaderName = leaderName,
+            configName = configName
         )
         sendMessage(message)
     }
@@ -405,8 +409,9 @@ class TelegramNotificationService(
 
     /**
      * 发送消息（发送给所有启用的 Telegram 配置）
+     * 公共方法，供其他服务调用
      */
-    private suspend fun sendMessage(message: String) {
+    suspend fun sendMessage(message: String) {
         try {
             val configs = notificationConfigService.getEnabledConfigsByType("telegram")
             if (configs.isEmpty()) {
@@ -578,7 +583,9 @@ class TelegramNotificationService(
         amount: String?,
         accountName: String?,
         walletAddress: String?,
-        locale: java.util.Locale
+        locale: java.util.Locale,
+        leaderName: String? = null,  // Leader 名称（备注）
+        configName: String? = null  // 跟单配置名
     ): String {
         
         // 获取多语言文本
@@ -617,11 +624,30 @@ class TelegramNotificationService(
             }
         }
 
+        // 构建跟单信息（如果有）
+        val copyTradingInfo = mutableListOf<String>()
+        if (!configName.isNullOrBlank()) {
+            copyTradingInfo.add("配置: ${configName!!}")
+        }
+        if (!leaderName.isNullOrBlank()) {
+            copyTradingInfo.add("Leader: ${leaderName!!}")
+        }
+        val copyTradingInfoText = if (copyTradingInfo.isNotEmpty()) {
+            "\n• 跟单: ${copyTradingInfo.joinToString(", ")}"
+        } else {
+            ""
+        }
+
         val time = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.util.Date())
 
         // 转义 HTML 特殊字符
         val escapedMarketTitle = marketTitle.replace("<", "&lt;").replace(">", "&gt;")
         val escapedAccountInfo = accountInfo.replace("<", "&lt;").replace(">", "&gt;")
+        val escapedCopyTradingInfo = if (copyTradingInfoText.isNotEmpty()) {
+            copyTradingInfoText.replace("<", "&lt;").replace(">", "&gt;")
+        } else {
+            ""
+        }
 
         // 格式化金额显示
         val amountDisplay = if (amount != null) {
@@ -675,7 +701,7 @@ class TelegramNotificationService(
 • $priceLabel: <code>$price</code>
 • $quantityLabel: <code>$size</code> shares
 • $amountLabel: <code>$amountDisplay</code> USDC
-• $accountLabel: $escapedAccountInfo
+• $accountLabel: $escapedAccountInfo$escapedCopyTradingInfo
 
 ⏰ $timeLabel: <code>$time</code>"""
     }
@@ -806,6 +832,128 @@ class TelegramNotificationService(
 ⏰ $timeLabel: <code>$time</code>"""
     }
 
+    /**
+     * 发送仓位赎回通知
+     * @param locale 语言设置（可选，如果提供则使用，否则使用 LocaleContextHolder 获取）
+     */
+    suspend fun sendRedeemNotification(
+        accountName: String?,
+        walletAddress: String?,
+        transactionHash: String,
+        totalRedeemedValue: String,
+        positions: List<com.wrbug.polymarketbot.dto.RedeemedPositionInfo>,
+        locale: java.util.Locale? = null
+    ) {
+        // 获取语言设置（优先使用传入的 locale，否则从 LocaleContextHolder 获取）
+        val currentLocale = locale ?: try {
+            LocaleContextHolder.getLocale()
+        } catch (e: Exception) {
+            logger.warn("获取语言设置失败，使用默认语言: ${e.message}", e)
+            java.util.Locale("zh", "CN")  // 默认简体中文
+        }
+        
+        val message = buildRedeemMessage(
+            accountName = accountName,
+            walletAddress = walletAddress,
+            transactionHash = transactionHash,
+            totalRedeemedValue = totalRedeemedValue,
+            positions = positions,
+            locale = currentLocale
+        )
+        sendMessage(message)
+    }
+    
+    /**
+     * 构建仓位赎回消息
+     */
+    private fun buildRedeemMessage(
+        accountName: String?,
+        walletAddress: String?,
+        transactionHash: String,
+        totalRedeemedValue: String,
+        positions: List<com.wrbug.polymarketbot.dto.RedeemedPositionInfo>,
+        locale: java.util.Locale
+    ): String {
+        // 获取多语言文本
+        val redeemSuccess = messageSource.getMessage("notification.redeem.success", null, "仓位赎回成功", locale)
+        val redeemInfo = messageSource.getMessage("notification.redeem.info", null, "赎回信息", locale)
+        val accountLabel = messageSource.getMessage("notification.order.account", null, "账户", locale)
+        val transactionHashLabel = messageSource.getMessage("notification.redeem.transaction_hash", null, "交易哈希", locale)
+        val totalValueLabel = messageSource.getMessage("notification.redeem.total_value", null, "赎回总价值", locale)
+        val positionsLabel = messageSource.getMessage("notification.redeem.positions", null, "赎回仓位", locale)
+        val marketLabel = messageSource.getMessage("notification.order.market", null, "市场", locale)
+        val quantityLabel = messageSource.getMessage("notification.order.quantity", null, "数量", locale)
+        val valueLabel = messageSource.getMessage("notification.order.amount", null, "金额", locale)
+        val timeLabel = messageSource.getMessage("notification.order.time", null, "时间", locale)
+        val unknownAccount: String = messageSource.getMessage("notification.order.unknown_account", null, "未知账户", locale) ?: "未知账户"
+        
+        // 优先使用账户名称，如果没有账户名称才显示钱包地址
+        val accountInfo: String = when {
+            !accountName.isNullOrBlank() -> {
+                accountName!!
+            }
+            !walletAddress.isNullOrBlank() -> {
+                maskAddress(walletAddress!!)
+            }
+            else -> {
+                unknownAccount
+            }
+        }
+        
+        val time = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(java.util.Date())
+        
+        // 转义 HTML 特殊字符
+        val escapedAccountInfo = accountInfo.replace("<", "&lt;").replace(">", "&gt;")
+        val escapedTxHash = transactionHash.replace("<", "&lt;").replace(">", "&gt;")
+        
+        // 格式化金额显示
+        val totalValueDisplay = try {
+            val totalValueDecimal = totalRedeemedValue.toSafeBigDecimal()
+            val formatted = if (totalValueDecimal.scale() > 4) {
+                totalValueDecimal.setScale(4, java.math.RoundingMode.DOWN).stripTrailingZeros()
+            } else {
+                totalValueDecimal.stripTrailingZeros()
+            }
+            formatted.toPlainString()
+        } catch (e: Exception) {
+            totalRedeemedValue
+        }
+        
+        // 构建仓位列表
+        val positionsText = positions.joinToString("\n") { position ->
+            val quantityDisplay = try {
+                val quantityDecimal = position.quantity.toSafeBigDecimal()
+                quantityDecimal.stripTrailingZeros().toPlainString()
+            } catch (e: Exception) {
+                position.quantity
+            }
+            val valueDisplay = try {
+                val valueDecimal = position.value.toSafeBigDecimal()
+                val formatted = if (valueDecimal.scale() > 4) {
+                    valueDecimal.setScale(4, java.math.RoundingMode.DOWN).stripTrailingZeros()
+                } else {
+                    valueDecimal.stripTrailingZeros()
+                }
+                formatted.toPlainString()
+            } catch (e: Exception) {
+                position.value
+            }
+            "  • ${position.marketId.substring(0, 8)}... (${position.side}): $quantityDisplay shares = $valueDisplay USDC"
+        }
+        
+        return """✅ <b>$redeemSuccess</b>
+
+📊 <b>$redeemInfo：</b>
+• $accountLabel: $escapedAccountInfo
+• $transactionHashLabel: <code>$escapedTxHash</code>
+• $totalValueLabel: <code>$totalValueDisplay</code> USDC
+
+📦 <b>$positionsLabel：</b>
+$positionsText
+
+⏰ $timeLabel: <code>$time</code>"""
+    }
+    
     /**
      * 脱敏显示地址（只显示前6位和后4位）
      */

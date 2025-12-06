@@ -24,6 +24,7 @@ class SystemConfigService(
         const val CONFIG_KEY_BUILDER_API_KEY = "builder.api_key"
         const val CONFIG_KEY_BUILDER_SECRET = "builder.secret"
         const val CONFIG_KEY_BUILDER_PASSPHRASE = "builder.passphrase"
+        const val CONFIG_KEY_AUTO_REDEEM = "auto_redeem"
     }
     
     /**
@@ -33,11 +34,13 @@ class SystemConfigService(
         val builderApiKey = getConfigValue(CONFIG_KEY_BUILDER_API_KEY)
         val builderSecret = getConfigValue(CONFIG_KEY_BUILDER_SECRET)
         val builderPassphrase = getConfigValue(CONFIG_KEY_BUILDER_PASSPHRASE)
+        val autoRedeem = isAutoRedeemEnabled()
         
         return SystemConfigDto(
             builderApiKeyConfigured = builderApiKey != null,
             builderSecretConfigured = builderSecret != null,
-            builderPassphraseConfigured = builderPassphrase != null
+            builderPassphraseConfigured = builderPassphrase != null,
+            autoRedeem = autoRedeem
         )
     }
     
@@ -83,9 +86,17 @@ class SystemConfigService(
                 )
             }
             
+            // 更新自动赎回配置
+            if (request.autoRedeem != null) {
+                updateConfigValue(
+                    CONFIG_KEY_AUTO_REDEEM,
+                    request.autoRedeem.toString()
+                )
+            }
+            
             Result.success(getSystemConfig())
         } catch (e: Exception) {
-            logger.error("更新 Builder API Key 配置失败", e)
+            logger.error("更新系统配置失败", e)
             Result.failure(e)
         }
     }
@@ -116,6 +127,32 @@ class SystemConfigService(
     }
     
     /**
+     * 检查自动赎回是否启用
+     */
+    fun isAutoRedeemEnabled(): Boolean {
+        val autoRedeemValue = getConfigValue(CONFIG_KEY_AUTO_REDEEM)
+        return when (autoRedeemValue?.lowercase()) {
+            "true" -> true
+            "false" -> false
+            else -> true  // 默认开启
+        }
+    }
+    
+    /**
+     * 更新自动赎回配置
+     */
+    @Transactional
+    fun updateAutoRedeem(enabled: Boolean): Result<SystemConfigDto> {
+        return try {
+            updateConfigValue(CONFIG_KEY_AUTO_REDEEM, enabled.toString())
+            Result.success(getSystemConfig())
+        } catch (e: Exception) {
+            logger.error("更新自动赎回配置失败", e)
+            Result.failure(e)
+        }
+    }
+    
+    /**
      * 获取配置值（原始值，加密存储）
      */
     private fun getConfigValue(configKey: String): String? {
@@ -141,6 +178,7 @@ class SystemConfigService(
                     CONFIG_KEY_BUILDER_API_KEY -> "Builder API Key（用于 Gasless 交易）"
                     CONFIG_KEY_BUILDER_SECRET -> "Builder Secret（用于 Gasless 交易）"
                     CONFIG_KEY_BUILDER_PASSPHRASE -> "Builder Passphrase（用于 Gasless 交易）"
+                    CONFIG_KEY_AUTO_REDEEM -> "自动赎回（系统级别配置，默认开启）"
                     else -> null
                 }
             )

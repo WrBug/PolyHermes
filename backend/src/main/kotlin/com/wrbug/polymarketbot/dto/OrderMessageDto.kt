@@ -43,7 +43,10 @@ data class OrderPushMessage(
     val accountName: String,           // 账户名称
     val order: OrderMessageDto,        // 订单信息（来自 WebSocket）
     val orderDetail: OrderDetailDto? = null,  // 订单详情（通过 API 获取）
-    val timestamp: Long = System.currentTimeMillis()  // 推送时间戳
+    val timestamp: Long = System.currentTimeMillis(),  // 推送时间戳
+    // 跟单相关字段（可选，仅在跟单触发的订单时提供）
+    val leaderName: String? = null,    // Leader 名称（备注）
+    val configName: String? = null    // 跟单配置名
 )
 
 /**

@@ -594,7 +594,25 @@ export const apiService = {
      * 更新 Builder API Key 配置
      */
     updateBuilderApiKey: (data: import('../types').BuilderApiKeyUpdateRequest) =>
-      apiClient.post<ApiResponse<import('../types').SystemConfig>>('/system/config/builder-api-key/update', data)
+      apiClient.post<ApiResponse<import('../types').SystemConfig>>('/system/config/builder-api-key/update', data),
+    
+    /**
+     * 检查 Builder API Key 是否已配置
+     */
+    checkBuilderApiKey: () =>
+      apiClient.post<ApiResponse<{ configured: boolean }>>('/system/config/builder-api-key/check', {}),
+    
+    /**
+     * 更新自动赎回配置
+     */
+    updateAutoRedeem: (data: { enabled: boolean }) =>
+      apiClient.post<ApiResponse<import('../types').SystemConfig>>('/system/config/auto-redeem/update', data),
+    
+    /**
+     * 获取自动赎回状态
+     */
+    getAutoRedeemStatus: () =>
+      apiClient.post<ApiResponse<{ enabled: boolean }>>('/system/config/auto-redeem/status', {})
   }
 }
 

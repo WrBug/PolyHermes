@@ -92,7 +92,7 @@ function App() {
    * 处理订单推送消息，显示全局通知
    */
   const handleOrderPush = useCallback((message: OrderPushMessage) => {
-    const { accountName, order, orderDetail } = message
+    const { accountName, order, orderDetail, leaderName, configName } = message
     
     // 根据订单类型和操作类型确定通知内容
     const orderTypeText = getOrderTypeText(order.type)
@@ -100,7 +100,21 @@ function App() {
     
     // 如果有市场名称，在标题中显示
     const marketName = orderDetail?.marketName || order.market.substring(0, 8) + '...'
-    const title = `${accountName} - ${orderTypeText}`
+    
+    // 构建标题：如果是跟单订单，显示 leader 备注和跟单配置名
+    let title = `${accountName} - ${orderTypeText}`
+    if (leaderName || configName) {
+      const parts: string[] = []
+      if (configName) {
+        parts.push(configName)
+      }
+      if (leaderName) {
+        parts.push(`Leader: ${leaderName}`)
+      }
+      if (parts.length > 0) {
+        title = `${accountName} (${parts.join(', ')}) - ${orderTypeText}`
+      }
+    }
     
     // 优先使用订单详情中的数据，如果没有则使用 WebSocket 消息中的数据
     const price = orderDetail ? parseFloat(orderDetail.price).toFixed(4) : parseFloat(order.price).toFixed(4)

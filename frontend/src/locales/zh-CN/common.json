@@ -216,6 +216,18 @@
     "systemSettingsDesc": "配置代理、查看 API 健康状态",
     "footer": "请使用上述页面进行配置管理。"
   },
+  "systemSettings": {
+    "autoRedeem": {
+      "title": "自动赎回配置",
+      "label": "自动赎回",
+      "tooltip": "开启后，系统会自动赎回可赎回的仓位。需要配置 Builder API Key 才能生效",
+      "builderApiKeyNotConfigured": "Builder API Key 未配置",
+      "builderApiKeyNotConfiguredDesc": "自动赎回功能需要配置 Builder API Key 才能生效。",
+      "goToConfigure": "前往配置",
+      "saveSuccess": "自动赎回配置已更新",
+      "saveFailed": "更新自动赎回配置失败"
+    }
+  },
   "builderApiKey": {
     "title": "Builder API Key 配置",
     "alertTitle": "什么是 Builder API Key？",
@@ -238,6 +250,7 @@
     "saveSuccess": "保存 Builder API Key 配置成功",
     "saveFailed": "保存 Builder API Key 配置失败",
     "getFailed": "获取 Builder API Key 配置失败",
+    "noChanges": "没有需要更新的字段",
     "notConfigured": "Builder API Key 未配置，请前往系统设置页面配置",
     "notConfiguredError": "Builder API Key 未配置，无法执行 Gasless 交易。请前往系统设置页面配置 Builder API Key。",
     "apiReference": "API 参考文档",
@@ -508,6 +521,18 @@
   "copyTradingAdd": {
     "title": "新增跟单配置",
     "back": "返回",
+    "configName": "配置名",
+    "configNameRequired": "请输入配置名",
+    "configNamePlaceholder": "例如：跟单配置1",
+    "configNameTooltip": "为跟单配置设置一个名称，便于识别和管理",
+    "advancedSettings": "高级设置",
+    "pushFailedOrders": "推送失败订单",
+    "pushFailedOrdersTooltip": "开启后，失败的订单会推送到 Telegram",
+    "autoRedeem": "自动赎回",
+    "autoRedeemTooltip": "开启后，系统会自动赎回可赎回的仓位。需要配置 Builder API Key 才能生效",
+    "builderApiKeyNotConfigured": "Builder API Key 未配置",
+    "builderApiKeyNotConfiguredDesc": "自动赎回功能需要配置 Builder API Key 才能生效。",
+    "goToConfigure": "前往配置",
     "selectWallet": "选择钱包",
     "selectWalletPlaceholder": "请选择钱包",
     "walletRequired": "请选择钱包",
@@ -579,6 +604,18 @@
   "copyTradingEdit": {
     "title": "编辑跟单配置",
     "back": "返回",
+    "configName": "配置名",
+    "configNameRequired": "请输入配置名",
+    "configNamePlaceholder": "例如：跟单配置1",
+    "configNameTooltip": "为跟单配置设置一个名称，便于识别和管理",
+    "advancedSettings": "高级设置",
+    "pushFailedOrders": "推送失败订单",
+    "pushFailedOrdersTooltip": "开启后，失败的订单会推送到 Telegram",
+    "autoRedeem": "自动赎回",
+    "autoRedeemTooltip": "开启后，系统会自动赎回可赎回的仓位。需要配置 Builder API Key 才能生效",
+    "builderApiKeyNotConfigured": "Builder API Key 未配置",
+    "builderApiKeyNotConfiguredDesc": "自动赎回功能需要配置 Builder API Key 才能生效。",
+    "goToConfigure": "前往配置",
     "wallet": "钱包",
     "leader": "Leader",
     "selectWallet": "钱包",
@@ -666,6 +703,8 @@
   "copyTradingList": {
     "title": "跟单配置管理",
     "addCopyTrading": "新增跟单",
+    "configName": "配置名",
+    "configNameNotProvided": "未提供",
     "wallet": "钱包",
     "account": "账户",
     "template": "模板",

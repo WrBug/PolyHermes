@@ -205,6 +205,9 @@ export interface CopyTrading {
   minOrderbookDepth?: string
   minPrice?: string  // 最低价格（可选），NULL表示不限制最低价
   maxPrice?: string  // 最高价格（可选），NULL表示不限制最高价
+  // 新增配置字段
+  configName?: string  // 配置名（可选，但提供时必须非空）
+  pushFailedOrders: boolean  // 推送失败订单（默认关闭）
   createdAt: number
   updatedAt: number
 }
@@ -246,6 +249,9 @@ export interface CopyTradingCreateRequest {
   minOrderbookDepth?: string
   minPrice?: string  // 最低价格（可选），NULL表示不限制最低价
   maxPrice?: string  // 最高价格（可选），NULL表示不限制最高价
+  // 新增配置字段
+  configName?: string  // 配置名（可选，但提供时必须非空）
+  pushFailedOrders?: boolean  // 推送失败订单（可选）
 }
 
 /**
@@ -275,6 +281,9 @@ export interface CopyTradingUpdateRequest {
   minOrderbookDepth?: string
   minPrice?: string  // 最低价格（可选），NULL表示不限制最低价
   maxPrice?: string  // 最高价格（可选），NULL表示不限制最高价
+  // 新增配置字段
+  configName?: string  // 配置名（可选，但提供时必须非空）
+  pushFailedOrders?: boolean  // 推送失败订单（可选）
 }
 
 /**
@@ -497,6 +506,9 @@ export interface OrderPushMessage {
   order: OrderMessage  // 订单信息（来自 WebSocket）
   orderDetail?: OrderDetail  // 订单详情（通过 API 获取）
   timestamp?: number  // 推送时间戳
+  // 跟单相关字段（可选，仅在跟单触发的订单时提供）
+  leaderName?: string  // Leader 名称（备注）
+  configName?: string  // 跟单配置名
 }
 
 /**
@@ -760,6 +772,7 @@ export interface SystemConfig {
   builderApiKeyConfigured: boolean
   builderSecretConfigured: boolean
   builderPassphraseConfigured: boolean
+  autoRedeem: boolean  // 自动赎回（系统级别配置，默认开启）
 }
 
 /**

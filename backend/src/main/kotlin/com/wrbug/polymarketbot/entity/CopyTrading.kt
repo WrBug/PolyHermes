@@ -87,6 +87,13 @@ data class CopyTrading(
     @Column(name = "max_price", precision = 20, scale = 8)
     val maxPrice: BigDecimal? = null,  // 最高价格（可选），NULL表示不限制最高价
     
+    // 新增配置字段
+    @Column(name = "config_name", length = 255)
+    val configName: String? = null,  // 配置名（可选）
+    
+    @Column(name = "push_failed_orders", nullable = false)
+    val pushFailedOrders: Boolean = false,  // 推送失败订单（默认关闭）
+    
     @Column(name = "created_at", nullable = false)
     val createdAt: Long = System.currentTimeMillis(),
     

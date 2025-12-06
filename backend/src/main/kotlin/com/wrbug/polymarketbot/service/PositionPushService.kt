@@ -18,7 +18,8 @@ import java.util.concurrent.ConcurrentHashMap
  */
 @Service
 class PositionPushService(
-    private val accountService: AccountService
+    private val accountService: AccountService,
+    private val positionCheckService: PositionCheckService
 ) {
     
     private val logger = LoggerFactory.getLogger(PositionPushService::class.java)
@@ -41,10 +42,12 @@ class PositionPushService(
     private val lock = Any()
     
     /**
-     * 初始化服务（不自动启动轮询，等待有客户端连接时再启动）
+     * 初始化服务（后端启动时直接启动轮询）
      */
     @PostConstruct
     fun init() {
+        logger.info("PositionPushService 初始化，启动仓位轮询任务")
+        startPolling()
     }
     
     /**
@@ -75,38 +78,27 @@ class PositionPushService(
     
     /**
      * 注册客户端会话（兼容旧接口）
-     * 如果有第一个客户端连接，启动轮询任务
+     * 轮询任务已在后端启动时启动，这里只需要注册回调
      */
     fun registerSession(sessionId: String, callback: (PositionPushMessage) -> Unit) {
         logger.info("注册仓位推送客户端会话: $sessionId")
         
         synchronized(lock) {
-            val wasEmpty = clientCallbacks.isEmpty()
             clientCallbacks[sessionId] = callback
-            
-            // 如果是第一个客户端连接，启动轮询任务
-            if (wasEmpty && clientCallbacks.isNotEmpty()) {
-                logger.info("检测到第一个客户端连接，启动轮询任务")
-                startPolling()
-            }
+            // 轮询任务已在后端启动时启动，不需要在这里启动
         }
     }
     
     /**
      * 注销客户端会话（兼容旧接口）
-     * 如果没有客户端连接了，停止轮询任务
+     * 轮询任务持续运行，不因客户端断开而停止
      */
     fun unregisterSession(sessionId: String) {
         logger.info("注销仓位推送客户端会话: $sessionId")
         
         synchronized(lock) {
             clientCallbacks.remove(sessionId)
-            
-            // 如果没有客户端连接了，停止轮询任务
-            if (clientCallbacks.isEmpty()) {
-                logger.info("没有客户端连接了，停止轮询任务")
-                stopPolling()
-            }
+            // 轮询任务持续运行，不停止
         }
     }
     
@@ -174,33 +166,26 @@ class PositionPushService(
     }
     
     /**
-     * 轮询仓位数据并推送增量更新
+     * 轮询仓位数据并推送全量数据
+     * 根据文档要求：每次轮训完成后向订阅者发送全量数据
      */
     private suspend fun pollAndPush() {
-        // 双重检查：如果没有客户端连接，跳过轮询（虽然理论上不应该发生，但作为安全措施）
-        if (clientCallbacks.isEmpty()) {
-            return
-        }
-        
         try {
             val result = accountService.getAllPositions()
             if (result.isSuccess) {
                 val positions = result.getOrNull()
                 if (positions != null) {
-                    // 比较差异
-                    val incremental = calculateIncremental(
-                        newCurrentPositions = positions.currentPositions,
-                        newHistoryPositions = positions.historyPositions
-                    )
+                    // 更新快照
+                    lastCurrentPositions = positions.currentPositions.associateBy { it.getPositionKey() }
+                    lastHistoryPositions = positions.historyPositions.associateBy { it.getPositionKey() }
                     
-                    // 如果有变化，推送增量更新
-                    if (incremental != null) {
+                    // 向所有订阅者发送全量数据
+                    if (clientCallbacks.isNotEmpty()) {
                         val message = PositionPushMessage(
-                            type = PositionPushMessageType.INCREMENTAL,
+                            type = PositionPushMessageType.FULL,
                             timestamp = System.currentTimeMillis(),
-                            currentPositions = incremental.currentPositions,
-                            historyPositions = incremental.historyPositions,
-                            removedPositionKeys = incremental.removedKeys
+                            currentPositions = positions.currentPositions,
+                            historyPositions = positions.historyPositions
                         )
                         
                         // 推送给所有连接的客户端
@@ -208,15 +193,14 @@ class PositionPushService(
                             try {
                                 callback(message)
                             } catch (e: Exception) {
-                                logger.error("推送增量更新失败: ${e.message}", e)
+                                logger.error("推送全量数据失败: ${e.message}", e)
                             }
                         }
-                        
                     }
                     
-                    // 更新快照
-                    lastCurrentPositions = positions.currentPositions.associateBy { it.getPositionKey() }
-                    lastHistoryPositions = positions.historyPositions.associateBy { it.getPositionKey() }
+                    // 仓位检查逻辑（复用仓位轮询）
+                    // 处理待赎回仓位和未卖出订单
+                    positionCheckService.checkPositions(positions.currentPositions)
                 }
             } else {
                 logger.warn("获取仓位数据失败: ${result.exceptionOrNull()?.message}")

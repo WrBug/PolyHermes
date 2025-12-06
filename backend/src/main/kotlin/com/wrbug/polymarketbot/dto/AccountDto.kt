@@ -25,7 +25,8 @@ data class AccountUpdateRequest(
 data class SystemConfigUpdateRequest(
     val builderApiKey: String? = null,  // Builder API Key（前端加密后传输）
     val builderSecret: String? = null,  // Builder Secret（前端加密后传输）
-    val builderPassphrase: String? = null  // Builder Passphrase（前端加密后传输）
+    val builderPassphrase: String? = null,  // Builder Passphrase（前端加密后传输）
+    val autoRedeem: Boolean? = null  // 自动赎回（系统级别配置）
 )
 
 /**
@@ -34,7 +35,8 @@ data class SystemConfigUpdateRequest(
 data class SystemConfigDto(
     val builderApiKeyConfigured: Boolean,  // Builder API Key 是否已配置
     val builderSecretConfigured: Boolean,  // Builder Secret 是否已配置
-    val builderPassphraseConfigured: Boolean  // Builder Passphrase 是否已配置
+    val builderPassphraseConfigured: Boolean,  // Builder Passphrase 是否已配置
+    val autoRedeem: Boolean = true  // 自动赎回（系统级别配置，默认开启）
 )
 
 /**

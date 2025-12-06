@@ -25,11 +25,11 @@ const BuilderApiKeySettings: React.FC = () => {
       if (response.data.code === 0 && response.data.data) {
         const config = response.data.data
         setBuilderApiKeyConfig(config)
-        // 预填充字段（如果已配置，显示占位符）
+        // 如果已配置，输入框留空（不显示***）
         builderApiKeyForm.setFieldsValue({
-          builderApiKey: config.builderApiKeyConfigured ? '***' : '',
-          builderSecret: config.builderSecretConfigured ? '***' : '',
-          builderPassphrase: config.builderPassphraseConfigured ? '***' : '',
+          builderApiKey: '',
+          builderSecret: '',
+          builderPassphrase: '',
         })
       } else {
         message.error(response.data.msg || t('builderApiKey.getFailed'))
@@ -42,16 +42,23 @@ const BuilderApiKeySettings: React.FC = () => {
   const handleBuilderApiKeySubmit = async (values: BuilderApiKeyUpdateRequest) => {
     setBuilderApiKeyLoading(true)
     try {
-      // 如果值是 '***'，表示已配置但未修改，不发送
+      // 只发送非空字段（如果字段为空且已配置，表示不修改，不发送该字段）
       const updateData: BuilderApiKeyUpdateRequest = {}
-      if (values.builderApiKey && values.builderApiKey !== '***') {
-        updateData.builderApiKey = values.builderApiKey
+      if (values.builderApiKey && values.builderApiKey.trim()) {
+        updateData.builderApiKey = values.builderApiKey.trim()
       }
-      if (values.builderSecret && values.builderSecret !== '***') {
-        updateData.builderSecret = values.builderSecret
+      if (values.builderSecret && values.builderSecret.trim()) {
+        updateData.builderSecret = values.builderSecret.trim()
       }
-      if (values.builderPassphrase && values.builderPassphrase !== '***') {
-        updateData.builderPassphrase = values.builderPassphrase
+      if (values.builderPassphrase && values.builderPassphrase.trim()) {
+        updateData.builderPassphrase = values.builderPassphrase.trim()
+      }
+      
+      // 如果所有字段都为空，提示用户
+      if (!updateData.builderApiKey && !updateData.builderSecret && !updateData.builderPassphrase) {
+        message.warning(t('builderApiKey.noChanges') || '没有需要更新的字段')
+        setBuilderApiKeyLoading(false)
+        return
       }
       
       const response = await apiService.systemConfig.updateBuilderApiKey(updateData)
