@@ -3,6 +3,8 @@
 [![GitHub](https://img.shields.io/badge/GitHub-WrBug%2FPolyHermes-blue?logo=github)](https://github.com/WrBug/PolyHermes)
 [![Twitter](https://img.shields.io/badge/Twitter-@quant__tr-blue?logo=twitter)](https://x.com/quant_tr)
 
+> 🌐 **Language**: [English](README_EN.md) | 中文
+
 一个功能强大的 Polymarket 预测市场跟单交易系统，支持自动化跟单、多账户管理、实时订单推送和统计分析。
 
 ---

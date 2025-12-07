@@ -3,6 +3,8 @@
 [![GitHub](https://img.shields.io/badge/GitHub-WrBug%2FPolyHermes-blue?logo=github)](https://github.com/WrBug/PolyHermes)
 [![Twitter](https://img.shields.io/badge/Twitter-@quant__tr-blue?logo=twitter)](https://x.com/quant_tr)
 
+> 🌐 **Language**: English | [中文](README.md)
+
 A powerful copy trading system for Polymarket prediction markets, supporting automated copy trading, multi-account management, real-time order push, and statistical analysis.
 
 ---
