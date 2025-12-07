@@ -1,0 +1,86 @@
+name: Delete Docker Image
+
+on:
+  release:
+    types:
+      - deleted  # 当删除 release 时触发
+
+jobs:
+  delete-image:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Delete Docker image
+        run: |
+          TAG_NAME="${{ github.event.release.tag_name }}"
+          
+          # 验证版本号格式：v数字.数字.数字[-后缀]（精准匹配）
+          if [[ ! "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]; then
+            echo "警告: 版本号格式不正确 ($TAG_NAME)，应为 v数字.数字.数字 或 v数字.数字.数字-后缀 (例如: v1.0.0, v1.0.0-beta)"
+            echo "跳过删除操作"
+            exit 0
+          fi
+          
+          IMAGE_NAME="wrbug/polyhermes"
+          DOCKER_USERNAME="${{ secrets.DOCKER_USERNAME }}"
+          DOCKER_PASSWORD="${{ secrets.DOCKER_PASSWORD }}"
+          
+          echo "正在删除 Docker 镜像: ${IMAGE_NAME}:${TAG_NAME}"
+          
+          # 方法 1: 尝试使用 JWT Token 认证（推荐，适用于 Access Token）
+          # 获取 JWT Token
+          echo "正在获取 Docker Hub JWT Token..."
+          TOKEN_RESPONSE=$(curl -s -X POST \
+            -H "Content-Type: application/json" \
+            -d "{\"username\": \"${DOCKER_USERNAME}\", \"password\": \"${DOCKER_PASSWORD}\"}" \
+            "https://hub.docker.com/v2/users/login/")
+          
+          # 提取 Token（支持多种格式）
+          TOKEN=$(echo "$TOKEN_RESPONSE" | grep -oE '"token":"[^"]*"' | head -1 | cut -d'"' -f4)
+          
+          if [ -z "$TOKEN" ]; then
+            # 尝试另一种提取方式
+            TOKEN=$(echo "$TOKEN_RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin).get('token', ''))" 2>/dev/null || echo "")
+          fi
+          
+          if [ -n "$TOKEN" ] && [ "$TOKEN" != "null" ]; then
+            echo "✅ 成功获取 JWT Token，使用 JWT Token 认证"
+            # 使用 JWT Token 删除镜像标签
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
+              -H "Authorization: JWT ${TOKEN}" \
+              "https://hub.docker.com/v2/repositories/${IMAGE_NAME}/tags/${TAG_NAME}/")
+          else
+            echo "⚠️  JWT Token 获取失败，尝试使用 Basic Auth"
+            echo "   如果继续失败，请检查 DOCKER_USERNAME 和 DOCKER_PASSWORD 是否正确"
+            # 方法 2: 使用 Basic Auth（适用于密码）
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X DELETE \
+              -u "${DOCKER_USERNAME}:${DOCKER_PASSWORD}" \
+              "https://hub.docker.com/v2/repositories/${IMAGE_NAME}/tags/${TAG_NAME}/")
+          fi
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n-1)
+          
+          if [ "$HTTP_CODE" = "204" ]; then
+            echo "✅ 成功删除 Docker 镜像标签: ${IMAGE_NAME}:${TAG_NAME}"
+          elif [ "$HTTP_CODE" = "404" ]; then
+            echo "⚠️  镜像标签不存在: ${IMAGE_NAME}:${TAG_NAME}，可能已被删除或不存在"
+          elif [ "$HTTP_CODE" = "401" ]; then
+            echo "❌ 认证失败 (HTTP 401): 未授权"
+            echo "   请检查以下内容："
+            echo "   1. DOCKER_USERNAME 和 DOCKER_PASSWORD 是否正确"
+            echo "   2. 如果使用 Access Token，确保有删除镜像的权限"
+            echo "   3. 访问令牌是否过期"
+            echo "   响应详情: $BODY"
+            exit 1
+          elif [ "$HTTP_CODE" = "403" ]; then
+            echo "❌ 权限不足 (HTTP 403): 没有删除镜像的权限"
+            echo "   请确保 Docker Hub 访问令牌具有以下权限："
+            echo "   - Delete repository tags"
+            echo "   响应详情: $BODY"
+            exit 1
+          else
+            echo "❌ 删除失败 (HTTP $HTTP_CODE): $BODY"
+            exit 1
+          fi
+

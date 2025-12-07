@@ -11,7 +11,20 @@
 3. **点击跳转**：点击版本号跳转到对应的 GitHub tag 页面
 4. **Docker 推送**：自动构建并推送到 Docker Hub
 5. **自动删除**：删除 release 时自动删除对应的 Docker 镜像标签
-6. **版本号验证**：精准匹配版本号格式 `v数字.数字.数字`（例如：`v1.0.0`, `v2.10.102`）
+6. **版本号验证**：精准匹配版本号格式 `v数字.数字.数字` 或 `v数字.数字.数字-后缀`（例如：`v1.0.0`, `v1.0.0-beta`）
+7. **独立脚本**：构建和删除功能分离到不同的 workflow 文件，便于管理和维护
+
+## Workflow 文件说明
+
+项目使用两个独立的 GitHub Actions workflow 文件：
+
+- **`.github/workflows/docker-build.yml`**：负责构建和推送 Docker 镜像
+  - 触发条件：`release: published`（创建 release 时）
+  - 功能：提取版本号、构建多架构镜像、推送到 Docker Hub
+
+- **`.github/workflows/docker-delete.yml`**：负责删除 Docker 镜像
+  - 触发条件：`release: deleted`（删除 release 时）
+  - 功能：验证版本号格式、删除对应的 Docker 镜像标签
 
 ## 使用方法
 
@@ -47,6 +60,10 @@
 ### 2. 创建 Release（必须通过 GitHub Releases 页面）
 
 **重要**：只有通过 [GitHub Releases 页面](https://github.com/WrBug/PolyHermes/releases/new) 创建 release 时才会触发自动构建。
+
+**Workflow 说明**：
+- 创建 release 时，会触发 `docker-build.yml` workflow，自动构建并推送镜像
+- 删除 release 时，会触发 `docker-delete.yml` workflow，自动删除对应的镜像标签
 
 **创建步骤**：
 1. 访问 [GitHub Releases 页面](https://github.com/WrBug/PolyHermes/releases/new)
