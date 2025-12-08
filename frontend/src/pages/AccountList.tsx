@@ -74,11 +74,54 @@ const AccountList: React.FC = () => {
   }
   
   const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      message.success(t('accountList.copySuccess'))
-    }).catch(() => {
-      message.error(t('accountList.copyFailed'))
-    })
+    if (!text) {
+      message.warning(t('accountList.copyFailed') || '复制失败：地址为空')
+      return
+    }
+    
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        message.success({
+          content: t('accountList.copySuccess') || '已复制到剪贴板',
+          duration: 2
+        })
+      }).catch((err) => {
+        console.error('复制失败:', err)
+        // 降级方案：使用传统方法
+        fallbackCopyTextToClipboard(text)
+      })
+    } else {
+      // 降级方案：使用传统方法
+      fallbackCopyTextToClipboard(text)
+    }
+  }
+  
+  const fallbackCopyTextToClipboard = (text: string) => {
+    const textArea = document.createElement('textarea')
+    textArea.value = text
+    textArea.style.position = 'fixed'
+    textArea.style.left = '-999999px'
+    textArea.style.top = '-999999px'
+    document.body.appendChild(textArea)
+    textArea.focus()
+    textArea.select()
+    
+    try {
+      const successful = document.execCommand('copy')
+      if (successful) {
+        message.success({
+          content: t('accountList.copySuccess') || '已复制到剪贴板',
+          duration: 2
+        })
+      } else {
+        message.error(t('accountList.copyFailed') || '复制失败')
+      }
+    } catch (err) {
+      console.error('复制失败:', err)
+      message.error(t('accountList.copyFailed') || '复制失败')
+    } finally {
+      document.body.removeChild(textArea)
+    }
   }
   
   const handleShowDetail = async (account: Account) => {
@@ -210,46 +253,45 @@ const AccountList: React.FC = () => {
       title: t('accountList.walletAddress'),
       dataIndex: 'walletAddress',
       key: 'walletAddress',
-      render: (text: string) => (
-        <Space>
-          <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{text}</span>
-          <Button
-            type="text"
-            size="small"
-            icon={<CopyOutlined />}
-            onClick={() => handleCopy(text)}
-            title={t('accountList.walletAddress')}
-          />
-        </Space>
-      )
+      render: (text: string) => {
+        const formatted = text ? `${text.slice(0, 6)}...${text.slice(-4)}` : '-'
+        return (
+          <Space>
+            <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{formatted}</span>
+            <Button
+              type="text"
+              size="small"
+              icon={<CopyOutlined />}
+              onClick={(e) => {
+                e.stopPropagation()
+                handleCopy(text)
+              }}
+              title={t('accountList.walletAddress')}
+            />
+          </Space>
+        )
+      }
     },
     {
       title: t('accountList.proxyAddress'),
       dataIndex: 'proxyAddress',
       key: 'proxyAddress',
-      render: (address: string) => (
-        <Space>
-          <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{address}</span>
-          <Button
-            type="text"
-            size="small"
-            icon={<CopyOutlined />}
-            onClick={() => handleCopy(address)}
-            title={t('accountList.proxyAddress')}
-          />
-        </Space>
-      )
-    },
-    {
-      title: t('accountList.apiCredentials'),
-      key: 'apiCredentials',
-      render: (_: any, record: Account) => {
-        const allConfigured = record.apiKeyConfigured && record.apiSecretConfigured && record.apiPassphraseConfigured
-        const partialConfigured = record.apiKeyConfigured || record.apiSecretConfigured || record.apiPassphraseConfigured
+      render: (address: string) => {
+        const formatted = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : '-'
         return (
-          <Tag color={allConfigured ? 'success' : partialConfigured ? 'warning' : 'default'}>
-            {allConfigured ? t('accountList.fullConfig') : partialConfigured ? t('accountList.partialConfig') : t('accountList.notConfigured')}
-          </Tag>
+          <Space>
+            <span style={{ fontFamily: 'monospace', fontSize: '12px' }}>{formatted}</span>
+            <Button
+              type="text"
+              size="small"
+              icon={<CopyOutlined />}
+              onClick={(e) => {
+                e.stopPropagation()
+                handleCopy(address)
+              }}
+              title={t('accountList.proxyAddress')}
+            />
+          </Space>
         )
       }
     },
@@ -264,17 +306,6 @@ const AccountList: React.FC = () => {
         const balanceObj = balanceMap[record.id]
         const balance = balanceObj?.total || record.balance || '-'
         return balance && balance !== '-' && typeof balance === 'string' ? `${formatUSDC(balance)} USDC` : '-'
-      }
-    },
-    {
-      title: t('accountList.activeOrders'),
-      dataIndex: 'activeOrders',
-      key: 'activeOrders',
-      render: (_: any, record: Account) => {
-        if (record.activeOrders !== undefined && record.activeOrders !== null) {
-          return <Tag color={record.activeOrders > 0 ? 'orange' : 'default'}>{record.activeOrders}</Tag>
-        }
-        return <span style={{ color: '#999' }}>-</span>
       }
     },
     {
@@ -323,9 +354,6 @@ const AccountList: React.FC = () => {
       title: t('accountList.accountName'),
       key: 'info',
       render: (_: any, record: Account) => {
-        const allConfigured = record.apiKeyConfigured && record.apiSecretConfigured && record.apiPassphraseConfigured
-        const partialConfigured = record.apiKeyConfigured || record.apiSecretConfigured || record.apiPassphraseConfigured
-        
         return (
           <div style={{ padding: '8px 0' }}>
             <div style={{ 
@@ -344,30 +372,31 @@ const AccountList: React.FC = () => {
               lineHeight: '1.4'
             }}>
               <div style={{ marginBottom: '4px' }}>
-                <strong>{t('accountList.walletAddress')}:</strong> {record.walletAddress}
+                <strong>{t('accountList.walletAddress')}:</strong> {record.walletAddress ? `${record.walletAddress.slice(0, 6)}...${record.walletAddress.slice(-4)}` : '-'}
                 <Button
                   type="text"
                   size="small"
                   icon={<CopyOutlined />}
-                  onClick={() => handleCopy(record.walletAddress)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleCopy(record.walletAddress)
+                  }}
                   style={{ marginLeft: '4px', padding: '0 4px' }}
                 />
               </div>
               <div>
-                <strong>{t('accountList.proxyAddress')}:</strong> {record.proxyAddress}
+                <strong>{t('accountList.proxyAddress')}:</strong> {record.proxyAddress ? `${record.proxyAddress.slice(0, 6)}...${record.proxyAddress.slice(-4)}` : '-'}
                 <Button
                   type="text"
                   size="small"
                   icon={<CopyOutlined />}
-                  onClick={() => handleCopy(record.proxyAddress)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleCopy(record.proxyAddress)
+                  }}
                   style={{ marginLeft: '4px', padding: '0 4px' }}
                 />
               </div>
-            </div>
-            <div style={{ marginBottom: '8px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-              <Tag color={allConfigured ? 'success' : partialConfigured ? 'warning' : 'default'} style={{ margin: 0 }}>
-                {allConfigured ? t('accountList.fullConfig') : partialConfigured ? t('accountList.partialConfig') : t('accountList.notConfigured')}
-              </Tag>
             </div>
             <div style={{ 
               fontSize: '14px',
@@ -389,18 +418,6 @@ const AccountList: React.FC = () => {
                 marginTop: '4px'
               }}>
                 {t('accountList.available')}: {formatUSDC(balanceMap[record.id].available)} USDC | {t('accountList.position')}: {formatUSDC(balanceMap[record.id].position)} USDC
-              </div>
-            )}
-            {(record.activeOrders !== undefined && record.activeOrders !== null) && (
-              <div style={{ 
-                fontSize: '12px',
-                color: '#666',
-                marginTop: '4px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                {t('accountList.activeOrders')}: <Tag color={record.activeOrders > 0 ? 'orange' : 'default'} style={{ margin: 0 }}>{record.activeOrders}</Tag>
               </div>
             )}
           </div>
@@ -598,7 +615,10 @@ const AccountList: React.FC = () => {
                     type="text"
                     size="small"
                     icon={<CopyOutlined />}
-                    onClick={() => handleCopy(detailAccount.walletAddress || '')}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleCopy(detailAccount.walletAddress || '')
+                    }}
                     title={t('accountList.walletAddress')}
                   />
                 </Space>
@@ -618,7 +638,10 @@ const AccountList: React.FC = () => {
                     type="text"
                     size="small"
                     icon={<CopyOutlined />}
-                    onClick={() => handleCopy(detailAccount.proxyAddress || '')}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleCopy(detailAccount.proxyAddress || '')
+                    }}
                     title={t('accountList.proxyAddress')}
                   />
                 </Space>

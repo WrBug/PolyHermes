@@ -9,6 +9,10 @@ import { useAccountStore } from '../store/accountStore'
 import type { CopyTrading, Leader, CopyTradingStatistics } from '../types'
 import { useMediaQuery } from 'react-responsive'
 import { formatUSDC } from '../utils'
+import CopyTradingOrdersModal from './CopyTradingOrders/index'
+import StatisticsModal from './CopyTradingOrders/StatisticsModal'
+import FilteredOrdersModal from './CopyTradingOrders/FilteredOrdersModal'
+import EditModal from './CopyTradingOrders/EditModal'
 
 const { Option } = Select
 
@@ -27,6 +31,17 @@ const CopyTradingList: React.FC = () => {
     leaderId?: number
     enabled?: boolean
   }>({})
+  
+  // Modal 状态
+  const [ordersModalOpen, setOrdersModalOpen] = useState(false)
+  const [ordersModalCopyTradingId, setOrdersModalCopyTradingId] = useState<string>('')
+  const [ordersModalTab, setOrdersModalTab] = useState<'buy' | 'sell' | 'matched'>('buy')
+  const [statisticsModalOpen, setStatisticsModalOpen] = useState(false)
+  const [statisticsModalCopyTradingId, setStatisticsModalCopyTradingId] = useState<string>('')
+  const [filteredOrdersModalOpen, setFilteredOrdersModalOpen] = useState(false)
+  const [filteredOrdersModalCopyTradingId, setFilteredOrdersModalCopyTradingId] = useState<string>('')
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [editModalCopyTradingId, setEditModalCopyTradingId] = useState<string>('')
   
   useEffect(() => {
     fetchAccounts()
@@ -266,46 +281,23 @@ const CopyTradingList: React.FC = () => {
       render: (_: any, record: CopyTrading) => {
         const menuItems: MenuProps['items'] = [
           {
-            key: 'buyOrders',
-            label: t('copyTradingList.buyOrders') || '买入订单',
-            icon: <UnorderedListOutlined />,
-            onClick: () => navigate(`/copy-trading/orders/buy/${record.id}`)
-          },
-          {
-            key: 'sellOrders',
-            label: t('copyTradingList.sellOrders') || '卖出订单',
-            icon: <UnorderedListOutlined />,
-            onClick: () => navigate(`/copy-trading/orders/sell/${record.id}`)
-          },
-          {
             key: 'matchedOrders',
-            label: t('copyTradingList.matchedOrders') || '匹配关系',
+            label: t('copyTradingList.matchedOrders') || '已成交订单',
             icon: <UnorderedListOutlined />,
-            onClick: () => navigate(`/copy-trading/orders/matched/${record.id}`)
+            onClick: () => {
+              setOrdersModalCopyTradingId(record.id.toString())
+              setOrdersModalTab('buy')
+              setOrdersModalOpen(true)
+            }
           },
           {
             key: 'filteredOrders',
             label: t('copyTradingList.filteredOrders') || '已过滤订单',
             icon: <UnorderedListOutlined />,
-            onClick: () => navigate(`/copy-trading/filtered-orders/${record.id}`)
-          },
-          {
-            type: 'divider'
-          },
-          {
-            key: 'delete',
-            label: (
-              <Popconfirm
-                title={t('copyTradingList.deleteConfirm') || '确定要删除这个跟单关系吗？'}
-                onConfirm={() => handleDelete(record.id)}
-                okText={t('common.confirm') || '确定'}
-                cancelText={t('common.cancel') || '取消'}
-                onCancel={(e) => e?.stopPropagation()}
-              >
-                <span style={{ color: '#ff4d4f' }}>{t('common.delete') || '删除'}</span>
-              </Popconfirm>
-            ),
-            danger: true
+            onClick: () => {
+              setFilteredOrdersModalCopyTradingId(record.id.toString())
+              setFilteredOrdersModalOpen(true)
+            }
           }
         ]
         
@@ -317,7 +309,10 @@ const CopyTradingList: React.FC = () => {
                   type="link"
                   size="small"
                   icon={<EditOutlined />}
-                  onClick={() => navigate(`/copy-trading/edit/${record.id}`)}
+                  onClick={() => {
+                    setEditModalCopyTradingId(record.id.toString())
+                    setEditModalOpen(true)
+                  }}
                 >
                   {t('common.edit') || '编辑'}
                 </Button>
@@ -325,7 +320,10 @@ const CopyTradingList: React.FC = () => {
                   type="link"
                   size="small"
                   icon={<BarChartOutlined />}
-                  onClick={() => navigate(`/copy-trading/statistics/${record.id}`)}
+                  onClick={() => {
+                    setStatisticsModalCopyTradingId(record.id.toString())
+                    setStatisticsModalOpen(true)
+                  }}
                 >
                   {t('copyTradingList.statistics') || '统计'}
                 </Button>
@@ -554,7 +552,10 @@ const CopyTradingList: React.FC = () => {
                           type="primary"
                           size="small"
                           icon={<EditOutlined />}
-                          onClick={() => navigate(`/copy-trading/edit/${record.id}`)}
+                          onClick={() => {
+                            setEditModalCopyTradingId(record.id.toString())
+                            setEditModalOpen(true)
+                          }}
                           style={{ flex: 1, minWidth: '80px' }}
                         >
                           {t('common.edit') || '编辑'}
@@ -562,7 +563,10 @@ const CopyTradingList: React.FC = () => {
                         <Button
                           size="small"
                           icon={<BarChartOutlined />}
-                          onClick={() => navigate(`/copy-trading/statistics/${record.id}`)}
+                          onClick={() => {
+                            setStatisticsModalCopyTradingId(record.id.toString())
+                            setStatisticsModalOpen(true)
+                          }}
                           style={{ flex: 1, minWidth: '80px' }}
                         >
                           {t('copyTradingList.statistics') || '统计'}
@@ -571,28 +575,23 @@ const CopyTradingList: React.FC = () => {
                           menu={{ 
                             items: [
                               {
-                                key: 'buyOrders',
-                                label: t('copyTradingList.buyOrders') || '买入订单',
-                                icon: <UnorderedListOutlined />,
-                                onClick: () => navigate(`/copy-trading/orders/buy/${record.id}`)
-                              },
-                              {
-                                key: 'sellOrders',
-                                label: t('copyTradingList.sellOrders') || '卖出订单',
-                                icon: <UnorderedListOutlined />,
-                                onClick: () => navigate(`/copy-trading/orders/sell/${record.id}`)
-                              },
-                              {
                                 key: 'matchedOrders',
-                                label: t('copyTradingList.matchedOrders') || '匹配关系',
+                                label: t('copyTradingList.matchedOrders') || '已成交订单',
                                 icon: <UnorderedListOutlined />,
-                                onClick: () => navigate(`/copy-trading/orders/matched/${record.id}`)
+                                onClick: () => {
+                                  setOrdersModalCopyTradingId(record.id.toString())
+                                  setOrdersModalTab('buy')
+                                  setOrdersModalOpen(true)
+                                }
                               },
                               {
                                 key: 'filteredOrders',
                                 label: t('copyTradingList.filteredOrders') || '已过滤订单',
                                 icon: <UnorderedListOutlined />,
-                                onClick: () => navigate(`/copy-trading/filtered-orders/${record.id}`)
+                                onClick: () => {
+                                  setFilteredOrdersModalCopyTradingId(record.id.toString())
+                                  setFilteredOrdersModalOpen(true)
+                                }
                               }
                             ]
                           }} 
@@ -643,6 +642,32 @@ const CopyTradingList: React.FC = () => {
           />
         )}
       </Card>
+      
+      {/* Modal 组件 */}
+      <CopyTradingOrdersModal
+        open={ordersModalOpen}
+        onClose={() => setOrdersModalOpen(false)}
+        copyTradingId={ordersModalCopyTradingId}
+        defaultTab={ordersModalTab}
+      />
+      <StatisticsModal
+        open={statisticsModalOpen}
+        onClose={() => setStatisticsModalOpen(false)}
+        copyTradingId={statisticsModalCopyTradingId}
+      />
+      <FilteredOrdersModal
+        open={filteredOrdersModalOpen}
+        onClose={() => setFilteredOrdersModalOpen(false)}
+        copyTradingId={filteredOrdersModalCopyTradingId}
+      />
+      <EditModal
+        open={editModalOpen}
+        onClose={() => setEditModalOpen(false)}
+        copyTradingId={editModalCopyTradingId}
+        onSuccess={() => {
+          fetchCopyTradings()
+        }}
+      />
     </div>
   )
 }

@@ -252,6 +252,7 @@ function App() {
           <Route path="/copy-trading/add" element={<ProtectedRoute><CopyTradingAdd /></ProtectedRoute>} />
           <Route path="/copy-trading/edit/:id" element={<ProtectedRoute><CopyTradingEdit /></ProtectedRoute>} />
           <Route path="/copy-trading/statistics/:copyTradingId" element={<ProtectedRoute><CopyTradingStatistics /></ProtectedRoute>} />
+          {/* 保留旧路由以保持向后兼容 */}
           <Route path="/copy-trading/orders/buy/:copyTradingId" element={<ProtectedRoute><CopyTradingBuyOrders /></ProtectedRoute>} />
           <Route path="/copy-trading/orders/sell/:copyTradingId" element={<ProtectedRoute><CopyTradingSellOrders /></ProtectedRoute>} />
           <Route path="/copy-trading/orders/matched/:copyTradingId" element={<ProtectedRoute><CopyTradingMatchedOrders /></ProtectedRoute>} />
