@@ -5,6 +5,7 @@ import com.google.gson.GsonBuilder
 import com.wrbug.polymarketbot.api.BuilderRelayerApi
 import com.wrbug.polymarketbot.api.EthereumRpcApi
 import com.wrbug.polymarketbot.api.GitHubApi
+import com.wrbug.polymarketbot.api.NbaStatsApi
 import com.wrbug.polymarketbot.api.PolymarketClobApi
 import com.wrbug.polymarketbot.api.PolymarketDataApi
 import com.wrbug.polymarketbot.api.PolymarketGammaApi
@@ -236,6 +237,44 @@ class RetrofitFactory(
             .addConverterFactory(GsonConverterFactory.create(gson))
             .build()
             .create(GitHubApi::class.java)
+    }
+    
+    /**
+     * 创建 NBA Stats API 客户端
+     * NBA Stats API 是公开 API，但需要设置正确的请求头
+     * @return NbaStatsApi 客户端
+     */
+    fun createNbaStatsApi(): NbaStatsApi {
+        val baseUrl = "https://stats.nba.com/stats/"
+        
+        // 添加拦截器，设置 NBA Stats API 需要的请求头
+        val nbaStatsInterceptor = object : Interceptor {
+            override fun intercept(chain: Interceptor.Chain): Response {
+                val request = chain.request().newBuilder()
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .header("Referer", "https://www.nba.com/")
+                    .header("Accept", "application/json")
+                    .header("Accept-Language", "en-US,en;q=0.9")
+                    .header("Origin", "https://www.nba.com")
+                    .build()
+                return chain.proceed(request)
+            }
+        }
+        
+        val okHttpClient = createClient()
+            .addInterceptor(nbaStatsInterceptor)
+            .build()
+        
+        val gson = GsonBuilder()
+            .setLenient()
+            .create()
+        
+        return Retrofit.Builder()
+            .baseUrl(baseUrl)
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create(gson))
+            .build()
+            .create(NbaStatsApi::class.java)
     }
 }
 

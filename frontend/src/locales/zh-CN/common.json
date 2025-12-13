@@ -181,7 +181,10 @@
     "logout": "退出登录",
     "logoutConfirm": "确认退出",
     "logoutConfirmDesc": "确定要退出登录吗？",
-    "navigation": "导航菜单"
+    "navigation": "导航菜单",
+    "nbaQuantitativeTrading": "NBA量化交易",
+    "nbaStrategies": "策略管理",
+    "nbaSignals": "交易信号"
   },
   "apiHealthStatus": {
     "title": "API 健康状态",

@@ -19,7 +19,9 @@ import {
   TwitterOutlined,
   CheckCircleOutlined,
   SendOutlined,
-  NotificationOutlined
+  NotificationOutlined,
+  ThunderboltOutlined,
+  SignalFilled
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 import type { ReactNode } from 'react'
@@ -52,6 +54,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     if (path.startsWith('/leaders') || path.startsWith('/templates') || path.startsWith('/copy-trading')) {
       keys.push('/copy-trading-management')
     }
+    if (path.startsWith('/nba')) {
+      keys.push('/nba-quantitative-trading')
+    }
     if (path.startsWith('/system-settings')) {
       keys.push('/system-settings')
     }
@@ -66,6 +71,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     const keys: string[] = []
     if (path.startsWith('/leaders') || path.startsWith('/templates') || path.startsWith('/copy-trading')) {
       keys.push('/copy-trading-management')
+    }
+    if (path.startsWith('/nba')) {
+      keys.push('/nba-quantitative-trading')
     }
     if (path.startsWith('/system-settings')) {
       keys.push('/system-settings')
@@ -110,6 +118,23 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       key: '/positions',
       icon: <UnorderedListOutlined />,
       label: t('menu.positions')
+    },
+    {
+      key: '/nba-quantitative-trading',
+      icon: <ThunderboltOutlined />,
+      label: t('menu.nbaQuantitativeTrading') || 'NBA量化交易',
+      children: [
+        {
+          key: '/nba/strategies',
+          icon: <FileTextOutlined />,
+          label: t('menu.nbaStrategies') || '策略管理'
+        },
+        {
+          key: '/nba/signals',
+          icon: <SignalFilled />,
+          label: t('menu.nbaSignals') || '交易信号'
+        }
+      ]
     },
     {
       key: '/statistics',
@@ -169,7 +194,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   
   const handleMenuClick = ({ key }: { key: string }) => {
     // 如果是父菜单，不导航（但 /system-settings 作为子菜单项时可以导航）
-    if (key === '/copy-trading-management') {
+    if (key === '/copy-trading-management' || key === '/nba-quantitative-trading') {
       return
     }
     

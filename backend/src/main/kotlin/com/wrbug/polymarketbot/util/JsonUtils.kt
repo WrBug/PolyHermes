@@ -28,5 +28,29 @@ object JsonUtils {
             emptyList()
         }
     }
+    
+    /**
+     * 解析 JSON 字符串列表（parseStringArray 的别名）
+     */
+    fun parseStringList(jsonString: String?): List<String> {
+        return parseStringArray(jsonString)
+    }
+    
+    /**
+     * 将对象转换为 JSON 字符串
+     * @param obj 要转换的对象
+     * @return JSON 字符串
+     */
+    fun toJson(obj: Any?): String? {
+        if (obj == null) {
+            return null
+        }
+        
+        return try {
+            gson.toJson(obj)
+        } catch (e: Exception) {
+            null
+        }
+    }
 }
 

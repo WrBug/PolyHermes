@@ -1,5 +1,13 @@
 import axios, { AxiosInstance, AxiosError } from 'axios'
-import type { ApiResponse, NotificationConfig, NotificationConfigRequest, NotificationConfigUpdateRequest } from '../types'
+import type { 
+  ApiResponse, 
+  NotificationConfig, 
+  NotificationConfigRequest, 
+  NotificationConfigUpdateRequest,
+  NbaGameListResponse,
+  NbaMarketListRequest,
+  NbaMarketListResponse
+} from '../types'
 import { getToken, setToken, removeToken } from '../utils'
 import { wsManager } from './websocket'
 import i18n from '../i18n/config'
@@ -672,6 +680,110 @@ export const apiService = {
           total?: number
         }
       }>>('/announcements/detail', data)
+  },
+  
+  /**
+   * NBA 量化策略 API
+   */
+  nbaStrategies: {
+    /**
+     * 创建策略
+     */
+    create: (data: any) =>
+      apiClient.post<ApiResponse<any>>('/nba/strategies/create', data),
+    
+    /**
+     * 更新策略
+     */
+    update: (data: any) =>
+      apiClient.post<ApiResponse<any>>('/nba/strategies/update', data),
+    
+    /**
+     * 获取策略列表
+     */
+    list: (data: { accountId?: number; enabled?: boolean; strategyName?: string; page?: number; limit?: number } = {}) =>
+      apiClient.post<ApiResponse<any>>('/nba/strategies/list', data),
+    
+    /**
+     * 获取策略详情
+     */
+    detail: (data: { id: number }) =>
+      apiClient.post<ApiResponse<any>>('/nba/strategies/detail', data),
+    
+    /**
+     * 删除策略
+     */
+    delete: (data: { id: number }) =>
+      apiClient.post<ApiResponse<void>>('/nba/strategies/delete', data)
+  },
+  
+  /**
+   * NBA 交易信号 API
+   */
+  nbaSignals: {
+    /**
+     * 获取交易信号列表
+     */
+    list: (data: { strategyId?: number; signalType?: string; signalStatus?: string; page?: number; limit?: number } = {}) =>
+      apiClient.post<ApiResponse<any>>('/nba/signals/list', data),
+    
+    /**
+     * 获取信号详情
+     */
+    detail: (data: { id: number }) =>
+      apiClient.post<ApiResponse<any>>('/nba/signals/detail', data)
+  },
+  
+  /**
+   * NBA 统计 API
+   */
+  nbaStatistics: {
+    /**
+     * 获取策略统计
+     */
+    strategy: (data: { strategyId: number; startDate?: string; endDate?: string }) =>
+      apiClient.post<ApiResponse<any>>('/nba/statistics/strategy', data),
+    
+    /**
+     * 获取总体统计
+     */
+    overall: (data: { startDate?: string; endDate?: string } = {}) =>
+      apiClient.post<ApiResponse<any>>('/nba/statistics/overall', data)
+  },
+  
+  /**
+   * NBA 比赛 API
+   */
+  nbaGames: {
+    /**
+     * 获取 NBA 比赛列表
+     * 前端传递时间戳（毫秒），后端转换为西8区时间
+     */
+    list: (data: { startTimestamp?: number; endTimestamp?: number; gameStatus?: string } = {}) =>
+      apiClient.post<ApiResponse<NbaGameListResponse>>('/nba/games/list', data),
+    
+    /**
+     * 获取 7 天内的所有球队
+     */
+    getTeams: () =>
+      apiClient.post<ApiResponse<string[]>>('/nba/games/teams', {})
+  },
+  
+  /**
+   * NBA 市场 API
+   */
+  nbaMarkets: {
+    /**
+     * 获取 NBA 市场列表
+     */
+    list: (data: NbaMarketListRequest) =>
+      apiClient.post<ApiResponse<NbaMarketListResponse>>('/nba/markets/list', data),
+    
+    /**
+     * 从市场中获取球队列表（用于策略配置）
+     */
+    getTeams: () =>
+      apiClient.post<ApiResponse<string[]>>('/nba/markets/teams', {})
   }
 }
 

@@ -797,3 +797,293 @@ export interface NotificationConfigUpdateRequest {
   }
 }
 
+/**
+ * NBA 量化策略
+ */
+export interface NbaQuantitativeStrategy {
+  id: number | null
+  strategyName: string
+  strategyDescription?: string
+  accountId: number
+  accountName?: string
+  enabled: boolean
+  filterTeams?: string[]
+  filterDateFrom?: string
+  filterDateTo?: string
+  filterGameImportance?: string
+  minWinProbabilityDiff: string
+  minWinProbability?: string
+  maxWinProbability?: string
+  minTradeValue: string
+  minRemainingTime?: number
+  maxRemainingTime?: number
+  minScoreDiff?: number
+  maxScoreDiff?: number
+  buyAmountStrategy: string
+  fixedBuyAmount?: string
+  buyRatio?: string
+  baseBuyAmount?: string
+  buyTiming: string
+  delayBuySeconds: number
+  buyDirection: string
+  enableSell: boolean
+  takeProfitThreshold?: string
+  stopLossThreshold?: string
+  probabilityReversalThreshold?: string
+  sellRatio: string
+  sellTiming: string
+  delaySellSeconds: number
+  priceStrategy: string
+  fixedPrice?: string
+  priceOffset: string
+  maxPosition: string
+  minPosition: string
+  maxGamePosition?: string
+  maxDailyLoss?: string
+  maxDailyOrders?: number
+  maxDailyProfit?: string
+  priceTolerance: string
+  minProbabilityThreshold?: string
+  maxProbabilityThreshold?: string
+  baseStrengthWeight: string
+  recentFormWeight: string
+  lineupIntegrityWeight: string
+  starStatusWeight: string
+  environmentWeight: string
+  matchupAdvantageWeight: string
+  scoreDiffWeight: string
+  momentumWeight: string
+  dataUpdateFrequency: number
+  analysisFrequency: number
+  pushFailedOrders: boolean
+  pushFrequency: string
+  batchPushInterval: number
+  createdAt: number
+  updatedAt: number
+}
+
+/**
+ * NBA 量化策略列表响应
+ */
+export interface NbaQuantitativeStrategyListResponse {
+  list: NbaQuantitativeStrategy[]
+  total: number
+  page: number
+  limit: number
+}
+
+/**
+ * NBA 市场 DTO
+ */
+export interface NbaMarketDto {
+  id?: string
+  question?: string
+  conditionId?: string
+  slug?: string
+  description?: string
+  category?: string
+  active?: boolean
+  closed?: boolean
+  archived?: boolean
+  volume?: string
+  liquidity?: string
+  endDate?: string
+  startDate?: string
+  outcomes?: string
+  outcomePrices?: string
+  volumeNum?: number
+  liquidityNum?: number
+  lastTradePrice?: number
+  bestBid?: number
+  bestAsk?: number
+}
+
+/**
+ * NBA 市场列表请求
+ */
+export interface NbaMarketListRequest {
+  active?: boolean
+  closed?: boolean
+  archived?: boolean
+}
+
+/**
+ * NBA 市场列表响应
+ */
+export interface NbaMarketListResponse {
+  list: NbaMarketDto[]
+  total: number
+}
+
+/**
+ * NBA 量化策略创建请求
+ */
+export interface NbaQuantitativeStrategyCreateRequest {
+  strategyName: string
+  strategyDescription?: string
+  accountId: number
+  enabled?: boolean
+  filterTeams?: string[]
+  filterDateFrom?: string
+  filterDateTo?: string
+  filterGameImportance?: string
+  minWinProbabilityDiff?: string
+  minWinProbability?: string
+  maxWinProbability?: string
+  minTradeValue?: string
+  minRemainingTime?: number
+  maxRemainingTime?: number
+  minScoreDiff?: number
+  maxScoreDiff?: number
+  buyAmountStrategy?: string
+  fixedBuyAmount?: string
+  buyRatio?: string
+  baseBuyAmount?: string
+  buyTiming?: string
+  delayBuySeconds?: number
+  buyDirection?: string
+  enableSell?: boolean
+  takeProfitThreshold?: string
+  stopLossThreshold?: string
+  probabilityReversalThreshold?: string
+  sellRatio?: string
+  sellTiming?: string
+  delaySellSeconds?: number
+  priceStrategy?: string
+  fixedPrice?: string
+  priceOffset?: string
+  maxPosition?: string
+  minPosition?: string
+  maxGamePosition?: string
+  maxDailyLoss?: string
+  maxDailyOrders?: number
+  maxDailyProfit?: string
+  priceTolerance?: string
+  minProbabilityThreshold?: string
+  maxProbabilityThreshold?: string
+  baseStrengthWeight?: string
+  recentFormWeight?: string
+  lineupIntegrityWeight?: string
+  starStatusWeight?: string
+  environmentWeight?: string
+  matchupAdvantageWeight?: string
+  scoreDiffWeight?: string
+  momentumWeight?: string
+  dataUpdateFrequency?: number
+  analysisFrequency?: number
+  pushFailedOrders?: boolean
+  pushFrequency?: string
+  batchPushInterval?: number
+}
+
+/**
+ * NBA 量化策略更新请求
+ */
+export interface NbaQuantitativeStrategyUpdateRequest {
+  id: number
+  strategyName?: string
+  strategyDescription?: string
+  enabled?: boolean
+  filterTeams?: string[]
+  filterDateFrom?: string
+  filterDateTo?: string
+  filterGameImportance?: string
+  minWinProbabilityDiff?: string
+  minWinProbability?: string
+  maxWinProbability?: string
+  minTradeValue?: string
+  minRemainingTime?: number
+  maxRemainingTime?: number
+  minScoreDiff?: number
+  maxScoreDiff?: number
+  buyAmountStrategy?: string
+  fixedBuyAmount?: string
+  buyRatio?: string
+  baseBuyAmount?: string
+  buyTiming?: string
+  delayBuySeconds?: number
+  buyDirection?: string
+  enableSell?: boolean
+  takeProfitThreshold?: string
+  stopLossThreshold?: string
+  probabilityReversalThreshold?: string
+  sellRatio?: string
+  sellTiming?: string
+  delaySellSeconds?: number
+  priceStrategy?: string
+  fixedPrice?: string
+  priceOffset?: string
+  maxPosition?: string
+  minPosition?: string
+  maxGamePosition?: string
+  maxDailyLoss?: string
+  maxDailyOrders?: number
+  maxDailyProfit?: string
+  priceTolerance?: string
+  minProbabilityThreshold?: string
+  maxProbabilityThreshold?: string
+  baseStrengthWeight?: string
+  recentFormWeight?: string
+  lineupIntegrityWeight?: string
+  starStatusWeight?: string
+  environmentWeight?: string
+  matchupAdvantageWeight?: string
+  scoreDiffWeight?: string
+  momentumWeight?: string
+  dataUpdateFrequency?: number
+  analysisFrequency?: number
+  pushFailedOrders?: boolean
+  pushFrequency?: string
+  batchPushInterval?: number
+}
+
+/**
+ * NBA 交易信号
+ */
+export interface NbaTradingSignal {
+  id: number
+  strategyId: number
+  strategyName?: string
+  gameId?: number
+  marketId?: number
+  signalType: 'BUY' | 'SELL'
+  direction: 'YES' | 'NO'
+  price: string
+  quantity: string
+  totalAmount: string
+  reason?: string
+  winProbability?: string
+  tradeValue?: string
+  signalStatus: 'GENERATED' | 'EXECUTING' | 'SUCCESS' | 'FAILED'
+  executionResult?: string
+  errorMessage?: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface NbaGame {
+  id?: number
+  nbaGameId?: string
+  homeTeam: string
+  awayTeam: string
+  gameDate: string
+  gameTime?: number
+  gameStatus: string
+  homeScore: number
+  awayScore: number
+  period: number
+  timeRemaining?: string
+  polymarketMarketId?: string
+}
+
+export interface NbaGameListRequest {
+  startTimestamp?: number  // 开始时间戳（毫秒）
+  endTimestamp?: number    // 结束时间戳（毫秒）
+  gameStatus?: string
+}
+
+export interface NbaGameListResponse {
+  list: NbaGame[]
+  total: number
+}
+

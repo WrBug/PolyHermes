@@ -33,6 +33,11 @@ import FilteredOrdersList from './pages/FilteredOrdersList'
 import SystemSettings from './pages/SystemSettings'
 import ApiHealthStatus from './pages/ApiHealthStatus'
 import Announcements from './pages/Announcements'
+import NbaQuantitativeStrategyList from './pages/NbaQuantitativeStrategyList'
+import NbaQuantitativeStrategyAdd from './pages/NbaQuantitativeStrategyAdd'
+import NbaQuantitativeStrategyEdit from './pages/NbaQuantitativeStrategyEdit'
+import NbaTradingSignals from './pages/NbaTradingSignals'
+import NbaStatistics from './pages/NbaStatistics'
 import { wsManager } from './services/websocket'
 import type { OrderPushMessage } from './types'
 import { apiService } from './services/api'
@@ -259,6 +264,11 @@ function App() {
           <Route path="/copy-trading/filtered-orders/:id" element={<ProtectedRoute><FilteredOrdersList /></ProtectedRoute>} />
           <Route path="/config" element={<ProtectedRoute><ConfigPage /></ProtectedRoute>} />
           <Route path="/positions" element={<ProtectedRoute><PositionList /></ProtectedRoute>} />
+          <Route path="/nba/strategies" element={<ProtectedRoute><NbaQuantitativeStrategyList /></ProtectedRoute>} />
+          <Route path="/nba/strategies/add" element={<ProtectedRoute><NbaQuantitativeStrategyAdd /></ProtectedRoute>} />
+          <Route path="/nba/strategies/edit/:id" element={<ProtectedRoute><NbaQuantitativeStrategyEdit /></ProtectedRoute>} />
+          <Route path="/nba/signals" element={<ProtectedRoute><NbaTradingSignals /></ProtectedRoute>} />
+          <Route path="/nba/statistics/:id" element={<ProtectedRoute><NbaStatistics /></ProtectedRoute>} />
           <Route path="/statistics" element={<ProtectedRoute><Statistics /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><UserList /></ProtectedRoute>} />
           <Route path="/announcements" element={<ProtectedRoute><Announcements /></ProtectedRoute>} />
