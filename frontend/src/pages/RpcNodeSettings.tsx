@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Card, Table, Button, Space, Badge, message, Popconfirm, Tag } from 'antd'
+import { Card, Table, Button, Space, Badge, message, Popconfirm, Tag, Switch } from 'antd'
 import { UpOutlined, DownOutlined, DeleteOutlined, ReloadOutlined, PlusOutlined, ApiOutlined } from '@ant-design/icons'
 import { apiService } from '../services/api'
 import type { RpcNodeConfig } from '../types'
@@ -92,6 +92,20 @@ const RpcNodeSettings: React.FC = () => {
         }
     }
 
+    const handleToggleEnabled = async (id: number, enabled: boolean) => {
+        try {
+            const response = await apiService.rpcNodes.update({ id, enabled })
+            if (response.data.code === 0) {
+                message.success(enabled ? t('rpcNodeSettings.enableSuccess') : t('rpcNodeSettings.disableSuccess'))
+                fetchNodes()
+            } else {
+                message.error(response.data.msg || t('rpcNodeSettings.updateFailed'))
+            }
+        } catch (error: any) {
+            message.error(error.message || t('rpcNodeSettings.updateFailed'))
+        }
+    }
+
     const columns = [
         {
             title: t('rpcNodeSettings.priority'),
@@ -125,6 +139,17 @@ const RpcNodeSettings: React.FC = () => {
             title: t('rpcNodeSettings.name'),
             dataIndex: 'name',
             ellipsis: true
+        },
+        {
+            title: t('rpcNodeSettings.enabled'),
+            dataIndex: 'enabled',
+            width: 100,
+            render: (enabled: boolean, record: RpcNodeConfig) => (
+                <Switch
+                    checked={enabled}
+                    onChange={(checked) => handleToggleEnabled(record.id, checked)}
+                />
+            )
         },
         {
             title: t('rpcNodeSettings.status'),

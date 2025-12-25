@@ -61,10 +61,12 @@ class RpcNodeService(
     
     /**
      * 获取所有节点配置（包含默认节点，用于内部使用）
+     * 只返回启用的节点，禁用的节点会被忽略
      * 默认节点始终排在最后
      */
     fun getAllNodesWithDefault(): List<RpcNodeConfig> {
-        val allNodes = rpcNodeConfigRepository.findAllByOrderByPriorityAsc()
+        // 只查询启用的节点
+        val allNodes = rpcNodeConfigRepository.findAllByEnabledTrueOrderByPriorityAsc()
         
         // 分离默认节点和用户配置的节点
         val (defaultNodes, userNodes) = allNodes.partition { isDefaultNode(it) }
@@ -366,14 +368,16 @@ class RpcNodeService(
     }
     
     /**
-     * 批量检查所有节点健康状态（不包含默认节点）
+     * 批量检查所有节点健康状态（不包含默认节点和禁用的节点）
      * 默认节点作为兜底，不应该返回给前端
+     * 禁用的节点不应该被检查
      */
     @Transactional
     fun checkAllNodesHealth(): Result<Map<Long, NodeCheckResult>> {
         return try {
-            val allNodes = rpcNodeConfigRepository.findAll()
-            // 过滤掉默认节点，只检查用户配置的节点
+            // 只查询启用的节点，过滤掉默认节点和禁用的节点
+            val allNodes = rpcNodeConfigRepository.findAllByEnabledTrueOrderByPriorityAsc()
+            // 过滤掉默认节点，只检查用户配置的启用节点
             val nodes = allNodes.filterNot { isDefaultNode(it) }
             val results = mutableMapOf<Long, NodeCheckResult>()
             
