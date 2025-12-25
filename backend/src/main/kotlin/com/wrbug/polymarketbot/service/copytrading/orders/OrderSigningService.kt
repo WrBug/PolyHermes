@@ -100,8 +100,9 @@ class OrderSigningService {
             return OrderAmounts(makerAmount.toString(), takerAmount.toString())
         } else {
             // SELL: makerAmount = size (shares), takerAmount = price * size (USDC)
-            // makerAmount 是 shares 数量，最多 4 位小数
-            // takerAmount 是 USDC 金额，需要使用原始价格计算（与SDK保持一致）
+            // 根据 Polymarket API 要求：
+            // - makerAmount (shares) 最多 2 位小数
+            // - takerAmount (USDC) 最多 4 位小数
             val rawMakerAmt = roundDown(sizeDecimal, roundConfig.size)
             
             // takerAmount = price * size，使用原始价格计算（不使用舍入后的价格）
@@ -109,16 +110,15 @@ class OrderSigningService {
             // 例如：0.9596 * 16.09 = 15.439964，而不是 0.96 * 16.09 = 15.4464
             val rawTakerAmt = rawMakerAmt.multiply(priceDecimal)
             
-            // 确保 makerAmount 精度（shares，最多 4 位小数）
-            val finalMakerAmt = roundDown(rawMakerAmt, TAKER_AMOUNT_DECIMALS)
+            // 确保 makerAmount 精度（shares，最多 2 位小数，符合 API 要求）
+            val finalMakerAmt = roundDown(rawMakerAmt, MAKER_AMOUNT_DECIMALS)
             
-            // takerAmount 不进行舍入，直接使用精确计算结果转换为 wei
-            // parseUnits 会将 BigDecimal 转换为 wei（6 位小数），自动处理精度
-            // 使用原始价格计算可以确保与SDK的结果一致
+            // 确保 takerAmount 精度（USDC，最多 4 位小数，符合 API 要求）
+            val finalTakerAmt = roundDown(rawTakerAmt, TAKER_AMOUNT_DECIMALS)
             
             // 转换为 wei（6 位小数）
             val makerAmount = parseUnits(finalMakerAmt, COLLATERAL_TOKEN_DECIMALS)
-            val takerAmount = parseUnits(rawTakerAmt, COLLATERAL_TOKEN_DECIMALS)
+            val takerAmount = parseUnits(finalTakerAmt, COLLATERAL_TOKEN_DECIMALS)
             
             return OrderAmounts(makerAmount.toString(), takerAmount.toString())
         }

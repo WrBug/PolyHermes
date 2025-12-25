@@ -848,9 +848,24 @@ open class CopyOrderTrackingService(
             return
         }
 
-        // 7. 解密私钥（在方法开始时解密一次，后续复用）
+        // 7. 解密 API 凭证
+        val apiSecret = try {
+            decryptApiSecret(account)
+        } catch (e: Exception) {
+            logger.warn("解密 API 凭证失败，跳过创建卖出订单: accountId=${account.id}, error=${e.message}")
+            return
+        }
+        val apiPassphrase = try {
+            decryptApiPassphrase(account)
+        } catch (e: Exception) {
+            logger.warn("解密 API 凭证失败，跳过创建卖出订单: accountId=${account.id}, error=${e.message}")
+            return
+        }
+
+        // 8. 解密私钥（在方法开始时解密一次，后续复用）
         val decryptedPrivateKey = decryptPrivateKey(account)
-        // 8. 创建并签名卖出订单
+        
+        // 9. 创建并签名卖出订单
         val signedOrder = try {
             orderSigningService.createAndSignOrder(
                 privateKey = decryptedPrivateKey,
@@ -869,7 +884,7 @@ open class CopyOrderTrackingService(
             return
         }
 
-        // 9. 构建订单请求
+        // 10. 构建订单请求
         // 跟单订单使用 FAK (Fill-And-Kill)，允许部分成交，未成交部分立即取消
         // 这样可以快速响应 Leader 的交易，避免订单长期挂单导致价格不匹配
         val orderRequest = NewOrderRequest(
@@ -879,15 +894,15 @@ open class CopyOrderTrackingService(
             deferExec = false
         )
 
-        // 10. 创建带认证的CLOB API客户端
+        // 11. 创建带认证的CLOB API客户端（使用解密后的凭证）
         val clobApi = retrofitFactory.createClobApi(
             account.apiKey,
-            account.apiSecret,
-            account.apiPassphrase,
+            apiSecret,
+            apiPassphrase,
             account.walletAddress
         )
 
-        // 11. 调用API创建卖出订单（带重试机制，重试时会重新生成salt并重新签名）
+        // 12. 调用API创建卖出订单（带重试机制，重试时会重新生成salt并重新签名）
 
         val createOrderResult = createOrderWithRetry(
             clobApi = clobApi,
