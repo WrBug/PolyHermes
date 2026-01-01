@@ -8,11 +8,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      # 本地构建时可以传递版本号参数（可选）
-      # args:
-      #   VERSION: ${VERSION:-dev}
-      #   GIT_TAG: ${GIT_TAG:-}
-      #   GITHUB_REPO_URL: https://github.com/WrBug/PolyHermes
+      # 本地构建时可以传递版本号参数（自动使用当前分支名）
+      args:
+        VERSION: ${VERSION:-dev}
+        GIT_TAG: ${GIT_TAG:-${VERSION:-dev}}
+        GITHUB_REPO_URL: ${GITHUB_REPO_URL:-https://github.com/WrBug/PolyHermes}
     container_name: polyhermes
     ports:
       - "${SERVER_PORT:-80}:80"
