@@ -73,42 +73,11 @@ jobs:
           # 获取 PR 详细信息
           PR_BODY="${{ steps.pr_details.outputs.pr_body }}"
           
-          # 转义 PR 标题和描述中的 HTML 特殊字符（但保留已有的 HTML 标签）
+          # 转义 PR 标题中的 HTML 特殊字符
           PR_TITLE_ESCAPED=$(echo "$PR_TITLE" | sed 's/&/\&amp;/g' | sed 's/</\&lt;/g' | sed 's/>/\&gt;/g')
           
-          # 构建消息内容（使用 HTML 格式）
-          MESSAGE="🚀 <b>PR 已合并到 main 分支</b>"$'\n'$'\n'"📝 <b>PR #${PR_NUMBER}:</b> ${PR_TITLE_ESCAPED}"$'\n'"🔗 <b>链接:</b> <a href=\"${PR_URL}\">查看 PR</a>"$'\n'"🔀 <b>合并提交:</b> <code>${PR_MERGE_COMMIT:0:7}</code>"
-
-          # 添加 PR 描述（如果有）
-          if [ -n "$PR_BODY" ] && [ "$PR_BODY" != "null" ] && [ "$PR_BODY" != "" ]; then
-            # 使用 Python 将 Markdown 转换为 HTML（更可靠）
-            # 使用 echo 创建临时 Python 脚本，避免 heredoc 导致的 YAML 解析问题
-            echo 'import sys' > /tmp/markdown_to_html.py
-            echo 'import re' >> /tmp/markdown_to_html.py
-            echo '' >> /tmp/markdown_to_html.py
-            echo 'text = sys.stdin.read()' >> /tmp/markdown_to_html.py
-            echo '' >> /tmp/markdown_to_html.py
-            echo 'text = text.replace("&", "&amp;")' >> /tmp/markdown_to_html.py
-            echo 'text = text.replace("<", "&lt;")' >> /tmp/markdown_to_html.py
-            echo 'text = text.replace(">", "&gt;")' >> /tmp/markdown_to_html.py
-            echo 'text = re.sub(r"```([^`]+)```", r"<pre><code>\\1</code></pre>", text, flags=re.DOTALL)' >> /tmp/markdown_to_html.py
-            echo 'text = re.sub(r"`([^`]+)`", r"<code>\\1</code>", text)' >> /tmp/markdown_to_html.py
-            echo 'text = re.sub(r"\\*\\*([^*]+)\\*\\*", r"<b>\\1</b>", text)' >> /tmp/markdown_to_html.py
-            echo 'text = re.sub(r"(?<!<[^>]*)\\*([^*<>]+)\\*(?![^<]*>)", r"<i>\\1</i>", text)' >> /tmp/markdown_to_html.py
-            echo 'text = re.sub(r"\\[([^\\]]+)\\]\\(([^)]+)\\)", r"<a href=\\"\\2\\">\\1</a>", text)' >> /tmp/markdown_to_html.py
-            echo 'text = re.sub(r"^### (.+)$", r"<b>\\1</b>", text, flags=re.MULTILINE)' >> /tmp/markdown_to_html.py
-            echo 'text = re.sub(r"^## (.+)$", r"<b>\\1</b>", text, flags=re.MULTILINE)' >> /tmp/markdown_to_html.py
-            echo 'text = re.sub(r"^# (.+)$", r"<b>\\1</b>", text, flags=re.MULTILINE)' >> /tmp/markdown_to_html.py
-            echo 'text = re.sub(r"^- (.+)$", r"• \\1", text, flags=re.MULTILINE)' >> /tmp/markdown_to_html.py
-            echo 'text = re.sub(r"^  - (.+)$", r"  • \\1", text, flags=re.MULTILINE)' >> /tmp/markdown_to_html.py
-            echo 'text = re.sub(r"^    - (.+)$", r"    • \\1", text, flags=re.MULTILINE)' >> /tmp/markdown_to_html.py
-            echo 'if len(text) > 1000:' >> /tmp/markdown_to_html.py
-            echo '    text = text[:1000] + "...\\n<i>(内容已截断)</i>"' >> /tmp/markdown_to_html.py
-            echo 'print(text, end="")' >> /tmp/markdown_to_html.py
-            PR_BODY_HTML=$(echo "$PR_BODY" | python3 /tmp/markdown_to_html.py)
-            
-            MESSAGE="${MESSAGE}"$'\n'$'\n'"📄 <b>PR 描述:</b>"$'\n'"${PR_BODY_HTML}"
-          fi
+          # 构建消息内容（仅包含关键信息）
+          MESSAGE="🚀 <b>main 分支代码更新</b>"$'\n'$'\n'"📝 <b>PR #${PR_NUMBER}:</b> ${PR_TITLE_ESCAPED}"$'\n'"🔗 <a href=\"${PR_URL}\">查看 PR</a>"
           
           # 发送 Telegram 消息（使用 jq 转义 JSON）
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
