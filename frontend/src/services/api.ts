@@ -181,18 +181,25 @@ export const apiService = {
      */
     login: (data: { username: string; password: string }) =>
       apiClient.post<ApiResponse<{ token: string }>>('/auth/login', data),
-    
+
     /**
      * 重置密码
      */
     resetPassword: (data: { resetKey: string; username: string; newPassword: string }) =>
       apiClient.post<ApiResponse<void>>('/auth/reset-password', data),
-    
+
     /**
      * 检查是否首次使用
      */
     checkFirstUse: () =>
-      apiClient.post<ApiResponse<{ isFirstUse: boolean }>>('/auth/check-first-use', {})
+      apiClient.post<ApiResponse<{ isFirstUse: boolean }>>('/auth/check-first-use', {}),
+
+    /**
+     * 获取 WebSocket 连接票据
+     * 返回一个短期有效（30秒）的一次性票据
+     */
+    getWebSocketTicket: () =>
+      apiClient.post<ApiResponse<{ ticket: string }>>('/auth/ws-ticket', {})
   },
   
   /**

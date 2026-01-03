@@ -199,7 +199,11 @@
     "importFailed": "导入账户失败",
     "derivedAddress": "推导地址",
     "addressError": "无法从私钥推导地址",
-    "addressErrorMnemonic": "无法从助记词推导地址"
+    "addressErrorMnemonic": "无法从助记词推导地址",
+    "walletType": "钱包类型",
+    "walletTypeHelp": "Magic：通过邮箱或社交账号（如 Google、Twitter）登录的 Polymarket 账户；MetaMask：使用 MetaMask 等浏览器钱包连接的 Polymarket 账户",
+    "walletTypeMagic": "Magic（邮箱/社交账号登录）",
+    "walletTypeSafe": "MetaMask（浏览器钱包）"
   },
   "leader": {
     "title": "Leader 管理",

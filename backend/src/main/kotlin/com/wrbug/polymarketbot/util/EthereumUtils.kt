@@ -19,7 +19,7 @@ object EthereumUtils {
      * @return 函数选择器，例如 "0x12345678"
      */
     fun getFunctionSelector(functionSignature: String): String {
-        val hash = keccak256(functionSignature.toByteArray())
+        val hash = keccak256Hex(functionSignature.toByteArray())
         return "0x" + hash.substring(0, 8)
     }
     
@@ -139,15 +139,47 @@ object EthereumUtils {
     }
     
     /**
+     * 将十六进制字符串转换为字节数组
+     * @param hex 十六进制字符串（带或不带 0x 前缀）
+     * @return 字节数组
+     */
+    fun hexToBytes(hex: String): ByteArray {
+        val cleanHex = hex.removePrefix("0x")
+        return ByteArray(cleanHex.length / 2) { i ->
+            cleanHex.substring(i * 2, i * 2 + 2).toInt(16).toByte()
+        }
+    }
+
+    /**
+     * 将字节数组转换为十六进制字符串
+     * @param bytes 字节数组
+     * @return 十六进制字符串（带 0x 前缀）
+     */
+    fun bytesToHex(bytes: ByteArray): String {
+        return "0x" + bytes.joinToString("") { "%02x".format(it) }
+    }
+
+    /**
      * 计算 Keccak-256 哈希（Ethereum 标准）
      * 使用 BouncyCastle 库实现真正的 Keccak-256
+     * @param data 输入数据
+     * @return 32 字节的哈希值
      */
-    private fun keccak256(data: ByteArray): String {
+    fun keccak256(data: ByteArray): ByteArray {
         val digest = KeccakDigest(256)
         digest.update(data, 0, data.size)
         val hash = ByteArray(digest.digestSize)
         digest.doFinal(hash, 0)
-        return hash.joinToString("") { "%02x".format(it) }
+        return hash
+    }
+
+    /**
+     * 计算 Keccak-256 哈希并返回十六进制字符串
+     * @param data 输入数据
+     * @return 十六进制哈希字符串
+     */
+    fun keccak256Hex(data: ByteArray): String {
+        return keccak256(data).joinToString("") { "%02x".format(it) }
     }
 }
 

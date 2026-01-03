@@ -1,18 +1,20 @@
 import { useState } from 'react'
-import { Form, Input, Button, Radio, Space, Alert } from 'antd'
+import { Form, Input, Button, Radio, Space, Alert, Tooltip } from 'antd'
+import { QuestionCircleOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useAccountStore } from '../store/accountStore'
-import { 
-  getAddressFromPrivateKey, 
+import {
+  getAddressFromPrivateKey,
   getAddressFromMnemonic,
   getPrivateKeyFromMnemonic,
-  isValidWalletAddress, 
+  isValidWalletAddress,
   isValidPrivateKey,
   isValidMnemonic
 } from '../utils'
 import { useMediaQuery } from 'react-responsive'
 
 type ImportType = 'privateKey' | 'mnemonic'
+type WalletType = 'magic' | 'safe'
 
 interface AccountImportFormProps {
   form: any
@@ -33,6 +35,7 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
   const isMobile = useMediaQuery({ maxWidth: 768 })
   const { importAccount, loading } = useAccountStore()
   const [importType, setImportType] = useState<ImportType>('privateKey')
+  const [walletType, setWalletType] = useState<WalletType>('magic')
   const [derivedAddress, setDerivedAddress] = useState<string>('')
   const [addressError, setAddressError] = useState<string>('')
   
@@ -141,7 +144,8 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
       await importAccount({
         privateKey: privateKey,
         walletAddress: walletAddress,
-        accountName: values.accountName
+        accountName: values.accountName,
+        walletType: walletType
       })
       
       // 等待store更新
@@ -189,8 +193,8 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
         size={isMobile ? 'middle' : 'large'}
       >
         <Form.Item label={t('accountImport.importMethod')}>
-          <Radio.Group 
-            value={importType} 
+          <Radio.Group
+            value={importType}
             onChange={(e) => {
               setImportType(e.target.value)
               setDerivedAddress('')
@@ -200,6 +204,29 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
           >
             <Radio value="privateKey">{t('accountImport.privateKey')}</Radio>
             <Radio value="mnemonic">{t('accountImport.mnemonic')}</Radio>
+          </Radio.Group>
+        </Form.Item>
+
+        <Form.Item
+          label={
+            <span>
+              {t('accountImport.walletType')}{' '}
+              <Tooltip title={t('accountImport.walletTypeHelp')}>
+                <QuestionCircleOutlined style={{ color: '#999' }} />
+              </Tooltip>
+            </span>
+          }
+        >
+          <Radio.Group
+            value={walletType}
+            onChange={(e) => setWalletType(e.target.value)}
+          >
+            <Radio value="magic">
+              {t('accountImport.walletTypeMagic')}
+            </Radio>
+            <Radio value="safe">
+              {t('accountImport.walletTypeSafe')}
+            </Radio>
           </Radio.Group>
         </Form.Item>
         

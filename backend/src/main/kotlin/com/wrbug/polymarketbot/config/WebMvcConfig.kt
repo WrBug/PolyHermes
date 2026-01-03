@@ -21,10 +21,6 @@ class WebMvcConfig(
         // 再注册JWT认证拦截器
         registry.addInterceptor(jwtAuthenticationInterceptor)
             .addPathPatterns("/api/**")
-        registry.addInterceptor(jwtAuthenticationInterceptor)
-            .addPathPatterns("/api/**")
-        registry.addInterceptor(jwtAuthenticationInterceptor)
-            .addPathPatterns("/api/**")
     }
 }
 

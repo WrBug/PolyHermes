@@ -25,6 +25,19 @@ class SystemConfigService(
         const val CONFIG_KEY_BUILDER_SECRET = "builder.secret"
         const val CONFIG_KEY_BUILDER_PASSPHRASE = "builder.passphrase"
         const val CONFIG_KEY_AUTO_REDEEM = "auto_redeem"
+
+        /**
+         * 遮蔽敏感信息，仅显示前4位和后4位
+         * 例如：abcd1234...wxyz5678
+         */
+        fun maskSensitiveValue(value: String?): String? {
+            if (value == null) return null
+            return when {
+                value.length <= 8 -> "****"  // 太短则完全遮蔽
+                value.length <= 16 -> "${value.take(2)}...${value.takeLast(2)}"
+                else -> "${value.take(4)}...${value.takeLast(4)}"
+            }
+        }
     }
 
     /**
@@ -36,26 +49,26 @@ class SystemConfigService(
         val builderPassphrase = getConfigValue(CONFIG_KEY_BUILDER_PASSPHRASE)
         val autoRedeem = isAutoRedeemEnabled()
 
-        // 获取完整的 API Key（用于前端展示）
-        val builderApiKeyDisplay = builderApiKey?.let { 
+        // 获取遮蔽后的显示值（仅显示部分字符，用于前端确认配置）
+        val builderApiKeyDisplay = builderApiKey?.let {
             try {
-                cryptoUtils.decrypt(it)
+                maskSensitiveValue(cryptoUtils.decrypt(it))
             } catch (e: Exception) {
                 null
             }
         }
-        
+
         val builderSecretDisplay = builderSecret?.let {
             try {
-                cryptoUtils.decrypt(it)
+                maskSensitiveValue(cryptoUtils.decrypt(it))
             } catch (e: Exception) {
                 null
             }
         }
-        
+
         val builderPassphraseDisplay = builderPassphrase?.let {
             try {
-                cryptoUtils.decrypt(it)
+                maskSensitiveValue(cryptoUtils.decrypt(it))
             } catch (e: Exception) {
                 null
             }

@@ -199,7 +199,11 @@
     "importFailed": "導入賬戶失敗",
     "derivedAddress": "推導地址",
     "addressError": "無法從私鑰推導地址",
-    "addressErrorMnemonic": "無法從助記詞推導地址"
+    "addressErrorMnemonic": "無法從助記詞推導地址",
+    "walletType": "錢包類型",
+    "walletTypeHelp": "Magic：透過郵箱或社群帳號（如 Google、Twitter）登入的 Polymarket 帳戶；MetaMask：使用 MetaMask 等瀏覽器錢包連接的 Polymarket 帳戶",
+    "walletTypeMagic": "Magic（郵箱/社群帳號登入）",
+    "walletTypeSafe": "MetaMask（瀏覽器錢包）"
   },
   "leader": {
     "title": "Leader 管理",

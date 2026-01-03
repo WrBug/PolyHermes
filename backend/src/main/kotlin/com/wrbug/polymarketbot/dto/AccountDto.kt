@@ -7,7 +7,8 @@ data class AccountImportRequest(
     val privateKey: String,  // 私钥（前端加密后传输）
     val walletAddress: String,  // 钱包地址（前端从私钥推导，用于验证）
     val accountName: String? = null,
-    val isEnabled: Boolean = true  // 是否启用（用于订单推送等功能的开关）
+    val isEnabled: Boolean = true,  // 是否启用（用于订单推送等功能的开关）
+    val walletType: String = "magic"  // 钱包类型：magic（邮箱/OAuth登录）或 safe（MetaMask浏览器钱包）
 )
 
 /**

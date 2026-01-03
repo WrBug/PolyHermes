@@ -39,9 +39,16 @@ class BlockchainService(
     // USDC 合约地址（Polygon 主网，Polymarket 使用 Polygon）
     private val usdcContractAddress = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
     
-    // Polymarket 代理工厂合约地址（Polygon 主网）
+    // Polymarket Safe 代理工厂合约地址（Polygon 主网，用于 MetaMask 用户）
     // 合约地址: 0xaacFeEa03eb1561C4e67d661e40682Bd20E3541b
-    private val proxyFactoryContractAddress = "0xaacFeEa03eb1561C4e67d661e40682Bd20E3541b"
+    private val safeProxyFactoryAddress = "0xaacFeEa03eb1561C4e67d661e40682Bd20E3541b"
+
+    // Polymarket Magic 代理工厂合约地址（Polygon 主网，用于邮箱/OAuth 登录用户）
+    // 合约地址: 0xaB45c5A4B0c941a2F231C04C3f49182e1A254052
+    private val magicProxyFactoryAddress = "0xaB45c5A4B0c941a2F231C04C3f49182e1A254052"
+
+    // Magic Proxy 的 init code hash（用于 CREATE2 计算）
+    private val magicProxyInitCodeHash = "0xd21df8dc65880a8606f09fe0ce3df9b8869287ab0b058be05aa9e8af6330a00b"
     
     // ConditionalTokens 合约地址（Polygon 主网）
     private val conditionalTokensAddress = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"
@@ -78,58 +85,160 @@ class BlockchainService(
     
     /**
      * 获取 Polymarket 代理钱包地址
-     * 通过 RPC 调用代理工厂合约获取用户的代理钱包地址
+     * 根据指定的钱包类型返回对应的代理地址
+     *
+     * Polymarket 有两种代理钱包类型：
+     * 1. Magic Proxy（邮箱/OAuth 登录用户）- 使用 CREATE2 计算地址
+     * 2. Safe Proxy（MetaMask 钱包用户）- 通过合约调用获取地址
+     *
+     * @param walletAddress 用户的钱包地址（EOA）
+     * @param walletType 钱包类型："magic"（默认）或 "safe"
+     * @return 代理钱包地址
+     */
+    suspend fun getProxyAddress(walletAddress: String, walletType: String = "magic"): Result<String> {
+        return try {
+            when (walletType.lowercase()) {
+                "safe" -> {
+                    // Safe Proxy（MetaMask 用户）
+                    val safeProxyResult = getSafeProxyAddress(walletAddress)
+                    if (safeProxyResult.isSuccess) {
+                        val safeProxyAddress = safeProxyResult.getOrNull()!!
+                        logger.debug("使用 Safe Proxy 地址: $safeProxyAddress")
+                        Result.success(safeProxyAddress)
+                    } else {
+                        Result.failure(safeProxyResult.exceptionOrNull() ?: Exception("获取 Safe Proxy 地址失败"))
+                    }
+                }
+                else -> {
+                    // Magic Proxy（邮箱/OAuth 登录用户）- 默认
+                    val magicProxyAddress = calculateMagicProxyAddress(walletAddress)
+                    logger.debug("使用 Magic Proxy 地址: $magicProxyAddress")
+                    Result.success(magicProxyAddress)
+                }
+            }
+        } catch (e: Exception) {
+            logger.error("获取代理地址失败: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 计算 Magic Proxy 地址（使用 CREATE2）
+     * 用于邮箱/OAuth 登录的用户
+     *
+     * CREATE2 地址计算公式：
+     * address = keccak256(0xff ++ factory ++ salt ++ initCodeHash)[12:]
+     * salt = keccak256(eoaAddress)
+     *
+     * @param walletAddress 用户的钱包地址（EOA）
+     * @return Magic 代理钱包地址
+     */
+    fun calculateMagicProxyAddress(walletAddress: String): String {
+        // 计算 salt = keccak256(eoaAddress)
+        val eoaBytes = EthereumUtils.hexToBytes(walletAddress.lowercase())
+        val salt = EthereumUtils.keccak256(eoaBytes)
+
+        // 计算 CREATE2 地址
+        // data = 0xff ++ factory ++ salt ++ initCodeHash
+        val prefix = byteArrayOf(0xff.toByte())
+        val factoryBytes = EthereumUtils.hexToBytes(magicProxyFactoryAddress)
+        val initCodeHashBytes = EthereumUtils.hexToBytes(magicProxyInitCodeHash)
+
+        val data = prefix + factoryBytes + salt + initCodeHashBytes
+        val hash = EthereumUtils.keccak256(data)
+
+        // 取后 20 字节作为地址
+        return "0x" + hash.copyOfRange(12, 32).joinToString("") { "%02x".format(it) }
+    }
+
+    /**
+     * 获取 Safe Proxy 地址
+     * 通过 RPC 调用 Safe 代理工厂合约获取用户的代理钱包地址
+     * 用于 MetaMask 钱包用户
+     *
      * @param walletAddress 用户的钱包地址
      * @return 代理钱包地址
      */
-    suspend fun getProxyAddress(walletAddress: String): Result<String> {
+    private suspend fun getSafeProxyAddress(walletAddress: String): Result<String> {
         return try {
             val rpcApi = polygonRpcApi
-            
+
             // 计算函数选择器
             val functionSelector = EthereumUtils.getFunctionSelector(computeProxyAddressFunctionSignature)
             // 编码地址参数
             val encodedAddress = EthereumUtils.encodeAddress(walletAddress)
             // 构建调用数据
             val data = functionSelector + encodedAddress
-            
+
             // 构建 JSON-RPC 请求
             val rpcRequest = JsonRpcRequest(
                 method = "eth_call",
                 params = listOf(
                     mapOf(
-                        "to" to proxyFactoryContractAddress,
+                        "to" to safeProxyFactoryAddress,
                         "data" to data
                     ),
                     "latest"
                 )
             )
-            
+
             // 发送 RPC 请求
             val response = rpcApi.call(rpcRequest)
-            
+
             if (!response.isSuccessful || response.body() == null) {
-                throw Exception("RPC 请求失败: ${response.code()} ${response.message()}")
+                return Result.failure(Exception("RPC 请求失败: ${response.code()} ${response.message()}"))
             }
-            
+
             val rpcResponse = response.body()!!
-            
+
             // 检查错误
             if (rpcResponse.error != null) {
-                throw Exception("RPC 错误: ${rpcResponse.error.message}")
+                return Result.failure(Exception("RPC 错误: ${rpcResponse.error.message}"))
             }
-            
+
             // 使用 Gson 解析 result（JsonElement）
-            val hexResult = rpcResponse.result?.asString 
-                ?: throw Exception("RPC 响应格式错误: result 为空")
-            
+            val hexResult = rpcResponse.result?.asString
+                ?: return Result.failure(Exception("RPC 响应格式错误: result 为空"))
+
             // 解析代理地址
             val proxyAddress = EthereumUtils.decodeAddress(hexResult)
-            
+
             Result.success(proxyAddress)
         } catch (e: Exception) {
-            logger.error("获取代理地址失败: ${e.message}", e)
             Result.failure(e)
+        }
+    }
+
+    /**
+     * 检查地址是否是合约
+     * @param address 地址
+     * @return 如果地址有代码（是合约）返回 true
+     */
+    private suspend fun isContract(address: String): Boolean {
+        return try {
+            val rpcApi = polygonRpcApi
+
+            val rpcRequest = JsonRpcRequest(
+                method = "eth_getCode",
+                params = listOf(address, "latest")
+            )
+
+            val response = rpcApi.call(rpcRequest)
+            if (!response.isSuccessful || response.body() == null) {
+                return false
+            }
+
+            val rpcResponse = response.body()!!
+            if (rpcResponse.error != null) {
+                return false
+            }
+
+            val code = rpcResponse.result?.asString ?: "0x"
+            // 如果代码不是 "0x" 或 "0x0"，则是合约
+            code != "0x" && code != "0x0"
+        } catch (e: Exception) {
+            logger.warn("检查合约地址失败: ${e.message}")
+            false
         }
     }
     

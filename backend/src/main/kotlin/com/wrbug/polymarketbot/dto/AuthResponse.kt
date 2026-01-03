@@ -14,3 +14,10 @@ data class CheckFirstUseResponse(
     val isFirstUse: Boolean
 )
 
+/**
+ * WebSocket 票据响应
+ */
+data class WebSocketTicketResponse(
+    val ticket: String
+)
+

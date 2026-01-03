@@ -99,8 +99,9 @@ class AccountService(
             }
 
             // 5. 获取代理地址（必须成功，否则导入失败）
+            // 根据用户选择的钱包类型计算代理地址
             val proxyAddress = runBlocking {
-                val proxyResult = blockchainService.getProxyAddress(request.walletAddress)
+                val proxyResult = blockchainService.getProxyAddress(request.walletAddress, request.walletType)
                 if (proxyResult.isSuccess) {
                     val address = proxyResult.getOrNull()
                     if (address != null) {
@@ -196,6 +197,85 @@ class AccountService(
             Result.success(toDto(saved))
         } catch (e: Exception) {
             logger.error("更新账户失败", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 刷新账户的代理地址
+     * 使用最新的代理地址计算逻辑（支持 Magic 和 Safe 两种类型）
+     */
+    @Transactional
+    fun refreshProxyAddress(accountId: Long): Result<AccountDto> {
+        return try {
+            val account = accountRepository.findById(accountId)
+                .orElse(null) ?: return Result.failure(IllegalArgumentException("账户不存在"))
+
+            // 重新获取代理地址
+            val proxyAddress = runBlocking {
+                val proxyResult = blockchainService.getProxyAddress(account.walletAddress)
+                if (proxyResult.isSuccess) {
+                    proxyResult.getOrNull()
+                        ?: throw IllegalStateException("获取代理地址返回空值")
+                } else {
+                    val error = proxyResult.exceptionOrNull()
+                    throw IllegalStateException("获取代理地址失败: ${error?.message}")
+                }
+            }
+
+            // 更新账户
+            val updated = account.copy(
+                proxyAddress = proxyAddress,
+                updatedAt = System.currentTimeMillis()
+            )
+            val saved = accountRepository.save(updated)
+
+            logger.info("刷新代理地址成功: accountId=${accountId}, oldProxy=${account.proxyAddress}, newProxy=${proxyAddress}")
+            Result.success(toDto(saved))
+        } catch (e: Exception) {
+            logger.error("刷新代理地址失败: accountId=${accountId}", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 刷新所有账户的代理地址
+     */
+    @Transactional
+    fun refreshAllProxyAddresses(): Result<List<AccountDto>> {
+        return try {
+            val accounts = accountRepository.findAll()
+            val updatedAccounts = mutableListOf<AccountDto>()
+
+            accounts.forEach { account ->
+                try {
+                    val proxyAddress = runBlocking {
+                        val proxyResult = blockchainService.getProxyAddress(account.walletAddress)
+                        if (proxyResult.isSuccess) {
+                            proxyResult.getOrNull()
+                        } else {
+                            null
+                        }
+                    }
+
+                    if (proxyAddress != null && proxyAddress != account.proxyAddress) {
+                        val updated = account.copy(
+                            proxyAddress = proxyAddress,
+                            updatedAt = System.currentTimeMillis()
+                        )
+                        val saved = accountRepository.save(updated)
+                        logger.info("刷新代理地址成功: accountId=${account.id}, oldProxy=${account.proxyAddress}, newProxy=${proxyAddress}")
+                        updatedAccounts.add(toDto(saved))
+                    }
+                } catch (e: Exception) {
+                    logger.warn("刷新账户 ${account.id} 代理地址失败: ${e.message}")
+                }
+            }
+
+            logger.info("批量刷新代理地址完成: 更新了 ${updatedAccounts.size} 个账户")
+            Result.success(updatedAccounts)
+        } catch (e: Exception) {
+            logger.error("批量刷新代理地址失败", e)
             Result.failure(e)
         }
     }

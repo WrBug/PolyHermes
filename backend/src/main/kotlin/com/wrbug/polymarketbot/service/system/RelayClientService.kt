@@ -333,15 +333,10 @@ class RelayClientService(
         // 打包签名（参考 builder-relayer-client/src/utils/index.ts 的 splitAndPackSig）
         val packedSignature = splitAndPackSig(safeSignature)
         
-        // 调试日志
+        // 调试日志（地址已遮蔽）
         logger.debug("=== Builder Relayer 签名调试 ===")
-        logger.debug("Safe Address: $proxyAddress")
-        logger.debug("From Address: $fromAddress")
-        logger.debug("To: ${safeTx.to}")
-        logger.debug("Data: $redeemCallData")
-        logger.debug("Nonce: $proxyNonce")
-        logger.debug("Packed Signature: $packedSignature")
-        logger.debug("Signature Length: ${packedSignature.length} (expected: 132 with 0x)")
+        logger.debug("Safe: ${proxyAddress.take(10)}..., From: ${fromAddress.take(10)}..., Nonce: $proxyNonce")
+        logger.debug("Signature Length: ${packedSignature.length}")
 
         // 构建 TransactionRequest（参考 builder-relayer-client/src/builder/safe.ts）
         // 注意：根据 TypeScript 实现，data 和 signature 都应该带 0x 前缀
@@ -364,13 +359,7 @@ class RelayClientService(
             metadata = "Redeem positions via Builder Relayer"
         )
         
-        logger.debug("Request Type: ${request.type}")
-        logger.debug("Request From: ${request.from}")
-        logger.debug("Request To: ${request.to}")
-        logger.debug("Request ProxyWallet: ${request.proxyWallet}")
-        logger.debug("Request Data Length: ${request.data.length}")
-        logger.debug("Request Signature Length: ${request.signature.length}")
-        logger.debug("Request Nonce: ${request.nonce}")
+        logger.debug("Request: type=${request.type}, dataLen=${request.data.length}, sigLen=${request.signature.length}, nonce=${request.nonce}")
 
         // 调用 Builder Relayer API（认证头通过拦截器添加）
         val response = relayerApi.submitTransaction(request)

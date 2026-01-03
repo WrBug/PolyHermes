@@ -54,34 +54,36 @@ class PolymarketApiKeyService(
             try {
                 // 先尝试获取现有的 API Key（derive）
                 val deriveResult = deriveApiKey(privateKey, walletAddress, chainId)
+                val maskedAddress = "${walletAddress.take(6)}...${walletAddress.takeLast(4)}"
                 if (deriveResult.isSuccess) {
                     val creds = deriveResult.getOrNull()
                     if (creds != null && isApiCreds(creds)) {
-                        logger.info("成功获取现有 API Key: ${walletAddress}")
+                        logger.debug("成功获取现有 API Key: $maskedAddress")
                         return@runBlocking Result.success(creds)
                     }
                 }
-                
+
                 // 如果获取失败或返回无效，尝试创建新的
-                logger.info("获取现有 API Key 失败，尝试创建新的: ${walletAddress}")
+                logger.debug("获取现有 API Key 失败，尝试创建新的: $maskedAddress")
                 val createResult = createApiKey(privateKey, walletAddress, chainId)
                 if (createResult.isSuccess) {
                     val creds = createResult.getOrNull()
                     if (creds != null && isApiCreds(creds)) {
-                        logger.info("成功创建新 API Key: ${walletAddress}")
+                        logger.debug("成功创建新 API Key: $maskedAddress")
                         return@runBlocking Result.success(creds)
                     }
                 }
-                
+
                 // 两个都失败
                 val error = createResult.exceptionOrNull() ?: deriveResult.exceptionOrNull()
                 val errorMsg = error?.message ?: "未知错误"
-                logger.error("获取和创建 API Key 都失败: ${walletAddress}", error)
+                logger.error("获取和创建 API Key 都失败: $maskedAddress", error)
                 Result.failure(
                     IllegalStateException("无法获取或创建 API Key: $errorMsg")
                 )
             } catch (e: Exception) {
-                logger.error("创建或获取 API Key 异常: ${walletAddress}", e)
+                val maskedAddress = "${walletAddress.take(6)}...${walletAddress.takeLast(4)}"
+                logger.error("创建或获取 API Key 异常: $maskedAddress", e)
                 Result.failure(e)
             }
         }

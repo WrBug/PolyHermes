@@ -199,7 +199,11 @@
     "importFailed": "Failed to import account",
     "derivedAddress": "Derived Address",
     "addressError": "Cannot derive address from private key",
-    "addressErrorMnemonic": "Cannot derive address from mnemonic"
+    "addressErrorMnemonic": "Cannot derive address from mnemonic",
+    "walletType": "Wallet Type",
+    "walletTypeHelp": "Magic: Polymarket accounts logged in via email or social accounts (Google, Twitter, etc.); MetaMask: Polymarket accounts connected via browser wallets like MetaMask",
+    "walletTypeMagic": "Magic (Email/Social Login)",
+    "walletTypeSafe": "MetaMask (Browser Wallet)"
   },
   "leader": {
     "title": "Leader Management",
