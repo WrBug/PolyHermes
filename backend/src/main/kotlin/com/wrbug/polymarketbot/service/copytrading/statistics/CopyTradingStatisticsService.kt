@@ -341,9 +341,9 @@ class CopyTradingStatisticsService(
                 // 传递 outcomeIndex 参数，确保获取对应 outcome 的价格
                 val result = accountService.getMarketPrice(marketId, outcomeIndex)
                 result.onSuccess { response ->
-                    // 使用中间价，如果没有则使用最后价格
-                    val price = response.midpoint ?: response.lastPrice
-                    if (price != null) {
+                    // 使用当前价格
+                    val price = response.currentPrice
+                    if (price.isNotBlank() && price != "0") {
                         // 使用 "marketId:outcomeIndex" 作为 key
                         val key = "$marketId:$outcomeIndex"
                         prices[key] = price

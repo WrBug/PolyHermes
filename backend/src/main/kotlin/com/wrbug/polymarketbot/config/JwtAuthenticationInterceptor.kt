@@ -36,20 +36,19 @@ class JwtAuthenticationInterceptor(
         handler: Any
     ): Boolean {
         val path = request.requestURI
-        val method = request.method
-        
-        // 只拦截POST请求
-        if (method != "POST") {
+
+        // 只拦截 /api/** 路径
+        if (!path.startsWith("/api/")) {
             return true
         }
-        
+
         // 排除不需要鉴权的路径
         if (excludePaths.contains(path)) {
             return true
         }
-        
-        // 只拦截 /api/** 路径
-        if (!path.startsWith("/api/")) {
+
+        // 允许 OPTIONS 请求（CORS 预检请求）
+        if (request.method == "OPTIONS") {
             return true
         }
         

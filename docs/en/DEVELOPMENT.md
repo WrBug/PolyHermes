@@ -100,9 +100,6 @@ spring.datasource.password=${DB_PASSWORD:password}
 # Server port
 server.port=${SERVER_PORT:8000}
 
-# Polygon RPC
-polygon.rpc.url=${POLYGON_RPC_URL:https://polygon-rpc.com}
-
 # JWT secret
 jwt.secret=${JWT_SECRET:change-me-in-production}
 

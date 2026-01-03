@@ -4,8 +4,10 @@ import com.wrbug.polymarketbot.api.LatestPriceResponse
 import com.wrbug.polymarketbot.dto.*
 import com.wrbug.polymarketbot.enums.ErrorCode
 import com.wrbug.polymarketbot.service.accounts.AccountService
+import com.wrbug.polymarketbot.service.common.MarketPriceService
 import com.wrbug.polymarketbot.service.common.PolymarketClobService
 import kotlinx.coroutines.runBlocking
+import java.math.BigDecimal
 import org.slf4j.LoggerFactory
 import org.springframework.context.MessageSource
 import org.springframework.http.ResponseEntity
@@ -20,14 +22,16 @@ import org.springframework.web.bind.annotation.*
 class MarketController(
     private val accountService: AccountService,
     private val clobService: PolymarketClobService,
+    private val marketPriceService: MarketPriceService,
     private val messageSource: MessageSource
 ) {
     
     private val logger = LoggerFactory.getLogger(MarketController::class.java)
     
     /**
-     * 获取市场价格（通过 Gamma API）
-     * 使用 Gamma API 获取价格信息，因为 Gamma API 支持 condition_ids 参数
+     * 获取市场价格
+     * 使用 MarketPriceService 获取当前市场价格（支持多数据源降级）
+     * 返回当前价格，前端接收后自行填充到 bestBid 字段
      */
     @PostMapping("/price")
     fun getMarketPrice(@RequestBody request: MarketPriceRequest): ResponseEntity<ApiResponse<MarketPriceResponse>> {
@@ -36,16 +40,16 @@ class MarketController(
                 return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_MARKET_ID_EMPTY, messageSource = messageSource))
             }
             
-            val result = runBlocking { accountService.getMarketPrice(request.marketId, request.outcomeIndex) }
-            result.fold(
-                onSuccess = { response ->
-                    ResponseEntity.ok(ApiResponse.success(response))
-                },
-                onFailure = { e ->
-                    logger.error("获取市场价格失败: ${e.message}", e)
-                    ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_MARKET_PRICE_FETCH_FAILED, e.message, messageSource))
-                }
+            val outcomeIndex = request.outcomeIndex ?: 0
+            val price = runBlocking { 
+                marketPriceService.getCurrentMarketPrice(request.marketId, outcomeIndex) 
+            }
+            
+            val response = MarketPriceResponse(
+                marketId = request.marketId,
+                currentPrice = price.toString()
             )
+            ResponseEntity.ok(ApiResponse.success(response))
         } catch (e: Exception) {
             logger.error("获取市场价格异常: ${e.message}", e)
             ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_MARKET_PRICE_FETCH_FAILED, e.message, messageSource))

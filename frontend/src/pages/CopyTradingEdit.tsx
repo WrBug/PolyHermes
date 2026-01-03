@@ -58,6 +58,8 @@ const CopyTradingEdit: React.FC = () => {
             maxSpread: found.maxSpread ? parseFloat(found.maxSpread) : undefined,
             minPrice: found.minPrice ? parseFloat(found.minPrice) : undefined,
             maxPrice: found.maxPrice ? parseFloat(found.maxPrice) : undefined,
+            maxPositionValue: found.maxPositionValue ? parseFloat(found.maxPositionValue) : undefined,
+            maxPositionCount: found.maxPositionCount,
             configName: found.configName || '',
             pushFailedOrders: found.pushFailedOrders ?? false
           })
@@ -123,6 +125,8 @@ const CopyTradingEdit: React.FC = () => {
         maxSpread: values.maxSpread?.toString(),
         minPrice: values.minPrice?.toString(),
         maxPrice: values.maxPrice?.toString(),
+        maxPositionValue: values.maxPositionValue?.toString(),
+        maxPositionCount: values.maxPositionCount,
         configName: values.configName?.trim() || undefined,
         pushFailedOrders: values.pushFailedOrders
       }
@@ -434,6 +438,35 @@ const CopyTradingEdit: React.FC = () => {
                 />
               </Form.Item>
             </Input.Group>
+          </Form.Item>
+          
+          <Divider>{t('copyTradingEdit.positionLimitFilter') || '最大仓位限制'}</Divider>
+          
+          <Form.Item
+            label={t('copyTradingEdit.maxPositionValue') || '最大仓位金额 (USDC)'}
+            name="maxPositionValue"
+            tooltip={t('copyTradingEdit.maxPositionValueTooltip') || '限制单个市场的最大仓位金额。如果该市场的当前仓位金额 + 跟单金额超过此限制，则不会下单。不填写则不启用此限制'}
+          >
+            <InputNumber
+              min={0}
+              step={0.0001}
+              precision={4}
+              style={{ width: '100%' }}
+              placeholder={t('copyTradingEdit.maxPositionValuePlaceholder') || '例如：100（可选，不填写表示不启用）'}
+            />
+          </Form.Item>
+          
+          <Form.Item
+            label={t('copyTradingEdit.maxPositionCount') || '最大仓位数量'}
+            name="maxPositionCount"
+            tooltip={t('copyTradingEdit.maxPositionCountTooltip') || '限制单个市场的最大仓位数量。如果该市场的当前仓位数量达到或超过此限制，则不会下单。不填写则不启用此限制'}
+          >
+            <InputNumber
+              min={1}
+              step={1}
+              style={{ width: '100%' }}
+              placeholder={t('copyTradingEdit.maxPositionCountPlaceholder') || '例如：10（可选，不填写表示不启用）'}
+            />
           </Form.Item>
           
           <Divider>{t('copyTradingEdit.advancedSettings') || '高级设置'}</Divider>

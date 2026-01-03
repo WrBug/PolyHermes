@@ -14,7 +14,6 @@ services:
       - DB_USERNAME=${DB_USERNAME:-root}
       - DB_PASSWORD=${DB_PASSWORD:-}
       - SERVER_PORT=8000
-      - POLYGON_RPC_URL=${POLYGON_RPC_URL:-https://polygon-rpc.com}
       - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
       - ADMIN_RESET_PASSWORD_KEY=${ADMIN_RESET_PASSWORD_KEY:-change-me-in-production}
     depends_on:

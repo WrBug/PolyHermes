@@ -102,6 +102,42 @@ export IMAGE_TAG=v1.0.0
 # 在 docker-compose.prod.yml 中使用: image: wrbug/polyhermes:${IMAGE_TAG:-latest}
 ```
 
+**更新 Docker 版本**：
+
+当有新版本发布时，可以通过以下步骤更新：
+
+```bash
+# 1. 停止当前运行的容器
+docker-compose -f docker-compose.prod.yml down
+
+# 2. 拉取最新版本的镜像（或指定版本）
+# 更新到最新版本
+docker pull wrbug/polyhermes:latest
+
+# 或更新到特定版本（例如 v1.0.1）
+docker pull wrbug/polyhermes:v1.0.1
+
+# 3. 如果使用特定版本，需要修改 docker-compose.prod.yml 中的镜像标签
+# 编辑 docker-compose.prod.yml，将 image 改为：
+# image: wrbug/polyhermes:v1.0.1
+
+# 4. 重新启动服务
+docker-compose -f docker-compose.prod.yml up -d
+
+# 5. 查看日志确认服务正常启动
+docker-compose -f docker-compose.prod.yml logs -f
+```
+
+**注意事项**：
+- ⚠️ **备份数据库（强烈推荐）**：
+  - 备份不是必须的，但强烈推荐，特别是生产环境
+  - Docker 更新不会删除数据（数据存储在独立的数据卷中）
+  - 但数据库结构可能会变更，如果迁移失败，备份可以帮助恢复
+  - 备份命令：`docker exec polyhermes-mysql mysqldump -u root -p polyhermes > backup_$(date +%Y%m%d_%H%M%S).sql`
+- ⚠️ 更新过程中服务会短暂中断，建议在低峰期进行
+- ✅ 使用 `docker-compose pull` 可以自动拉取最新镜像并更新（如果使用 `latest` 标签）
+- ✅ 查看可用版本：访问 [Docker Hub](https://hub.docker.com/r/wrbug/polyhermes/tags) 或 [GitHub Releases](https://github.com/WrBug/PolyHermes/releases)
+
 2. **本地构建部署（开发环境）**
 
 适用于开发环境或需要自定义构建的场景。
@@ -129,7 +165,6 @@ DB_USERNAME=root
 DB_PASSWORD=your_password_here
 SPRING_PROFILES_ACTIVE=prod
 SERVER_PORT=80
-POLYGON_RPC_URL=https://polygon-rpc.com
 JWT_SECRET=your-jwt-secret-key-change-in-production
 ADMIN_RESET_PASSWORD_KEY=your-admin-reset-key-change-in-production
 EOF
@@ -361,7 +396,6 @@ DB_USERNAME=root
 DB_PASSWORD=your_password_here
 SPRING_PROFILES_ACTIVE=prod
 SERVER_PORT=8000
-POLYGON_RPC_URL=https://polygon-rpc.com
 JWT_SECRET=your-jwt-secret-key-change-in-production
 ADMIN_RESET_PASSWORD_KEY=your-admin-reset-key-change-in-production
 EOF
@@ -522,7 +556,6 @@ serve -s dist -l 3000
 | `DB_USERNAME` | 数据库用户名 | `root` | 是（生产） |
 | `DB_PASSWORD` | 数据库密码 | - | 是（生产） |
 | `SERVER_PORT` | 服务器端口 | `8000` | 否 |
-| `POLYGON_RPC_URL` | Polygon RPC 地址 | `https://polygon-rpc.com` | 否 |
 | `JWT_SECRET` | JWT 密钥 | - | 是（生产） |
 | `ADMIN_RESET_PASSWORD_KEY` | 管理员密码重置密钥 | - | 是（生产） |
 

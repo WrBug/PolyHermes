@@ -86,7 +86,9 @@ class CopyTradingService(
                     minOrderDepth = request.minOrderDepth?.toSafeBigDecimal() ?: template.minOrderDepth,
                     maxSpread = request.maxSpread?.toSafeBigDecimal() ?: template.maxSpread,
                     minPrice = request.minPrice?.toSafeBigDecimal() ?: template.minPrice,
-                    maxPrice = request.maxPrice?.toSafeBigDecimal() ?: template.maxPrice
+                    maxPrice = request.maxPrice?.toSafeBigDecimal() ?: template.maxPrice,
+                    maxPositionValue = request.maxPositionValue?.toSafeBigDecimal(),
+                    maxPositionCount = request.maxPositionCount
                 )
             } else {
                 // 手动输入（所有字段必须提供）
@@ -112,7 +114,9 @@ class CopyTradingService(
                     minOrderDepth = request.minOrderDepth?.toSafeBigDecimal(),
                     maxSpread = request.maxSpread?.toSafeBigDecimal(),
                     minPrice = request.minPrice?.toSafeBigDecimal(),
-                    maxPrice = request.maxPrice?.toSafeBigDecimal()
+                    maxPrice = request.maxPrice?.toSafeBigDecimal(),
+                    maxPositionValue = request.maxPositionValue?.toSafeBigDecimal(),
+                    maxPositionCount = request.maxPositionCount
                 )
             }
             
@@ -139,19 +143,22 @@ class CopyTradingService(
                 maxSpread = config.maxSpread,
                 minPrice = config.minPrice,
                 maxPrice = config.maxPrice,
+                maxPositionValue = config.maxPositionValue,
+                maxPositionCount = config.maxPositionCount,
                 configName = configName,
                 pushFailedOrders = request.pushFailedOrders ?: false
             )
             
             val saved = copyTradingRepository.save(copyTrading)
             
-            // 如果跟单已启用，重新启动监听（确保状态完全同步）
+            // 如果跟单已启用，更新 Leader 监听和账户监听（增量更新，不重启所有监听）
             if (saved.enabled) {
                 kotlinx.coroutines.runBlocking {
                     try {
-                        monitorService.restartMonitoring()
+                        monitorService.updateLeaderMonitoring(saved.leaderId)
+                        monitorService.updateAccountMonitoring(saved.accountId)
                     } catch (e: Exception) {
-                        logger.error("重新启动跟单监听失败", e)
+                        logger.error("更新监听失败", e)
                     }
                 }
             }
@@ -204,6 +211,8 @@ class CopyTradingService(
                 maxSpread = request.maxSpread?.toSafeBigDecimal() ?: copyTrading.maxSpread,
                 minPrice = request.minPrice?.toSafeBigDecimal() ?: copyTrading.minPrice,
                 maxPrice = request.maxPrice?.toSafeBigDecimal() ?: copyTrading.maxPrice,
+                maxPositionValue = request.maxPositionValue?.toSafeBigDecimal() ?: copyTrading.maxPositionValue,
+                maxPositionCount = request.maxPositionCount ?: copyTrading.maxPositionCount,
                 configName = configName,
                 pushFailedOrders = request.pushFailedOrders ?: copyTrading.pushFailedOrders,
                 updatedAt = System.currentTimeMillis()
@@ -211,12 +220,13 @@ class CopyTradingService(
             
             val saved = copyTradingRepository.save(updated)
             
-            // 重新启动监听（确保状态完全同步）
+            // 更新 Leader 监听和账户监听（增量更新，根据 enabled 状态决定添加或移除）
             kotlinx.coroutines.runBlocking {
                 try {
-                    monitorService.restartMonitoring()
+                    monitorService.updateLeaderMonitoring(saved.leaderId)
+                    monitorService.updateAccountMonitoring(saved.accountId)
                 } catch (e: Exception) {
-                    logger.error("重新启动跟单监听失败", e)
+                    logger.error("更新监听失败", e)
                 }
             }
             
@@ -314,14 +324,17 @@ class CopyTradingService(
             val copyTrading = copyTradingRepository.findById(copyTradingId).orElse(null)
                 ?: return Result.failure(IllegalArgumentException("跟单配置不存在"))
             
+            val leaderId = copyTrading.leaderId
+            val accountId = copyTrading.accountId
             copyTradingRepository.delete(copyTrading)
             
-            // 重新启动监听（确保状态完全同步）
+            // 更新 Leader 监听和账户监听（检查是否还有其他启用的跟单配置）
             kotlinx.coroutines.runBlocking {
                 try {
-                    monitorService.restartMonitoring()
+                    monitorService.removeLeaderMonitoring(leaderId)
+                    monitorService.updateAccountMonitoring(accountId)
                 } catch (e: Exception) {
-                    logger.error("重新启动跟单监听失败", e)
+                    logger.error("更新监听失败", e)
                 }
             }
             
@@ -409,6 +422,8 @@ class CopyTradingService(
             maxSpread = copyTrading.maxSpread?.toPlainString(),
             minPrice = copyTrading.minPrice?.toPlainString(),
             maxPrice = copyTrading.maxPrice?.toPlainString(),
+            maxPositionValue = copyTrading.maxPositionValue?.toPlainString(),
+            maxPositionCount = copyTrading.maxPositionCount,
             configName = copyTrading.configName,
             pushFailedOrders = copyTrading.pushFailedOrders,
             createdAt = copyTrading.createdAt,
@@ -437,6 +452,8 @@ class CopyTradingService(
         val minOrderDepth: BigDecimal?,
         val maxSpread: BigDecimal?,
         val minPrice: BigDecimal?,
-        val maxPrice: BigDecimal?
+        val maxPrice: BigDecimal?,
+        val maxPositionValue: BigDecimal?,
+        val maxPositionCount: Int?
     )
 }

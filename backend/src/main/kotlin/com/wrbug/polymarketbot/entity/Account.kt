@@ -40,6 +40,9 @@ data class Account(
     @Column(name = "is_enabled", nullable = false)
     val isEnabled: Boolean = true,  // 是否启用（用于订单推送等功能的开关）
     
+    @Column(name = "wallet_type", nullable = false, length = 20)
+    val walletType: String = "magic",  // 钱包类型：magic（邮箱/OAuth登录）或 safe（MetaMask浏览器钱包）
+    
     @Column(name = "created_at", nullable = false)
     val createdAt: Long = System.currentTimeMillis(),
     

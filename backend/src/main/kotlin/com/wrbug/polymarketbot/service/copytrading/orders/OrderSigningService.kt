@@ -100,8 +100,9 @@ class OrderSigningService {
             return OrderAmounts(makerAmount.toString(), takerAmount.toString())
         } else {
             // SELL: makerAmount = size (shares), takerAmount = price * size (USDC)
-            // makerAmount 是 shares 数量，最多 4 位小数
-            // takerAmount 是 USDC 金额，需要使用原始价格计算（与SDK保持一致）
+            // 根据 Polymarket API 要求：
+            // - makerAmount (shares) 最多 2 位小数
+            // - takerAmount (USDC) 最多 4 位小数
             val rawMakerAmt = roundDown(sizeDecimal, roundConfig.size)
             
             // takerAmount = price * size，使用原始价格计算（不使用舍入后的价格）
@@ -109,16 +110,15 @@ class OrderSigningService {
             // 例如：0.9596 * 16.09 = 15.439964，而不是 0.96 * 16.09 = 15.4464
             val rawTakerAmt = rawMakerAmt.multiply(priceDecimal)
             
-            // 确保 makerAmount 精度（shares，最多 4 位小数）
-            val finalMakerAmt = roundDown(rawMakerAmt, TAKER_AMOUNT_DECIMALS)
+            // 确保 makerAmount 精度（shares，最多 2 位小数，符合 API 要求）
+            val finalMakerAmt = roundDown(rawMakerAmt, MAKER_AMOUNT_DECIMALS)
             
-            // takerAmount 不进行舍入，直接使用精确计算结果转换为 wei
-            // parseUnits 会将 BigDecimal 转换为 wei（6 位小数），自动处理精度
-            // 使用原始价格计算可以确保与SDK的结果一致
+            // 确保 takerAmount 精度（USDC，最多 4 位小数，符合 API 要求）
+            val finalTakerAmt = roundDown(rawTakerAmt, TAKER_AMOUNT_DECIMALS)
             
             // 转换为 wei（6 位小数）
             val makerAmount = parseUnits(finalMakerAmt, COLLATERAL_TOKEN_DECIMALS)
-            val takerAmount = parseUnits(rawTakerAmt, COLLATERAL_TOKEN_DECIMALS)
+            val takerAmount = parseUnits(finalTakerAmt, COLLATERAL_TOKEN_DECIMALS)
             
             return OrderAmounts(makerAmount.toString(), takerAmount.toString())
         }
@@ -172,25 +172,15 @@ class OrderSigningService {
             // 5. 确保 maker 地址也是小写格式
             val makerAddressLower = makerAddress.lowercase()
             
-            // 打印签名前的订单参数
-            logger.info("========== 订单签名前参数 ==========")
-            logger.info("订单方向: $side")
-            logger.info("价格: $price")
-            logger.info("数量: $size")
-            logger.info("Token ID: $tokenId")
-            logger.info("Maker 地址: $makerAddressLower")
-            logger.info("Signer 地址: $signerAddress")
-            logger.info("Taker 地址: $taker")
-            logger.info("Maker Amount (wei): ${amounts.makerAmount}")
-            logger.info("Taker Amount (wei): ${amounts.takerAmount}")
-            logger.info("Salt: $salt")
-            logger.info("Expiration: $expiration")
-            logger.info("Nonce: $nonce")
-            logger.info("Fee Rate BPS: $feeRateBps")
-            logger.info("Signature Type: $signatureType")
-            logger.info("Exchange Contract: $EXCHANGE_CONTRACT")
-            logger.info("Chain ID: $CHAIN_ID")
-            logger.info("====================================")
+            // 打印签名前的订单参数（DEBUG 级别，避免敏感信息泄露）
+            logger.debug("========== 订单签名前参数 ==========")
+            logger.debug("订单方向: $side, 价格: $price, 数量: $size")
+            logger.debug("Token ID: $tokenId")
+            logger.debug("Maker: ${makerAddressLower.take(10)}...${makerAddressLower.takeLast(6)}")
+            logger.debug("Signer: ${signerAddress.take(10)}...${signerAddress.takeLast(6)}")
+            logger.debug("Amounts - Maker: ${amounts.makerAmount}, Taker: ${amounts.takerAmount}")
+            logger.debug("Salt: $salt, Expiration: $expiration, Nonce: $nonce, FeeRateBPS: $feeRateBps")
+            logger.debug("Signature Type: $signatureType, Chain ID: $CHAIN_ID")
             
             // 6. 构建订单数据并签名
             val signature = signOrder(

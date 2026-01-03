@@ -31,22 +31,44 @@ class AuthService(
     private lateinit var resetPasswordKey: String
     
     /**
-     * 登录
+     * 登录（带IP限速保护）
      */
-    fun login(username: String, password: String): Result<LoginResponse> {
+    fun login(username: String, password: String, ipAddress: String): Result<LoginResponse> {
         return try {
+            // 检查登录频率限制
+            rateLimitService.checkLoginRateLimit(ipAddress).fold(
+                onSuccess = { },
+                onFailure = { e ->
+                    return Result.failure(IllegalStateException(e.message ?: "登录频率限制"))
+                }
+            )
+
             val user = userRepository.findByUsername(username)
-                ?: return Result.failure(IllegalArgumentException(ErrorCode.AUTH_USERNAME_OR_PASSWORD_ERROR.message))
-            
-            // 验证密码
-            if (!passwordEncoder.matches(password, user.password)) {
-                logger.warn("登录失败：密码错误，username=$username")
+            if (user == null) {
+                // 记录失败尝试
+                val lockoutMsg = rateLimitService.recordLoginFailure(ipAddress)
+                if (lockoutMsg != null) {
+                    return Result.failure(IllegalStateException(lockoutMsg))
+                }
                 return Result.failure(IllegalArgumentException(ErrorCode.AUTH_USERNAME_OR_PASSWORD_ERROR.message))
             }
-            
+
+            // 验证密码
+            if (!passwordEncoder.matches(password, user.password)) {
+                // 记录失败尝试
+                val lockoutMsg = rateLimitService.recordLoginFailure(ipAddress)
+                if (lockoutMsg != null) {
+                    return Result.failure(IllegalStateException(lockoutMsg))
+                }
+                return Result.failure(IllegalArgumentException(ErrorCode.AUTH_USERNAME_OR_PASSWORD_ERROR.message))
+            }
+
+            // 登录成功，清除失败记录
+            rateLimitService.clearLoginFailures(ipAddress)
+
             // 生成JWT token（包含tokenVersion，用于使修改密码后的旧token失效）
             val token = jwtUtils.generateToken(username, user.tokenVersion)
-            
+
             logger.info("用户登录成功：username=$username")
             Result.success(LoginResponse(token = token))
         } catch (e: Exception) {

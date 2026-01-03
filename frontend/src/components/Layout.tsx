@@ -19,6 +19,7 @@ import {
   TwitterOutlined,
   CheckCircleOutlined,
   SendOutlined,
+  ApiOutlined,
   NotificationOutlined,
   ThunderboltOutlined,
   SignalFilled
@@ -155,6 +156,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           key: '/system-settings',
           icon: <SettingOutlined />,
           label: t('menu.systemOverview') || '通用设置'
+        },
+        {
+          key: '/system-settings/rpc-nodes',
+          icon: <ApiOutlined />,
+          label: t('menu.rpcNodes') || 'RPC节点管理'
         },
         {
           key: '/system-settings/api-health',

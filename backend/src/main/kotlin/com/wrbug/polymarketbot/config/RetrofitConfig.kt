@@ -1,5 +1,6 @@
 package com.wrbug.polymarketbot.config
 
+import com.google.gson.Gson
 import com.wrbug.polymarketbot.api.PolymarketClobApi
 import com.wrbug.polymarketbot.util.createClient
 import org.springframework.beans.factory.annotation.Value
@@ -18,7 +19,9 @@ import retrofit2.converter.gson.GsonConverterFactory
  * - 账户 API Key 在调用时动态设置，不在此处配置
  */
 @Configuration
-class RetrofitConfig {
+class RetrofitConfig(
+    private val gson: Gson
+) {
     
     @Value("\${polymarket.clob.base-url}")
     private lateinit var clobBaseUrl: String
@@ -37,7 +40,7 @@ class RetrofitConfig {
         return Retrofit.Builder()
             .baseUrl(clobBaseUrl)
             .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(GsonConverterFactory.create(gson))
             .build()
             .create(PolymarketClobApi::class.java)
     }

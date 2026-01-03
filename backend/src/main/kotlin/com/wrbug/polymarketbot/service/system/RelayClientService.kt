@@ -24,12 +24,11 @@ import java.math.BigInteger
  */
 @Service
 class RelayClientService(
-    @Value("\${polygon.rpc.url:}")
-    private val polygonRpcUrl: String,
     @Value("\${polymarket.builder.relayer-url:}")
     private val builderRelayerUrl: String,
     private val retrofitFactory: RetrofitFactory,
-    private val systemConfigService: SystemConfigService
+    private val systemConfigService: SystemConfigService,
+    private val rpcNodeService: RpcNodeService
 ) {
 
     private val logger = LoggerFactory.getLogger(RelayClientService::class.java)
@@ -43,12 +42,9 @@ class RelayClientService(
     // 空集合ID
     private val EMPTY_SET = "0x0000000000000000000000000000000000000000000000000000000000000000"
 
-    private val polygonRpcApi: EthereumRpcApi? by lazy {
-        if (polygonRpcUrl.isBlank()) {
-            null
-        } else {
-            retrofitFactory.createEthereumRpcApi(polygonRpcUrl)
-        }
+    private val polygonRpcApi: EthereumRpcApi by lazy {
+        val rpcUrl = rpcNodeService.getHttpUrl()
+        retrofitFactory.createEthereumRpcApi(rpcUrl)
     }
 
     /**
@@ -260,7 +256,7 @@ class RelayClientService(
         builderSecret: String,
         builderPassphrase: String
     ): Result<String> {
-        val rpcApi = polygonRpcApi ?: throw IllegalStateException("Polygon RPC URL 未配置")
+        val rpcApi = polygonRpcApi
         val relayerApi = retrofitFactory.createBuilderRelayerApi(
             relayerUrl = builderRelayerUrl,
             apiKey = builderApiKey,
@@ -337,15 +333,10 @@ class RelayClientService(
         // 打包签名（参考 builder-relayer-client/src/utils/index.ts 的 splitAndPackSig）
         val packedSignature = splitAndPackSig(safeSignature)
         
-        // 调试日志
+        // 调试日志（地址已遮蔽）
         logger.debug("=== Builder Relayer 签名调试 ===")
-        logger.debug("Safe Address: $proxyAddress")
-        logger.debug("From Address: $fromAddress")
-        logger.debug("To: ${safeTx.to}")
-        logger.debug("Data: $redeemCallData")
-        logger.debug("Nonce: $proxyNonce")
-        logger.debug("Packed Signature: $packedSignature")
-        logger.debug("Signature Length: ${packedSignature.length} (expected: 132 with 0x)")
+        logger.debug("Safe: ${proxyAddress.take(10)}..., From: ${fromAddress.take(10)}..., Nonce: $proxyNonce")
+        logger.debug("Signature Length: ${packedSignature.length}")
 
         // 构建 TransactionRequest（参考 builder-relayer-client/src/builder/safe.ts）
         // 注意：根据 TypeScript 实现，data 和 signature 都应该带 0x 前缀
@@ -368,13 +359,7 @@ class RelayClientService(
             metadata = "Redeem positions via Builder Relayer"
         )
         
-        logger.debug("Request Type: ${request.type}")
-        logger.debug("Request From: ${request.from}")
-        logger.debug("Request To: ${request.to}")
-        logger.debug("Request ProxyWallet: ${request.proxyWallet}")
-        logger.debug("Request Data Length: ${request.data.length}")
-        logger.debug("Request Signature Length: ${request.signature.length}")
-        logger.debug("Request Nonce: ${request.nonce}")
+        logger.debug("Request: type=${request.type}, dataLen=${request.data.length}, sigLen=${request.signature.length}, nonce=${request.nonce}")
 
         // 调用 Builder Relayer API（认证头通过拦截器添加）
         val response = relayerApi.submitTransaction(request)
@@ -461,13 +446,7 @@ class RelayClientService(
         safeTx: SafeTransaction
     ): Result<String> {
         return try {
-            // 如果未配置 RPC URL，返回错误
-            if (polygonRpcUrl.isBlank()) {
-                logger.warn("未配置 Polygon RPC URL，无法执行交易")
-                return Result.failure(IllegalStateException("未配置 Polygon RPC URL，无法执行交易。请配置 polygon.rpc.url 或启用 Builder Relayer（Gasless）"))
-            }
-
-            val rpcApi = polygonRpcApi ?: throw IllegalStateException("Polygon RPC URL 未配置")
+            val rpcApi = polygonRpcApi
 
             // 从私钥推导实际签名地址（交易真正的 from 地址）
             val cleanPrivateKey = privateKey.removePrefix("0x")
@@ -665,7 +644,7 @@ class RelayClientService(
         }
 
         val hexNonce = rpcResponse.result ?: return Result.failure(Exception("Proxy nonce 结果为空"))
-        val nonce = EthereumUtils.decodeUint256(hexNonce)
+        val nonce = EthereumUtils.decodeUint256(hexNonce.asString)
         return Result.success(nonce)
     }
 
@@ -689,7 +668,7 @@ class RelayClientService(
         }
 
         val hexNonce = rpcResponse.result ?: return Result.failure(Exception("nonce 结果为空"))
-        val nonce = EthereumUtils.decodeUint256(hexNonce)
+        val nonce = EthereumUtils.decodeUint256(hexNonce.asString)
         return Result.success(nonce)
     }
 
@@ -713,7 +692,7 @@ class RelayClientService(
         }
 
         val hexGasPrice = rpcResponse.result ?: return Result.failure(Exception("gas price 结果为空"))
-        val gasPrice = EthereumUtils.decodeUint256(hexGasPrice)
+        val gasPrice = EthereumUtils.decodeUint256(hexGasPrice.asString)
         return Result.success(gasPrice)
     }
 
@@ -784,7 +763,7 @@ class RelayClientService(
         }
 
         val txHash = rpcResponse.result ?: return Result.failure(Exception("交易哈希为空"))
-        return Result.success(txHash)
+        return Result.success(txHash.asString)
     }
 
     /**

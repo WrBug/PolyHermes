@@ -28,12 +28,11 @@ class ApiHealthCheckService(
     private val dataApiBaseUrl: String,
     @Value("\${polymarket.gamma.base-url}")
     private val gammaBaseUrl: String,
-    @Value("\${polygon.rpc.url:}")
-    private val polygonRpcUrl: String,
     @Value("\${polymarket.rtds.ws-url}")
     private val polymarketWsUrl: String,
     @Value("\${polymarket.builder.relayer-url:}")
-    private val builderRelayerUrl: String
+    private val builderRelayerUrl: String,
+    private val rpcNodeService: RpcNodeService
 ) : ApplicationContextAware {
 
     private var applicationContext: ApplicationContext? = null
@@ -186,19 +185,12 @@ class ApiHealthCheckService(
 
     /**
      * 检查 Polygon RPC
+     * 使用动态获取的可用节点（RpcNodeService 总是返回一个有效的 URL，包括默认节点）
      */
     private suspend fun checkPolygonRpc(): ApiHealthCheckDto = withContext(Dispatchers.IO) {
-        if (polygonRpcUrl.isBlank()) {
-            return@withContext ApiHealthCheckDto(
-                name = "Polygon RPC",
-                url = "未配置",
-                status = "skipped",
-                message = "未配置 Polygon RPC URL"
-            )
-        }
-
-        val url = polygonRpcUrl
-        checkJsonRpcApi("Polygon RPC", url)
+        // 使用 RpcNodeService 获取可用节点（总是返回有效值，包括默认节点）
+        val rpcUrl = rpcNodeService.getHttpUrl()
+        checkJsonRpcApi("Polygon RPC", rpcUrl)
     }
 
     /**

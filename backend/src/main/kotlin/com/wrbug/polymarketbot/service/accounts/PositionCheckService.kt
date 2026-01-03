@@ -21,8 +21,7 @@ import org.springframework.context.i18n.LocaleContextHolder
 import com.wrbug.polymarketbot.service.system.SystemConfigService
 import com.wrbug.polymarketbot.service.system.RelayClientService
 import com.wrbug.polymarketbot.service.system.TelegramNotificationService
-import com.wrbug.polymarketbot.util.RetrofitFactory
-import com.wrbug.polymarketbot.util.JsonUtils
+import com.wrbug.polymarketbot.service.common.MarketPriceService
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 import java.util.concurrent.ConcurrentHashMap
@@ -45,7 +44,7 @@ class PositionCheckService(
     private val telegramNotificationService: TelegramNotificationService?,
     private val accountRepository: AccountRepository,
     private val messageSource: MessageSource,
-    private val retrofitFactory: RetrofitFactory
+    private val marketPriceService: MarketPriceService
 ) {
     
     private val logger = LoggerFactory.getLogger(PositionCheckService::class.java)
@@ -427,118 +426,10 @@ class PositionCheckService(
     
     /**
      * 获取当前市场最新价（用于更新订单卖出价）
-     * 优先使用 bestBid（最优买价），如果没有则使用 midpoint（中间价）
-     * 如果市场已关闭：
-     *   - 该 outcome 赢了，返回 1
-     *   - 该 outcome 输了，返回 0
+     * 委托给 MarketPriceService 处理
      */
     private suspend fun getCurrentMarketPrice(marketId: String, outcomeIndex: Int): BigDecimal {
-        return try {
-            // 先获取市场信息，检查市场是否已关闭
-            val gammaApi = retrofitFactory.createGammaApi()
-            val marketResponse = gammaApi.listMarkets(conditionIds = listOf(marketId))
-            
-            if (marketResponse.isSuccessful && marketResponse.body() != null) {
-                val markets = marketResponse.body()!!
-                val market = markets.firstOrNull()
-                
-                if (market != null && market.closed == true) {
-                    // 市场已关闭，检查该 outcome 是赢了还是输了
-                    val outcomeResult = checkOutcomeResult(market, outcomeIndex)
-                    when (outcomeResult) {
-                        OutcomeResult.WON -> {
-                            logger.info("市场已关闭且该 outcome 赢了，返回价格为 1: marketId=$marketId, outcomeIndex=$outcomeIndex")
-                            return BigDecimal.ONE
-                        }
-                        OutcomeResult.LOST -> {
-                            logger.info("市场已关闭且该 outcome 输了，返回价格为 0: marketId=$marketId, outcomeIndex=$outcomeIndex")
-                            return BigDecimal.ZERO
-                        }
-                        OutcomeResult.UNKNOWN -> {
-                            // 无法判断，继续使用正常价格逻辑
-                        }
-                    }
-                }
-            }
-            
-            // 如果市场未关闭或无法判断输赢，获取正常价格
-            val priceResult = accountService.getMarketPrice(marketId, outcomeIndex)
-            val marketPrice = priceResult.getOrNull()
-            if (marketPrice != null) {
-                // 优先使用 bestBid（最优买价，用于卖出参考），如果没有则使用 midpoint
-                val priceStr = marketPrice.bestBid ?: marketPrice.midpoint ?: marketPrice.lastPrice
-                priceStr?.toSafeBigDecimal() ?: BigDecimal.ZERO
-            } else {
-                BigDecimal.ZERO
-            }
-        } catch (e: Exception) {
-            logger.error("获取市场最新价失败: marketId=$marketId, outcomeIndex=$outcomeIndex, error=${e.message}", e)
-            BigDecimal.ZERO
-        }
-    }
-    
-    /**
-     * Outcome 结果枚举
-     */
-    private enum class OutcomeResult {
-        WON,    // 赢了
-        LOST,   // 输了
-        UNKNOWN // 无法判断
-    }
-    
-    /**
-     * 检查该 outcome 的结果（赢了、输了或无法判断）
-     * @param market 市场信息
-     * @param outcomeIndex outcome 索引
-     * @return OutcomeResult
-     */
-    private fun checkOutcomeResult(market: com.wrbug.polymarketbot.api.MarketResponse, outcomeIndex: Int): OutcomeResult {
-        return try {
-            // 优先使用 outcomePrices（结算价格数组）
-            val outcomePrices = market.outcomePrices
-            if (outcomePrices != null && outcomePrices.isNotBlank()) {
-                val prices = JsonUtils.parseStringArray(outcomePrices)
-                if (outcomeIndex < prices.size) {
-                    val price = prices[outcomeIndex].toSafeBigDecimal()
-                    // 如果价格 >= 0.99，认为赢了
-                    if (price >= BigDecimal("0.99")) {
-                        return OutcomeResult.WON
-                    }
-                    // 如果价格 <= 0.01，认为输了
-                    if (price <= BigDecimal("0.01")) {
-                        return OutcomeResult.LOST
-                    }
-                    // 其他情况，无法判断
-                    return OutcomeResult.UNKNOWN
-                }
-            }
-            
-            // 如果没有 outcomePrices，使用 bestBid 和 bestAsk 判断
-            val bestBid = market.bestBid ?: 0.0
-            val bestAsk = market.bestAsk ?: 0.0
-            
-            // 如果目标 outcome 不是第一个（index != 0），需要转换价格
-            val targetBid = if (outcomeIndex > 0) {
-                // 第二个 outcome 的 bestBid = 1 - 第一个 outcome 的 bestAsk
-                BigDecimal.ONE.subtract(BigDecimal.valueOf(bestAsk))
-            } else {
-                BigDecimal.valueOf(bestBid)
-            }
-            
-            // 如果 bestBid >= 0.99，认为赢了
-            if (targetBid >= BigDecimal("0.99")) {
-                return OutcomeResult.WON
-            }
-            // 如果 bestBid <= 0.01，认为输了
-            if (targetBid <= BigDecimal("0.01")) {
-                return OutcomeResult.LOST
-            }
-            // 其他情况，无法判断
-            OutcomeResult.UNKNOWN
-        } catch (e: Exception) {
-            logger.warn("检查 outcome 结果失败: marketId=${market.conditionId}, outcomeIndex=$outcomeIndex, error=${e.message}", e)
-            OutcomeResult.UNKNOWN
-        }
+        return marketPriceService.getCurrentMarketPrice(marketId, outcomeIndex)
     }
     
     
@@ -628,7 +519,8 @@ class PositionCheckService(
                     outcomeIndex = outcomeIndex,
                     totalMatchedQuantity = totalMatchedQuantity,
                     sellPrice = sellPrice,
-                    totalRealizedPnl = totalRealizedPnl
+                    totalRealizedPnl = totalRealizedPnl,
+                    priceUpdated = true  // 自动生成的订单，直接标记为已处理，不发送通知
                 )
                 
                 val savedRecord = sellMatchRecordRepository.save(matchRecord)
@@ -742,7 +634,8 @@ class PositionCheckService(
                     outcomeIndex = outcomeIndex,
                     totalMatchedQuantity = totalMatchedQuantity,
                     sellPrice = sellPrice,
-                    totalRealizedPnl = totalRealizedPnl
+                    totalRealizedPnl = totalRealizedPnl,
+                    priceUpdated = true  // 自动生成的订单，直接标记为已处理，不发送通知
                 )
                 
                 val savedRecord = sellMatchRecordRepository.save(matchRecord)

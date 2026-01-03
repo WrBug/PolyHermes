@@ -22,15 +22,14 @@ import java.util.concurrent.ConcurrentHashMap
 @Service
 class CopyTradingWebSocketService(
     private val copyOrderTrackingService: CopyOrderTrackingService,
-    private val templateRepository: CopyTradingTemplateRepository
+    private val templateRepository: CopyTradingTemplateRepository,
+    private val gson: Gson
 ) {
     
     private val logger = LoggerFactory.getLogger(CopyTradingWebSocketService::class.java)
     
     @Value("\${polymarket.websocket.url:wss://ws-live-data.polymarket.com}")
     private var websocketUrl: String = "wss://ws-live-data.polymarket.com"
-    
-    private val gson = Gson()
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     
     // 存储每个Leader的WebSocket客户端：leaderId -> WebSocketClient

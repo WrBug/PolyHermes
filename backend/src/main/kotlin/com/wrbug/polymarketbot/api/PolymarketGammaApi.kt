@@ -24,6 +24,7 @@ interface PolymarketGammaApi {
      * 根据条件获取市场信息
      * 文档: https://docs.polymarket.com/api-reference/markets/list-markets
      * @param conditionIds condition ID 数组（16 进制字符串，如 "0x..."）
+     * @param clobTokenIds CLOB token ID 数组（用于通过 tokenId 查询市场）
      * @param includeTag 是否包含标签信息
      * @param tags 标签 ID 数组，用于过滤市场（如 NBA 的 tag ID）
      * @param active 是否只返回活跃的市场
@@ -37,6 +38,7 @@ interface PolymarketGammaApi {
     @GET("/markets")
     suspend fun listMarkets(
         @Query("condition_ids") conditionIds: List<String>? = null,
+        @Query("clob_token_ids") clobTokenIds: List<String>? = null,
         @Query("include_tag") includeTag: Boolean? = null,
         @Query("tags") tags: List<String>? = null,
         @Query("active") active: Boolean? = null,
@@ -87,6 +89,9 @@ data class MarketResponse(
     val lastTradePrice: Double? = null,
     val bestBid: Double? = null,
     val bestAsk: Double? = null,
+    // 以下字段可能存在于响应中，但不在标准文档中
+    val clobTokenIds: String? = null,  // CLOB token IDs（可能是 JSON 字符串或数组）
+    val clob_token_ids: String? = null  // 下划线格式（兼容不同 API 版本）
     val tags: List<MarketTag>? = null,  // 市场标签列表
     val sportsMarketType: String? = null,  // 市场类型：moneyline, spread 等
     val gameStartTime: String? = null,  // 比赛开始时间（格式：2025-12-13 00:00:00+00）

@@ -8,6 +8,7 @@ import com.wrbug.polymarketbot.util.multi
 import com.wrbug.polymarketbot.util.toSafeBigDecimal
 import org.slf4j.LoggerFactory
 import com.wrbug.polymarketbot.service.common.PolymarketClobService
+import com.wrbug.polymarketbot.service.accounts.AccountService
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 
@@ -16,7 +17,8 @@ import java.math.BigDecimal
  */
 @Service
 class CopyTradingFilterService(
-    private val clobService: PolymarketClobService
+    private val clobService: PolymarketClobService,
+    private val accountService: AccountService
 ) {
     
     private val logger = LoggerFactory.getLogger(CopyTradingFilterService::class.java)
@@ -26,12 +28,16 @@ class CopyTradingFilterService(
      * @param copyTrading 跟单配置
      * @param tokenId token ID（用于获取订单簿）
      * @param tradePrice Leader 交易价格，用于价格区间检查
+     * @param copyOrderAmount 跟单金额（USDC），用于仓位检查，如果为null则不进行仓位检查
+     * @param marketId 市场ID，用于仓位检查（按市场过滤仓位）
      * @return 过滤结果
      */
     suspend fun checkFilters(
         copyTrading: CopyTrading,
         tokenId: String,
-        tradePrice: BigDecimal? = null  // Leader 交易价格，用于价格区间检查
+        tradePrice: BigDecimal? = null,  // Leader 交易价格，用于价格区间检查
+        copyOrderAmount: BigDecimal? = null,  // 跟单金额（USDC），用于仓位检查
+        marketId: String? = null  // 市场ID，用于仓位检查（按市场过滤仓位）
     ): FilterResult {
         // 1. 价格区间检查（如果配置了价格区间）
         if (tradePrice != null) {
@@ -73,6 +79,14 @@ class CopyTradingFilterService(
             val depthCheck = checkOrderDepth(copyTrading, orderbook)
             if (!depthCheck.isPassed) {
                 return FilterResult.orderDepthFailed(depthCheck.reason, orderbook)
+            }
+        }
+        
+        // 6. 仓位检查（如果配置了最大仓位限制且提供了跟单金额和市场ID）
+        if (copyOrderAmount != null && marketId != null) {
+            val positionCheck = checkPositionLimits(copyTrading, copyOrderAmount, marketId)
+            if (!positionCheck.isPassed) {
+                return positionCheck
             }
         }
         
@@ -183,6 +197,79 @@ class CopyTradingFilterService(
         }
         
         return FilterResult.passed()
+    }
+    
+    /**
+     * 检查仓位限制（按市场检查）
+     * @param copyTrading 跟单配置
+     * @param copyOrderAmount 跟单金额（USDC）
+     * @param marketId 市场ID，用于过滤该市场的仓位
+     * @return 过滤结果
+     */
+    private suspend fun checkPositionLimits(
+        copyTrading: CopyTrading,
+        copyOrderAmount: BigDecimal,
+        marketId: String
+    ): FilterResult {
+        // 如果未配置仓位限制，直接通过
+        if (copyTrading.maxPositionValue == null && copyTrading.maxPositionCount == null) {
+            return FilterResult.passed()
+        }
+        
+        try {
+            // 获取账户的所有仓位信息
+            val positionsResult = accountService.getAllPositions()
+            if (positionsResult.isFailure) {
+                logger.warn("获取仓位信息失败，跳过仓位检查: accountId=${copyTrading.accountId}, marketId=$marketId, error=${positionsResult.exceptionOrNull()?.message}")
+                // 如果获取仓位失败，为了安全起见，不通过检查
+                return FilterResult.maxPositionValueFailed("获取仓位信息失败，无法进行仓位检查")
+            }
+            
+            val positions = positionsResult.getOrNull() ?: return FilterResult.maxPositionValueFailed("仓位信息为空")
+            
+            // 过滤出当前账户且该市场的仓位
+            val marketPositions = positions.currentPositions.filter { 
+                it.accountId == copyTrading.accountId && it.marketId == marketId
+            }
+            
+            // 检查最大仓位金额（如果配置了）
+            if (copyTrading.maxPositionValue != null) {
+                // 计算该市场的当前仓位总价值（累加该市场所有仓位的 currentValue）
+                val currentPositionValue = marketPositions.sumOf { position ->
+                    position.currentValue.toSafeBigDecimal()
+                }
+                
+                // 检查：该市场的当前仓位 + 跟单金额 <= 最大仓位金额
+                val totalValueAfterOrder = currentPositionValue.add(copyOrderAmount)
+                
+                if (totalValueAfterOrder.gt(copyTrading.maxPositionValue)) {
+                    return FilterResult.maxPositionValueFailed(
+                        "超过最大仓位金额限制: 当前该市场仓位=${currentPositionValue} USDC, 跟单金额=${copyOrderAmount} USDC, 总计=${totalValueAfterOrder} USDC > 最大限制=${copyTrading.maxPositionValue} USDC"
+                    )
+                }
+            }
+            
+            // 检查最大仓位数量（如果配置了）
+            if (copyTrading.maxPositionCount != null) {
+                // 计算该市场的当前仓位数量（该市场不同方向的仓位算不同仓位）
+                val currentPositionCount = marketPositions.size
+                
+                // 检查：该市场的当前仓位数量 <= 最大仓位数量
+                // 注意：如果该市场已有仓位，跟单可能会增加新的仓位（不同方向）或增加现有仓位
+                // 为了简化，我们检查当前该市场的仓位数量是否已经达到或超过限制
+                if (currentPositionCount >= copyTrading.maxPositionCount) {
+                    return FilterResult.maxPositionCountFailed(
+                        "超过最大仓位数量限制: 当前该市场仓位数量=${currentPositionCount} >= 最大限制=${copyTrading.maxPositionCount}"
+                    )
+                }
+            }
+            
+            return FilterResult.passed()
+        } catch (e: Exception) {
+            logger.error("仓位检查异常: accountId=${copyTrading.accountId}, marketId=$marketId, error=${e.message}", e)
+            // 如果检查异常，为了安全起见，不通过检查
+            return FilterResult.maxPositionValueFailed("仓位检查异常: ${e.message}")
+        }
     }
 }
 

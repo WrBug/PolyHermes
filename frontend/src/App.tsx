@@ -32,6 +32,7 @@ import CopyTradingMatchedOrders from './pages/CopyTradingMatchedOrders'
 import FilteredOrdersList from './pages/FilteredOrdersList'
 import SystemSettings from './pages/SystemSettings'
 import ApiHealthStatus from './pages/ApiHealthStatus'
+import RpcNodeSettings from './pages/RpcNodeSettings'
 import Announcements from './pages/Announcements'
 import NbaQuantitativeStrategyList from './pages/NbaQuantitativeStrategyList'
 import NbaQuantitativeStrategyAdd from './pages/NbaQuantitativeStrategyAdd'
@@ -273,7 +274,7 @@ function App() {
           <Route path="/users" element={<ProtectedRoute><UserList /></ProtectedRoute>} />
           <Route path="/announcements" element={<ProtectedRoute><Announcements /></ProtectedRoute>} />
           <Route path="/system-settings" element={<ProtectedRoute><SystemSettings /></ProtectedRoute>} />
-          <Route path="/system-settings/api-health" element={<ProtectedRoute><ApiHealthStatus /></ProtectedRoute>} />
+          <Route path="/system-settings/rpc-nodes" element={<ProtectedRoute><RpcNodeSettings /></ProtectedRoute>} />          <Route path="/system-settings/api-health" element={<ProtectedRoute><ApiHealthStatus /></ProtectedRoute>} />
           
           {/* 默认重定向到登录页 */}
           <Route path="*" element={<Navigate to="/login" replace />} />

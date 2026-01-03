@@ -96,6 +96,65 @@ class AccountController(
     }
 
     /**
+     * 刷新账户的代理地址
+     * 使用最新的代理地址计算逻辑（支持 Magic 和 Safe 两种类型）
+     */
+    @PostMapping("/refresh-proxy")
+    fun refreshProxyAddress(@RequestBody request: AccountDetailRequest): ResponseEntity<ApiResponse<AccountDto>> {
+        return try {
+            if (request.accountId == null || request.accountId <= 0) {
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ACCOUNT_ID_INVALID, messageSource = messageSource))
+            }
+
+            val result = accountService.refreshProxyAddress(request.accountId)
+            result.fold(
+                onSuccess = { account ->
+                    ResponseEntity.ok(ApiResponse.success(account))
+                },
+                onFailure = { e ->
+                    logger.error("刷新代理地址失败: ${e.message}", e)
+                    when (e) {
+                        is IllegalArgumentException -> ResponseEntity.ok(
+                            ApiResponse.error(
+                                ErrorCode.PARAM_ERROR,
+                                e.message,
+                                messageSource
+                            )
+                        )
+
+                        else -> ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            logger.error("刷新代理地址异常: ${e.message}", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
+        }
+    }
+
+    /**
+     * 批量刷新所有账户的代理地址
+     */
+    @PostMapping("/refresh-all-proxies")
+    fun refreshAllProxyAddresses(): ResponseEntity<ApiResponse<List<AccountDto>>> {
+        return try {
+            val result = accountService.refreshAllProxyAddresses()
+            result.fold(
+                onSuccess = { accounts ->
+                    ResponseEntity.ok(ApiResponse.success(accounts))
+                },
+                onFailure = { e ->
+                    logger.error("批量刷新代理地址失败: ${e.message}", e)
+                    ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
+                }
+            )
+        } catch (e: Exception) {
+            logger.error("批量刷新代理地址异常: ${e.message}", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
+        }
+    }
+
+    /**
      * 删除账户
      */
     @PostMapping("/delete")

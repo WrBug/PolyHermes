@@ -7,6 +7,7 @@ import { useAccountStore } from '../store/accountStore'
 import type { Account } from '../types'
 import { useMediaQuery } from 'react-responsive'
 import { formatUSDC } from '../utils'
+import AccountImportForm from '../components/AccountImportForm'
 
 const { Title } = Typography
 
@@ -25,10 +26,19 @@ const AccountList: React.FC = () => {
   const [editAccount, setEditAccount] = useState<Account | null>(null)
   const [editForm] = Form.useForm()
   const [editLoading, setEditLoading] = useState(false)
+  const [accountImportModalVisible, setAccountImportModalVisible] = useState(false)
+  const [accountImportForm] = Form.useForm()
   
   useEffect(() => {
     fetchAccounts()
   }, [fetchAccounts])
+  
+  const handleAccountImportSuccess = async () => {
+    message.success(t('accountImport.importSuccess'))
+    setAccountImportModalVisible(false)
+    accountImportForm.resetFields()
+    fetchAccounts()
+  }
   
   // 加载所有账户的余额
   useEffect(() => {
@@ -494,7 +504,7 @@ const AccountList: React.FC = () => {
         <Button
           type="primary"
           icon={<PlusOutlined />}
-          onClick={() => navigate('/accounts/import')}
+          onClick={() => setAccountImportModalVisible(true)}
           size={isMobile ? 'middle' : 'large'}
           block={isMobile}
           style={isMobile ? { minHeight: '44px' } : undefined}
@@ -835,6 +845,34 @@ const AccountList: React.FC = () => {
             <div style={{ marginTop: '16px' }}>{t('accountList.loading')}</div>
           </div>
         )}
+      </Modal>
+      
+      {/* 导入账户 Modal */}
+      <Modal
+        title={t('accountImport.title')}
+        open={accountImportModalVisible}
+        onCancel={() => {
+          setAccountImportModalVisible(false)
+          accountImportForm.resetFields()
+        }}
+        footer={null}
+        width={isMobile ? '95%' : 600}
+        style={{ top: isMobile ? 20 : 50 }}
+        bodyStyle={{ padding: '24px', maxHeight: 'calc(100vh - 150px)', overflow: 'auto' }}
+        destroyOnClose
+        maskClosable
+        closable
+      >
+        <AccountImportForm
+          form={accountImportForm}
+          onSuccess={handleAccountImportSuccess}
+          onCancel={() => {
+            setAccountImportModalVisible(false)
+            accountImportForm.resetFields()
+          }}
+          showAlert={true}
+          showCancelButton={true}
+        />
       </Modal>
     </div>
   )

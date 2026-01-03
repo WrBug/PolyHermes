@@ -98,6 +98,7 @@ const ApiHealthStatus: React.FC = () => {
                     }}
                     bodyStyle={{ padding: '12px' }}
                   >
+                    <Space direction="vertical" size="small" style={{ width: '100%' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
                       <Text strong style={{ fontSize: '14px' }}>
                         {item.name}
@@ -110,9 +111,28 @@ const ApiHealthStatus: React.FC = () => {
                         )}
                         <Badge 
                           status={item.status === 'success' ? 'success' : item.status === 'skipped' ? 'default' : 'error'}
+                            text={getStatusText(item.status)}
                         />
                       </Space>
                     </div>
+                      
+                      <div>
+                        <Text type="secondary" style={{ fontSize: '12px', wordBreak: 'break-all' }}>
+                          {item.url}
+                        </Text>
+                      </div>
+                      
+                      {item.message && item.message !== '连接成功' && (
+                        <div>
+                          <Text 
+                            type={item.status === 'success' ? 'success' : item.status === 'skipped' ? 'secondary' : 'danger'}
+                            style={{ fontSize: '12px' }}
+                          >
+                            {item.message}
+                          </Text>
+                        </div>
+                      )}
+                    </Space>
                   </Card>
                 ) : (
                   <Card

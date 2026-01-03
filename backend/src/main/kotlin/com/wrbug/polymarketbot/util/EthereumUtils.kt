@@ -19,7 +19,7 @@ object EthereumUtils {
      * @return 函数选择器，例如 "0x12345678"
      */
     fun getFunctionSelector(functionSignature: String): String {
-        val hash = keccak256(functionSignature.toByteArray())
+        val hash = keccak256Hex(functionSignature.toByteArray())
         return "0x" + hash.substring(0, 8)
     }
     
@@ -78,15 +78,108 @@ object EthereumUtils {
     }
     
     /**
+     * 从 ABI 编码的响应中解析 uint256 数组
+     * ABI 编码格式：
+     * - offset (32 bytes): 数组数据的位置偏移量
+     * - length (32 bytes): 数组长度
+     * - data: 每个元素 32 字节
+     * @param hexResult 十六进制结果（完整的 ABI 编码响应）
+     * @param offset 数组数据的偏移位置（字节数，从 offset 位置开始读取）
+     * @return BigInteger 数组
+     */
+    fun decodeUint256Array(hexResult: String, offset: Int = 0): List<BigInteger> {
+        val cleanHex = hexResult.removePrefix("0x")
+        if (cleanHex.length < (offset + 1) * 64) {
+            return emptyList()
+        }
+        
+        // 从 offset 位置开始读取
+        val startPos = offset * 64  // 每个 uint256 是 64 个十六进制字符
+        val lengthHex = cleanHex.substring(startPos, startPos + 64)
+        val length = BigInteger(lengthHex, 16).toInt()
+        
+        if (length <= 0 || length > 100) {  // 防止异常数据
+            return emptyList()
+        }
+        
+        val result = mutableListOf<BigInteger>()
+        for (i in 0 until length) {
+            val elementStart = startPos + 64 + (i * 64)  // 跳过长度字段
+            if (elementStart + 64 > cleanHex.length) {
+                break
+            }
+            val elementHex = cleanHex.substring(elementStart, elementStart + 64)
+            result.add(BigInteger(elementHex, 16))
+        }
+        
+        return result
+    }
+    
+    /**
+     * 从 ABI 编码的元组响应中解析数据
+     * 用于解析 getCondition 返回的 (uint256 payoutDenominator, uint256[] payouts)
+     * @param hexResult 十六进制结果
+     * @return Pair<payoutDenominator, payouts>
+     */
+    fun decodeConditionResult(hexResult: String): Pair<BigInteger, List<BigInteger>> {
+        val cleanHex = hexResult.removePrefix("0x")
+        
+        // 第一个 32 字节：payoutDenominator
+        val payoutDenominatorHex = cleanHex.substring(0, 64)
+        val payoutDenominator = BigInteger(payoutDenominatorHex, 16)
+        
+        // 第二个 32 字节：payouts 数组的偏移量（通常是 0x40 = 64 字节）
+        val offsetHex = cleanHex.substring(64, 128)
+        val offset = BigInteger(offsetHex, 16).toInt() / 32  // 转换为 32 字节单位
+        
+        // 从 offset 位置解析数组
+        val payouts = decodeUint256Array(hexResult, offset)
+        
+        return Pair(payoutDenominator, payouts)
+    }
+    
+    /**
+     * 将十六进制字符串转换为字节数组
+     * @param hex 十六进制字符串（带或不带 0x 前缀）
+     * @return 字节数组
+     */
+    fun hexToBytes(hex: String): ByteArray {
+        val cleanHex = hex.removePrefix("0x")
+        return ByteArray(cleanHex.length / 2) { i ->
+            cleanHex.substring(i * 2, i * 2 + 2).toInt(16).toByte()
+        }
+    }
+
+    /**
+     * 将字节数组转换为十六进制字符串
+     * @param bytes 字节数组
+     * @return 十六进制字符串（带 0x 前缀）
+     */
+    fun bytesToHex(bytes: ByteArray): String {
+        return "0x" + bytes.joinToString("") { "%02x".format(it) }
+    }
+
+    /**
      * 计算 Keccak-256 哈希（Ethereum 标准）
      * 使用 BouncyCastle 库实现真正的 Keccak-256
+     * @param data 输入数据
+     * @return 32 字节的哈希值
      */
-    private fun keccak256(data: ByteArray): String {
+    fun keccak256(data: ByteArray): ByteArray {
         val digest = KeccakDigest(256)
         digest.update(data, 0, data.size)
         val hash = ByteArray(digest.digestSize)
         digest.doFinal(hash, 0)
-        return hash.joinToString("") { "%02x".format(it) }
+        return hash
+    }
+
+    /**
+     * 计算 Keccak-256 哈希并返回十六进制字符串
+     * @param data 输入数据
+     * @return 十六进制哈希字符串
+     */
+    fun keccak256Hex(data: ByteArray): String {
+        return keccak256(data).joinToString("") { "%02x".format(it) }
     }
 }
 

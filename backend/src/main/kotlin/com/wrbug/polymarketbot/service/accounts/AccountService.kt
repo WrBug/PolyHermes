@@ -37,7 +37,8 @@ class AccountService(
     private val orderSigningService: OrderSigningService,
     private val cryptoUtils: CryptoUtils,
     private val telegramNotificationService: TelegramNotificationService? = null,  // 可选，避免循环依赖
-    private val relayClientService: RelayClientService
+    private val relayClientService: RelayClientService,
+    private val jsonUtils: JsonUtils
 ) {
 
     private val logger = LoggerFactory.getLogger(AccountService::class.java)
@@ -98,8 +99,9 @@ class AccountService(
             }
 
             // 5. 获取代理地址（必须成功，否则导入失败）
+            // 根据用户选择的钱包类型计算代理地址
             val proxyAddress = runBlocking {
-                val proxyResult = blockchainService.getProxyAddress(request.walletAddress)
+                val proxyResult = blockchainService.getProxyAddress(request.walletAddress, request.walletType)
                 if (proxyResult.isSuccess) {
                     val address = proxyResult.getOrNull()
                     if (address != null) {
@@ -149,6 +151,7 @@ class AccountService(
                 accountName = accountName,
                 isDefault = false,  // 不再支持默认账户
                 isEnabled = request.isEnabled,
+                walletType = request.walletType,  // 保存钱包类型
                 createdAt = System.currentTimeMillis(),
                 updatedAt = System.currentTimeMillis()
             )
@@ -195,6 +198,85 @@ class AccountService(
             Result.success(toDto(saved))
         } catch (e: Exception) {
             logger.error("更新账户失败", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 刷新账户的代理地址
+     * 使用最新的代理地址计算逻辑（支持 Magic 和 Safe 两种类型）
+     */
+    @Transactional
+    fun refreshProxyAddress(accountId: Long): Result<AccountDto> {
+        return try {
+            val account = accountRepository.findById(accountId)
+                .orElse(null) ?: return Result.failure(IllegalArgumentException("账户不存在"))
+
+            // 重新获取代理地址（使用保存的钱包类型）
+            val proxyAddress = runBlocking {
+                val proxyResult = blockchainService.getProxyAddress(account.walletAddress, account.walletType)
+                if (proxyResult.isSuccess) {
+                    proxyResult.getOrNull()
+                        ?: throw IllegalStateException("获取代理地址返回空值")
+                } else {
+                    val error = proxyResult.exceptionOrNull()
+                    throw IllegalStateException("获取代理地址失败: ${error?.message}")
+                }
+            }
+
+            // 更新账户
+            val updated = account.copy(
+                proxyAddress = proxyAddress,
+                updatedAt = System.currentTimeMillis()
+            )
+            val saved = accountRepository.save(updated)
+
+            logger.info("刷新代理地址成功: accountId=${accountId}, oldProxy=${account.proxyAddress}, newProxy=${proxyAddress}")
+            Result.success(toDto(saved))
+        } catch (e: Exception) {
+            logger.error("刷新代理地址失败: accountId=${accountId}", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 刷新所有账户的代理地址
+     */
+    @Transactional
+    fun refreshAllProxyAddresses(): Result<List<AccountDto>> {
+        return try {
+            val accounts = accountRepository.findAll()
+            val updatedAccounts = mutableListOf<AccountDto>()
+
+            accounts.forEach { account ->
+                try {
+                    val proxyAddress = runBlocking {
+                        val proxyResult = blockchainService.getProxyAddress(account.walletAddress, account.walletType)
+                        if (proxyResult.isSuccess) {
+                            proxyResult.getOrNull()
+                        } else {
+                            null
+                        }
+                    }
+
+                    if (proxyAddress != null && proxyAddress != account.proxyAddress) {
+                        val updated = account.copy(
+                            proxyAddress = proxyAddress,
+                            updatedAt = System.currentTimeMillis()
+                        )
+                        val saved = accountRepository.save(updated)
+                        logger.info("刷新代理地址成功: accountId=${account.id}, oldProxy=${account.proxyAddress}, newProxy=${proxyAddress}")
+                        updatedAccounts.add(toDto(saved))
+                    }
+                } catch (e: Exception) {
+                    logger.warn("刷新账户 ${account.id} 代理地址失败: ${e.message}")
+                }
+            }
+
+            logger.info("批量刷新代理地址完成: 更新了 ${updatedAccounts.size} 个账户")
+            Result.success(updatedAccounts)
+        } catch (e: Exception) {
+            logger.error("批量刷新代理地址失败", e)
             Result.failure(e)
         }
     }
@@ -362,6 +444,7 @@ class AccountService(
                 proxyAddress = account.proxyAddress,
                 accountName = account.accountName,
                 isEnabled = account.isEnabled,
+                walletType = account.walletType,
                 apiKeyConfigured = account.apiKey != null,
                 apiSecretConfigured = account.apiSecret != null,
                 apiPassphraseConfigured = account.apiPassphrase != null,
@@ -927,6 +1010,8 @@ class AccountService(
                                 marketId = request.marketId,
                                 marketSlug = marketSlug,
                                 side = request.side,
+                                price = sellPrice,  // 直接传递卖出价格
+                                size = sellQuantity.toPlainString(),  // 直接传递卖出数量
                                 accountName = account.accountName,
                                 walletAddress = account.walletAddress,
                                 clobApi = clobApi,
@@ -1119,7 +1204,7 @@ class AccountService(
                     // 如果目标 outcome 不是第一个（index != 0），需要转换价格
                     // 对于二元市场：第二个 outcome 的价格 = 1 - 第一个 outcome 的价格
                     if (outcomeIndex != null && outcomeIndex > 0) {
-                        val outcomes = JsonUtils.parseStringArray(market.outcomes)
+                        val outcomes = jsonUtils.parseStringArray(market.outcomes)
                         // 只对二元市场进行价格转换
                         if (outcomes.size == 2) {
                             // 保存原始第一个 outcome 的价格
@@ -1151,13 +1236,13 @@ class AccountService(
                         null
                     }
 
+                    // 优先使用 lastPrice（最近成交价），如果没有则使用 bestBid，最后使用 midpoint
+                    val currentPrice = lastPrice ?: bestBid ?: midpoint ?: "0"
+
                     Result.success(
                         MarketPriceResponse(
                             marketId = marketId,
-                            lastPrice = lastPrice,
-                            bestBid = bestBid,
-                            bestAsk = bestAsk,
-                            midpoint = midpoint
+                            currentPrice = currentPrice
                         )
                     )
                 } else {

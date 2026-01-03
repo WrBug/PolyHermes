@@ -24,7 +24,6 @@ services:
       - DB_USERNAME=${DB_USERNAME:-root}
       - DB_PASSWORD=${DB_PASSWORD:-}
       - SERVER_PORT=8000
-      - POLYGON_RPC_URL=${POLYGON_RPC_URL:-https://polygon-rpc.com}
       # ⚠️ 安全警告：以下两个环境变量不能使用默认值，否则容器启动会失败
       # 请在 .env 文件中设置，或通过环境变量传入
       # 生成随机密钥：openssl rand -hex 32 (ADMIN_RESET_PASSWORD_KEY) 或 openssl rand -hex 64 (JWT_SECRET)

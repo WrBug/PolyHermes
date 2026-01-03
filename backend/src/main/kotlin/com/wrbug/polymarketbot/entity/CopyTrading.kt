@@ -84,6 +84,13 @@ data class CopyTrading(
     @Column(name = "max_price", precision = 20, scale = 8)
     val maxPrice: BigDecimal? = null,  // 最高价格（可选），NULL表示不限制最高价
     
+    // 最大仓位配置
+    @Column(name = "max_position_value", precision = 20, scale = 8)
+    val maxPositionValue: BigDecimal? = null,  // 最大仓位金额（USDC），NULL表示不启用
+    
+    @Column(name = "max_position_count")
+    val maxPositionCount: Int? = null,  // 最大仓位数量，NULL表示不启用
+    
     // 新增配置字段
     @Column(name = "config_name", length = 255)
     val configName: String? = null,  // 配置名（可选）

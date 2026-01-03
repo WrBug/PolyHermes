@@ -17,7 +17,11 @@ enum class FilterStatus {
     /** 失败：价差过大 */
     FAILED_SPREAD,
     /** 失败：订单深度不足 */
-    FAILED_ORDER_DEPTH
+    FAILED_ORDER_DEPTH,
+    /** 失败：超过最大仓位金额 */
+    FAILED_MAX_POSITION_VALUE,
+    /** 失败：超过最大仓位数量 */
+    FAILED_MAX_POSITION_COUNT
 }
 
 /**
@@ -72,6 +76,18 @@ data class FilterResult(
             status = FilterStatus.FAILED_ORDER_DEPTH,
             reason = reason,
             orderbook = orderbook
+        )
+
+        /** 超过最大仓位金额 */
+        fun maxPositionValueFailed(reason: String) = FilterResult(
+            status = FilterStatus.FAILED_MAX_POSITION_VALUE,
+            reason = reason
+        )
+
+        /** 超过最大仓位数量 */
+        fun maxPositionCountFailed(reason: String) = FilterResult(
+            status = FilterStatus.FAILED_MAX_POSITION_COUNT,
+            reason = reason
         )
     }
 }

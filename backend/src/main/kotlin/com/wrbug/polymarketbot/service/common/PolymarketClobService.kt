@@ -300,13 +300,23 @@ class PolymarketClobService(
             )
             
             val response = authenticatedClobApi.getOrder(orderId)
-            if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
+            if (response.isSuccessful) {
+                val body = response.body()
+                if (body != null) {
+                    Result.success(body)
+                } else {
+                    // 响应体为空，可能是订单不存在或已过期
+                    logger.warn("获取订单详情失败: 响应体为空, orderId=$orderId, code=${response.code()}")
+                    Result.failure(Exception("订单不存在或已过期: orderId=$orderId"))
+                }
             } else {
-                Result.failure(Exception("获取订单详情失败: ${response.code()} ${response.message()}"))
+                // HTTP 状态码不是 2xx
+                val errorBody = response.errorBody()?.string()?.take(200) ?: "无错误详情"
+                logger.warn("获取订单详情失败: HTTP ${response.code()}, orderId=$orderId, errorBody=$errorBody")
+                Result.failure(Exception("获取订单详情失败: HTTP ${response.code()} ${response.message()}"))
             }
         } catch (e: Exception) {
-            logger.error("获取订单详情异常: ${e.message}", e)
+            logger.error("获取订单详情异常: orderId=$orderId, ${e.message}", e)
             Result.failure(e)
         }
     }

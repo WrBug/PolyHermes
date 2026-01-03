@@ -16,6 +16,7 @@ export interface Account {
   proxyAddress: string  // Polymarket 代理钱包地址
   accountName?: string
   isEnabled?: boolean  // 是否启用
+  walletType?: string  // 钱包类型：magic（邮箱/OAuth登录）或 safe（MetaMask浏览器钱包）
   apiKeyConfigured: boolean
   apiSecretConfigured: boolean
   apiPassphraseConfigured: boolean
@@ -42,6 +43,7 @@ export interface AccountImportRequest {
   privateKey: string
   walletAddress: string
   accountName?: string
+  walletType?: string  // 钱包类型：magic（邮箱/OAuth登录）或 safe（MetaMask浏览器钱包）
 }
 
 /**
@@ -205,6 +207,9 @@ export interface CopyTrading {
   maxSpread?: string
   minPrice?: string  // 最低价格（可选），NULL表示不限制最低价
   maxPrice?: string  // 最高价格（可选），NULL表示不限制最高价
+  // 最大仓位配置
+  maxPositionValue?: string  // 最大仓位金额（USDC），NULL表示不启用
+  maxPositionCount?: number  // 最大仓位数量，NULL表示不启用
   // 新增配置字段
   configName?: string  // 配置名（可选，但提供时必须非空）
   pushFailedOrders: boolean  // 推送失败订单（默认关闭）
@@ -248,6 +253,9 @@ export interface CopyTradingCreateRequest {
   maxSpread?: string
   minPrice?: string  // 最低价格（可选），NULL表示不限制最低价
   maxPrice?: string  // 最高价格（可选），NULL表示不限制最高价
+  // 最大仓位配置
+  maxPositionValue?: string  // 最大仓位金额（USDC），NULL表示不启用
+  maxPositionCount?: number  // 最大仓位数量，NULL表示不启用
   // 新增配置字段
   configName?: string  // 配置名（可选，但提供时必须非空）
   pushFailedOrders?: boolean  // 推送失败订单（可选）
@@ -279,6 +287,9 @@ export interface CopyTradingUpdateRequest {
   maxSpread?: string
   minPrice?: string  // 最低价格（可选），NULL表示不限制最低价
   maxPrice?: string  // 最高价格（可选），NULL表示不限制最高价
+  // 最大仓位配置
+  maxPositionValue?: string  // 最大仓位金额（USDC），NULL表示不启用
+  maxPositionCount?: number  // 最大仓位数量，NULL表示不启用
   // 新增配置字段
   configName?: string  // 配置名（可选，但提供时必须非空）
   pushFailedOrders?: boolean  // 推送失败订单（可选）
@@ -425,14 +436,11 @@ export interface MarketPriceRequest {
 }
 
 /**
- * 市场价格响应
+ * 市场当前价格响应
  */
 export interface MarketPriceResponse {
   marketId: string
-  lastPrice?: string
-  bestBid?: string
-  bestAsk?: string
-  midpoint?: string
+  currentPrice: string
 }
 
 /**
@@ -1087,3 +1095,54 @@ export interface NbaGameListResponse {
   total: number
 }
 
+
+/**
+ * RPC 节点配置类型
+ */
+export interface RpcNodeConfig {
+  id: number
+  providerType: 'ALCHEMY' | 'INFURA' | 'QUICKNODE' | 'CHAINSTACK' | 'GETBLOCK' | 'CUSTOM' | 'PUBLIC'
+  name: string
+  httpUrl: string
+  wsUrl?: string
+  apiKeyMasked?: string  // 脱敏后的 API Key
+  enabled: boolean
+  priority: number
+  lastCheckTime?: number
+  lastCheckStatus?: 'HEALTHY' | 'UNHEALTHY' | 'UNKNOWN'
+  responseTimeMs?: number
+  createdAt: number
+  updatedAt: number
+}
+
+/**
+ * 添加 RPC 节点请求
+ */
+export interface RpcNodeAddRequest {
+  providerType: string
+  name: string
+  apiKey?: string  // 主流服务商需要
+  httpUrl?: string  // CUSTOM 需要
+  wsUrl?: string
+}
+
+/**
+ * 更新 RPC 节点请求
+ */
+export interface RpcNodeUpdateRequest {
+  id: number
+  name?: string
+  enabled?: boolean
+  priority?: number
+}
+
+/**
+ * 节点健康检查结果
+ */
+export interface NodeCheckResult {
+  status: 'HEALTHY' | 'UNHEALTHY' | 'UNKNOWN'
+  message: string
+  checkTime: number
+  responseTimeMs?: number
+  blockNumber?: string
+}

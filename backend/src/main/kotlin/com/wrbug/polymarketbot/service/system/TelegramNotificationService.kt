@@ -65,6 +65,9 @@ class TelegramNotificationService(
         marketId: String? = null,
         marketSlug: String? = null,
         side: String,
+        price: String? = null,  // 订单价格（可选，如果提供则直接使用）
+        size: String? = null,  // 订单数量（可选，如果提供则直接使用）
+        outcome: String? = null,  // 市场方向（可选，如果提供则直接使用）
         accountName: String? = null,
         walletAddress: String? = null,
         clobApi: PolymarketClobApi? = null,
@@ -84,35 +87,49 @@ class TelegramNotificationService(
             java.util.Locale("zh", "CN")  // 默认简体中文
         }
         
-        // 尝试从订单详情获取实际价格和数量
-        var actualPrice: String? = null
-        var actualSize: String? = null
+        // 优先使用传入的价格和数量，如果没有提供则尝试从订单详情获取
+        var actualPrice: String? = price
+        var actualSize: String? = size
         var actualSide: String = side
-        var actualOutcome: String? = null  // 市场方向（outcome）
+        var actualOutcome: String? = outcome
         
-        if (orderId != null && clobApi != null && apiKey != null && apiSecret != null && apiPassphrase != null && walletAddressForApi != null) {
+        // 如果价格或数量未提供，尝试从订单详情获取
+        if ((actualPrice == null || actualSize == null) && orderId != null && clobApi != null && apiKey != null && apiSecret != null && apiPassphrase != null && walletAddressForApi != null) {
             try {
                 val orderResponse = clobApi.getOrder(orderId)
-                if (orderResponse.isSuccessful && orderResponse.body() != null) {
-                    val order = orderResponse.body()!!
-                    actualPrice = order.price
-                    actualSize = order.originalSize  // 使用 originalSize 作为订单数量
-                    actualSide = order.side  // 使用订单详情中的 side
-                    actualOutcome = order.outcome  // 使用订单详情中的 outcome（市场方向）
+                if (orderResponse.isSuccessful) {
+                    val order = orderResponse.body()
+                    if (order != null) {
+                        if (actualPrice == null) {
+                            actualPrice = order.price
+                        }
+                        if (actualSize == null) {
+                            actualSize = order.originalSize  // 使用 originalSize 作为订单数量
+                        }
+                        actualSide = order.side  // 使用订单详情中的 side
+                        if (actualOutcome == null) {
+                            actualOutcome = order.outcome  // 使用订单详情中的 outcome（市场方向）
+                        }
+                    } else {
+                        logger.debug("查询订单详情失败: 响应体为空, orderId=$orderId")
+                    }
+                } else {
+                    val errorBody = orderResponse.errorBody()?.string()?.take(200) ?: "无错误详情"
+                    logger.debug("查询订单详情失败: orderId=$orderId, code=${orderResponse.code()}, errorBody=$errorBody")
                 }
             } catch (e: Exception) {
-                logger.warn("查询订单详情失败，使用默认值: ${e.message}", e)
+                logger.warn("查询订单详情失败: orderId=$orderId, ${e.message}", e)
             }
         }
         
-        // 如果没有获取到实际值，使用默认值（这种情况不应该发生，但为了兼容性保留）
-        val price = actualPrice ?: "0"
-        val size = actualSize ?: "0"
+        // 如果仍然没有获取到实际值，使用默认值（这种情况不应该发生，但为了兼容性保留）
+        val finalPrice = actualPrice ?: "0"
+        val finalSize = actualSize ?: "0"
         
         // 计算订单金额 = price × size（USDC）
         val amount = try {
-            val priceDecimal = price.toSafeBigDecimal()
-            val sizeDecimal = size.toSafeBigDecimal()
+            val priceDecimal = finalPrice.toSafeBigDecimal()
+            val sizeDecimal = finalSize.toSafeBigDecimal()
             priceDecimal.multiply(sizeDecimal).toString()
         } catch (e: Exception) {
             logger.warn("计算订单金额失败: ${e.message}", e)
@@ -126,8 +143,8 @@ class TelegramNotificationService(
             marketSlug = marketSlug,
             side = actualSide,
             outcome = actualOutcome,
-            price = price,
-            size = size,
+            price = finalPrice,
+            size = finalSize,
             amount = amount,
             accountName = accountName,
             walletAddress = walletAddress,
@@ -296,18 +313,8 @@ class TelegramNotificationService(
             else -> filterType
         }
         
-        // 优先使用账户名称，如果没有账户名称才显示钱包地址
-        val accountInfo: String = when {
-            !accountName.isNullOrBlank() -> {
-                accountName!!
-            }
-            !walletAddress.isNullOrBlank() -> {
-                maskAddress(walletAddress!!)
-            }
-            else -> {
-                unknownAccount
-            }
-        }
+        // 构建账户信息（格式：账户名(钱包地址)）
+        val accountInfo = buildAccountInfo(accountName, walletAddress, unknownAccount)
 
         val time = DateUtils.formatDateTime()
 
@@ -359,13 +366,17 @@ class TelegramNotificationService(
             ""
         }
 
+        // 格式化价格和数量
+        val priceDisplay = formatPrice(price)
+        val sizeDisplay = formatQuantity(size)
+
         return """🚫 <b>$orderFiltered</b>
 
 📊 <b>$orderInfo：</b>
 • $marketLabel: $marketDisplay$outcomeDisplay
 • $sideLabel: <b>$sideDisplay</b>
-• $priceLabel: <code>$price</code>
-• $quantityLabel: <code>$size</code> shares
+• $priceLabel: <code>$priceDisplay</code>
+• $quantityLabel: <code>$sizeDisplay</code> shares
 • $amountLabel: <code>$amountDisplay</code> USDC
 • $accountLabel: $escapedAccountInfo
 
@@ -571,6 +582,68 @@ class TelegramNotificationService(
     }
 
     /**
+     * 格式化价格显示（保留最多4位小数，截断不四舍五入）
+     */
+    private fun formatPrice(price: String): String {
+        return try {
+            val priceDecimal = price.toSafeBigDecimal()
+            val formatted = if (priceDecimal.scale() > 4) {
+                priceDecimal.setScale(4, java.math.RoundingMode.DOWN).stripTrailingZeros()
+            } else {
+                priceDecimal.stripTrailingZeros()
+            }
+            formatted.toPlainString()
+        } catch (e: Exception) {
+            price
+        }
+    }
+
+    /**
+     * 格式化数量显示（保留最多2位小数，截断不四舍五入）
+     */
+    private fun formatQuantity(quantity: String): String {
+        return try {
+            val quantityDecimal = quantity.toSafeBigDecimal()
+            val formatted = if (quantityDecimal.scale() > 2) {
+                quantityDecimal.setScale(2, java.math.RoundingMode.DOWN).stripTrailingZeros()
+            } else {
+                quantityDecimal.stripTrailingZeros()
+            }
+            formatted.toPlainString()
+        } catch (e: Exception) {
+            quantity
+        }
+    }
+
+    /**
+     * 构建账户信息显示（格式：账户名(钱包地址)）
+     */
+    private fun buildAccountInfo(
+        accountName: String?,
+        walletAddress: String?,
+        unknownAccount: String
+    ): String {
+        return when {
+            !accountName.isNullOrBlank() && !walletAddress.isNullOrBlank() -> {
+                // 有账户名和钱包地址：账户名(钱包地址)
+                "${accountName}(${maskAddress(walletAddress)})"
+            }
+            !accountName.isNullOrBlank() -> {
+                // 只有账户名
+                accountName
+            }
+            !walletAddress.isNullOrBlank() -> {
+                // 只有钱包地址
+                maskAddress(walletAddress)
+            }
+            else -> {
+                // 都没有
+                unknownAccount
+            }
+        }
+    }
+
+    /**
      * 构建订单成功消息
      */
     private fun buildOrderSuccessMessage(
@@ -613,18 +686,8 @@ class TelegramNotificationService(
             else -> side
         }
         
-        // 优先使用账户名称，如果没有账户名称才显示钱包地址
-        val accountInfo: String = when {
-            !accountName.isNullOrBlank() -> {
-                accountName!!
-            }
-            !walletAddress.isNullOrBlank() -> {
-                maskAddress(walletAddress!!)
-            }
-            else -> {
-                unknownAccount
-            }
-        }
+        // 构建账户信息（格式：账户名(钱包地址)）
+        val accountInfo = buildAccountInfo(accountName, walletAddress, unknownAccount)
 
         // 构建跟单信息（如果有）
         val copyTradingInfo = mutableListOf<String>()
@@ -694,14 +757,18 @@ class TelegramNotificationService(
             ""
         }
 
+        // 格式化价格和数量
+        val priceDisplay = formatPrice(price)
+        val sizeDisplay = formatQuantity(size)
+
         return """✅ <b>$orderCreatedSuccess</b>
 
 📊 <b>$orderInfo：</b>
 • $orderIdLabel: <code>${orderId ?: unknown}</code>
 • $marketLabel: $marketDisplay$outcomeDisplay
 • $sideLabel: <b>$sideDisplay</b>
-• $priceLabel: <code>$price</code>
-• $quantityLabel: <code>$size</code> shares
+• $priceLabel: <code>$priceDisplay</code>
+• $quantityLabel: <code>$sizeDisplay</code> shares
 • $amountLabel: <code>$amountDisplay</code> USDC
 • $accountLabel: $escapedAccountInfo$escapedCopyTradingInfo
 
@@ -748,18 +815,8 @@ class TelegramNotificationService(
             else -> side
         }
         
-        // 优先使用账户名称，如果没有账户名称才显示钱包地址
-        val accountInfo: String = when {
-            !accountName.isNullOrBlank() -> {
-                accountName!!
-            }
-            !walletAddress.isNullOrBlank() -> {
-                maskAddress(walletAddress!!)
-            }
-            else -> {
-                unknownAccount
-            }
-        }
+        // 构建账户信息（格式：账户名(钱包地址)）
+        val accountInfo = buildAccountInfo(accountName, walletAddress, unknownAccount)
 
         val time = DateUtils.formatDateTime()
 
@@ -818,13 +875,17 @@ class TelegramNotificationService(
             ""
         }
 
+        // 格式化价格和数量
+        val priceDisplay = formatPrice(price)
+        val sizeDisplay = formatQuantity(size)
+
         return """❌ <b>$orderCreatedFailed</b>
 
 📊 <b>$orderInfo：</b>
 • $marketLabel: $marketDisplay$outcomeDisplay
 • $sideLabel: <b>$sideDisplay</b>
-• $priceLabel: <code>$price</code>
-• $quantityLabel: <code>$size</code> shares
+• $priceLabel: <code>$priceDisplay</code>
+• $quantityLabel: <code>$sizeDisplay</code> shares
 • $amountLabel: <code>$amountDisplay</code> USDC
 • $accountLabel: $escapedAccountInfo
 
@@ -889,18 +950,8 @@ class TelegramNotificationService(
         val timeLabel = messageSource.getMessage("notification.order.time", null, "时间", locale)
         val unknownAccount: String = messageSource.getMessage("notification.order.unknown_account", null, "未知账户", locale) ?: "未知账户"
         
-        // 优先使用账户名称，如果没有账户名称才显示钱包地址
-        val accountInfo: String = when {
-            !accountName.isNullOrBlank() -> {
-                accountName!!
-            }
-            !walletAddress.isNullOrBlank() -> {
-                maskAddress(walletAddress!!)
-            }
-            else -> {
-                unknownAccount
-            }
-        }
+        // 构建账户信息（格式：账户名(钱包地址)）
+        val accountInfo = buildAccountInfo(accountName, walletAddress, unknownAccount)
         
         val time = DateUtils.formatDateTime()
         
@@ -923,12 +974,7 @@ class TelegramNotificationService(
         
         // 构建仓位列表
         val positionsText = positions.joinToString("\n") { position ->
-            val quantityDisplay = try {
-                val quantityDecimal = position.quantity.toSafeBigDecimal()
-                quantityDecimal.stripTrailingZeros().toPlainString()
-            } catch (e: Exception) {
-                position.quantity
-            }
+            val quantityDisplay = formatQuantity(position.quantity)
             val valueDisplay = try {
                 val valueDecimal = position.value.toSafeBigDecimal()
                 val formatted = if (valueDecimal.scale() > 4) {

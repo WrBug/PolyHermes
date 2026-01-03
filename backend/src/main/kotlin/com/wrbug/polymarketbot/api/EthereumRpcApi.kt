@@ -1,5 +1,6 @@
 package com.wrbug.polymarketbot.api
 
+import com.google.gson.JsonElement
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.POST
@@ -29,10 +30,11 @@ data class JsonRpcRequest(
 
 /**
  * JSON-RPC 响应
+ * 使用 JsonElement 类型处理 result 字段，可以灵活处理字符串、对象、数组等类型
  */
 data class JsonRpcResponse(
     val jsonrpc: String? = null,
-    val result: String? = null,
+    val result: JsonElement? = null,  // 使用 JsonElement 类型，可以处理任意 JSON 类型
     val error: JsonRpcError? = null,
     val id: Int? = null
 )

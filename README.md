@@ -228,6 +228,25 @@ docker-compose up -d
 # image: wrbug/polyhermes:v1.0.0
 ```
 
+**更新 Docker 版本**：
+
+```bash
+# 1. 停止当前容器
+docker-compose -f docker-compose.prod.yml down
+
+# 2. 拉取最新镜像
+docker pull wrbug/polyhermes:latest
+
+# 3. 重新启动服务
+docker-compose -f docker-compose.prod.yml up -d
+
+# 或更新到特定版本（例如 v1.0.1）
+# 修改 docker-compose.prod.yml 中的镜像标签为: image: wrbug/polyhermes:v1.0.1
+# 然后执行: docker-compose -f docker-compose.prod.yml up -d
+```
+
+详细更新说明请参考：[部署文档 - 更新 Docker 版本](docs/zh/DEPLOYMENT.md#更新-docker-版本)
+
 2. **本地构建部署（开发环境）**
 
 ```bash
@@ -251,7 +270,6 @@ DB_USERNAME=root
 DB_PASSWORD=your_password_here
 SPRING_PROFILES_ACTIVE=prod
 SERVER_PORT=80
-POLYGON_RPC_URL=https://polygon-rpc.com
 JWT_SECRET=your-jwt-secret-key-change-in-production
 ADMIN_RESET_PASSWORD_KEY=your-admin-reset-key-change-in-production
 EOF
@@ -318,7 +336,6 @@ cd frontend
 | `DB_USERNAME` | 数据库用户名 | `root` |
 | `DB_PASSWORD` | 数据库密码 | - |
 | `SERVER_PORT` | 后端服务端口 | `8000` |
-| `POLYGON_RPC_URL` | Polygon RPC 地址 | `https://polygon-rpc.com` |
 | `JWT_SECRET` | JWT 密钥 | - |
 | `ADMIN_RESET_PASSWORD_KEY` | 管理员密码重置密钥 | - |
 | `CRYPTO_SECRET_KEY` | 加密密钥（用于加密存储私钥和 API Key） | - |

@@ -51,30 +51,33 @@ class WebSocketManager {
   
   /**
    * 连接 WebSocket（全局共享连接）
+   * 使用短期票据认证，避免在 URL 中暴露 JWT
    */
-  connect(): void {
+  async connect(): Promise<void> {
     // 检查是否有token，未登录不允许连接
     const token = this.getToken()
     if (!token) {
       console.log('[WebSocket] 未登录，不建立连接')
       return
     }
-    
+
     // 如果已经连接或正在连接，直接返回
     if (this.ws?.readyState === WebSocket.OPEN || this.isConnecting) {
       return
     }
-    
+
     // 如果正在卸载，不允许连接
     if (this.isUnmounting) {
       return
     }
-    
+
     this.isConnecting = true
-    const wsUrl = this.getWebSocketUrl()
-    console.log('[WebSocket] 正在连接:', wsUrl)
-    
+
     try {
+      // 获取短期票据
+      const wsUrl = await this.getWebSocketUrl()
+      console.log('[WebSocket] 正在连接...')
+
       // 如果已经有连接（但状态不是 OPEN），先关闭
       if (this.ws) {
         try {
@@ -84,10 +87,10 @@ class WebSocketManager {
         }
         this.ws = null
       }
-      
+
       const ws = new WebSocket(wsUrl)
       this.ws = ws
-      
+
       ws.onopen = () => {
         console.log('[WebSocket] 连接成功')
         this.isConnecting = false
@@ -95,17 +98,17 @@ class WebSocketManager {
         this.startPing()
         this.resubscribeAll()  // 重新订阅所有频道
       }
-      
+
       ws.onmessage = (event) => {
         this.handleMessage(event.data)
       }
-      
+
       ws.onerror = (error) => {
         console.error('[WebSocket] 连接错误:', error)
         this.isConnecting = false
         this.notifyConnectionStatus(false)
       }
-      
+
       ws.onclose = () => {
         console.log('[WebSocket] 连接关闭')
         this.isConnecting = false
@@ -324,14 +327,14 @@ class WebSocketManager {
   }
   
   /**
-   * 获取 WebSocket URL（带token认证）
+   * 获取 WebSocket URL（使用短期票据认证）
    * 默认使用相对路径 /ws（通过反向代理转发）
    * 如果设置了 VITE_WS_URL 环境变量，则使用完整 URL（用于跨域场景）
    */
-  private getWebSocketUrl(): string {
+  private async getWebSocketUrl(): Promise<string> {
     const envWsUrl = import.meta.env.VITE_WS_URL
     let wsBaseUrl: string
-    
+
     if (envWsUrl) {
       // 如果设置了环境变量，使用完整 URL（支持跨域）
       wsBaseUrl = envWsUrl
@@ -341,10 +344,22 @@ class WebSocketManager {
       const host = window.location.host
       wsBaseUrl = `${protocol}//${host}`
     }
-    
+
+    // 获取短期票据（避免在 URL 中暴露 JWT）
+    // 使用动态导入避免循环依赖
+    try {
+      const { apiService } = await import('./api')
+      const response = await apiService.auth.getWebSocketTicket()
+      if (response.data.code === 0 && response.data.data?.ticket) {
+        return `${wsBaseUrl}/ws?ticket=${encodeURIComponent(response.data.data.ticket)}`
+      }
+    } catch (error) {
+      console.warn('[WebSocket] 获取票据失败，尝试使用 token 认证:', error)
+    }
+
+    // 兼容旧方式：如果获取票据失败，回退到使用 token（不推荐）
     const token = this.getToken()
     if (token) {
-      // 通过查询参数传递token
       return `${wsBaseUrl}/ws?token=${encodeURIComponent(token)}`
     }
     return `${wsBaseUrl}/ws`

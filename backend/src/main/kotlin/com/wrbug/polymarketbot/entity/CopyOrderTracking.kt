@@ -38,6 +38,9 @@ data class CopyOrderTracking(
     @Column(name = "leader_buy_trade_id", nullable = false, length = 100)
     val leaderBuyTradeId: String,  // Leader 买入交易ID
     
+    @Column(name = "leader_buy_quantity", nullable = true, precision = 20, scale = 8)
+    val leaderBuyQuantity: BigDecimal? = null,  // Leader 买入数量（用于固定金额模式计算卖出比例）
+    
     @Column(name = "quantity", nullable = false, precision = 20, scale = 8)
     val quantity: BigDecimal,  // 买入数量
     
@@ -52,6 +55,9 @@ data class CopyOrderTracking(
     
     @Column(name = "status", nullable = false, length = 20)
     var status: String = "filled",  // filled, fully_matched, partially_matched
+    
+    @Column(name = "notification_sent", nullable = false)
+    var notificationSent: Boolean = false,  // 是否已发送通知（从订单详情获取实际数据后发送）
     
     @Column(name = "created_at", nullable = false)
     val createdAt: Long = System.currentTimeMillis(),

@@ -154,9 +154,6 @@ SPRING_PROFILES_ACTIVE=prod
 # 服务器端口
 SERVER_PORT=8000
 
-# Polygon RPC
-POLYGON_RPC_URL=https://polygon-rpc.com
-
 # JWT 密钥（已自动生成随机值，生产环境建议修改）
 JWT_SECRET=${JWT_SECRET}
 

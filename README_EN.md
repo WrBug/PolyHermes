@@ -228,6 +228,25 @@ docker-compose up -d
 # image: wrbug/polyhermes:v1.0.0
 ```
 
+**Update Docker Version**:
+
+```bash
+# 1. Stop current containers
+docker-compose -f docker-compose.prod.yml down
+
+# 2. Pull latest image
+docker pull wrbug/polyhermes:latest
+
+# 3. Restart services
+docker-compose -f docker-compose.prod.yml up -d
+
+# Or update to specific version (e.g., v1.0.1)
+# Modify image tag in docker-compose.prod.yml to: image: wrbug/polyhermes:v1.0.1
+# Then run: docker-compose -f docker-compose.prod.yml up -d
+```
+
+For detailed update instructions, please refer to: [Deployment Guide - Update Docker Version](docs/en/DEPLOYMENT.md#update-docker-version)
+
 2. **Local Build Deployment (Development Environment)**
 
 ```bash
@@ -251,7 +270,6 @@ DB_USERNAME=root
 DB_PASSWORD=your_password_here
 SPRING_PROFILES_ACTIVE=prod
 SERVER_PORT=80
-POLYGON_RPC_URL=https://polygon-rpc.com
 JWT_SECRET=your-jwt-secret-key-change-in-production
 ADMIN_RESET_PASSWORD_KEY=your-admin-reset-key-change-in-production
 EOF
@@ -318,7 +336,6 @@ cd frontend
 | `DB_USERNAME` | Database username | `root` |
 | `DB_PASSWORD` | Database password | - |
 | `SERVER_PORT` | Backend service port | `8000` |
-| `POLYGON_RPC_URL` | Polygon RPC address | `https://polygon-rpc.com` |
 | `JWT_SECRET` | JWT secret key | - |
 | `ADMIN_RESET_PASSWORD_KEY` | Admin password reset key | - |
 | `CRYPTO_SECRET_KEY` | Encryption key (for encrypting stored private keys and API Keys) | - |

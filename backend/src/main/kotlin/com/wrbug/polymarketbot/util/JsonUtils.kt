@@ -2,14 +2,16 @@ package com.wrbug.polymarketbot.util
 
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import org.springframework.stereotype.Component
 
 /**
  * JSON 工具类
  * 用于解析 JSON 字符串
  */
-object JsonUtils {
-    
-    private val gson = Gson()
+@Component
+class JsonUtils(
+    private val gson: Gson
+) {
     
     /**
      * 解析 JSON 字符串数组

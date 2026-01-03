@@ -36,6 +36,49 @@ jobs:
           echo "Extracted version: $VERSION"
           echo "Full tag: $TAG_NAME"
       
+      - name: Send Telegram notification (build started)
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          # 检查必要的环境变量
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "⚠️  Telegram Bot Token 或 Chat ID 未配置，跳过通知"
+            exit 0
+          fi
+          
+          # 获取构建信息
+          VERSION="${{ steps.extract_version.outputs.VERSION }}"
+          TAG="${{ steps.extract_version.outputs.TAG }}"
+          RELEASE_URL="${{ github.event.release.html_url }}"
+          
+          # 构建消息内容（仅包含关键信息）
+          MESSAGE="🔨 <b>Docker 镜像构建中</b>"$'\n'$'\n'"📦 <b>版本:</b> ${VERSION}"$'\n'"🏷️ <b>Tag:</b> <code>${TAG}</code>"$'\n'"🔗 <a href=\"${RELEASE_URL}\">查看 Release</a>"
+          
+          # 发送 Telegram 消息（使用 jq 转义 JSON）
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg chat_id "$TELEGRAM_CHAT_ID" \
+              --arg text "$MESSAGE" \
+              '{chat_id: $chat_id, text: $text, parse_mode: "HTML", disable_web_page_preview: false}')" > /tmp/telegram_response.json
+          
+          # 检查发送结果
+          if [ $? -eq 0 ]; then
+            RESPONSE=$(cat /tmp/telegram_response.json)
+            if echo "$RESPONSE" | grep -q '"ok":true'; then
+              echo "✅ Telegram 通知发送成功"
+            else
+              echo "❌ Telegram 通知发送失败: $RESPONSE"
+              # 通知失败不应该导致整个 job 失败
+              exit 0
+            fi
+          else
+            echo "❌ 发送 Telegram 消息时发生错误"
+            # 通知失败不应该导致整个 job 失败
+            exit 0
+          fi
+      
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
@@ -65,3 +108,49 @@ jobs:
             GITHUB_REPO_URL=https://github.com/WrBug/PolyHermes
           cache-from: type=registry,ref=wrbug/polyhermes:latest
           cache-to: type=inline
+
+      - name: Send Telegram notification
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          # 检查必要的环境变量
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "⚠️  Telegram Bot Token 或 Chat ID 未配置，跳过通知"
+            exit 0
+          fi
+          
+          # 获取构建信息
+          VERSION="${{ steps.extract_version.outputs.VERSION }}"
+          TAG="${{ steps.extract_version.outputs.TAG }}"
+          RELEASE_NAME="${{ github.event.release.name }}"
+          RELEASE_URL="${{ github.event.release.html_url }}"
+          REPO_NAME="${{ github.repository }}"
+          
+          # 构建消息内容（仅包含关键信息）
+          DEPLOY_DOC_URL="https://github.com/WrBug/PolyHermes/blob/main/docs/zh/DEPLOYMENT.md"
+          MESSAGE="✅ <b>Docker 镜像构建成功</b>"$'\n'$'\n'"📦 <b>版本:</b> ${VERSION}"$'\n'"🏷️ <b>Tag:</b> <code>${TAG}</code>"$'\n'"🔗 <a href=\"${RELEASE_URL}\">查看 Release</a>"$'\n'"📚 <a href=\"${DEPLOY_DOC_URL}\">Docker 部署文档</a>"
+          
+          # 发送 Telegram 消息（使用 jq 转义 JSON）
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg chat_id "$TELEGRAM_CHAT_ID" \
+              --arg text "$MESSAGE" \
+              '{chat_id: $chat_id, text: $text, parse_mode: "HTML", disable_web_page_preview: false}')" > /tmp/telegram_response.json
+          
+          # 检查发送结果
+          if [ $? -eq 0 ]; then
+            RESPONSE=$(cat /tmp/telegram_response.json)
+            if echo "$RESPONSE" | grep -q '"ok":true'; then
+              echo "✅ Telegram 通知发送成功"
+            else
+              echo "❌ Telegram 通知发送失败: $RESPONSE"
+              # 构建成功，通知失败不应该导致整个 job 失败
+              exit 0
+            fi
+          else
+            echo "❌ 发送 Telegram 消息时发生错误"
+            # 构建成功，通知失败不应该导致整个 job 失败
+            exit 0
+          fi

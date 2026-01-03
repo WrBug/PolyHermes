@@ -1,0 +1,103 @@
+name: Telegram Notification on PR Merge
+
+on:
+  pull_request:
+    types:
+      - closed  # 当 PR 被关闭（合并或关闭）时触发
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    
+    # 只在 PR 被合并到 main 分支时执行
+    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Get PR details
+        id: pr_details
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          REPO="${{ github.repository }}"
+          
+          # 获取 PR 详细信息
+          PR_RESPONSE=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${REPO}/pulls/${PR_NUMBER}")
+          
+          # 获取 PR 变更的文件列表
+          FILES_RESPONSE=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${REPO}/pulls/${PR_NUMBER}/files")
+          
+          # 提取 PR 描述（body），保留换行，限制长度
+          PR_BODY=$(echo "$PR_RESPONSE" | jq -r '.body // ""')
+          if [ ${#PR_BODY} -gt 500 ]; then
+            PR_BODY="${PR_BODY:0:500}..."
+          fi
+          
+          # 保存到输出变量（使用 base64 编码避免特殊字符问题）
+          echo "pr_body<<EOF" >> $GITHUB_OUTPUT
+          echo "$PR_BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Send Telegram notification
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          # 检查 PR 是否被合并（而不是仅关闭）
+          PR_MERGED="${{ github.event.pull_request.merged }}"
+          if [ "$PR_MERGED" != "true" ]; then
+            echo "ℹ️  PR 仅关闭，未合并，跳过通知"
+            exit 0
+          fi
+          
+          # 检查必要的环境变量
+          # 注意：TELEGRAM_CHAT_ID 可以是个人聊天 ID（正数）或群组 ID（负数，如 -1001234567890）
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "⚠️  Telegram Bot Token 或 Chat ID 未配置，跳过通知"
+            exit 0
+          fi
+          
+          # 获取 PR 基本信息
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_URL="${{ github.event.pull_request.html_url }}"
+          PR_MERGE_COMMIT="${{ github.event.pull_request.merge_commit_sha }}"
+          
+          # 获取 PR 详细信息
+          PR_BODY="${{ steps.pr_details.outputs.pr_body }}"
+          
+          # 转义 PR 标题中的 HTML 特殊字符
+          PR_TITLE_ESCAPED=$(echo "$PR_TITLE" | sed 's/&/\&amp;/g' | sed 's/</\&lt;/g' | sed 's/>/\&gt;/g')
+          
+          # 构建消息内容（仅包含关键信息）
+          MESSAGE="🚀 <b>main 分支代码更新</b>"$'\n'$'\n'"📝 <b>PR #${PR_NUMBER}:</b> ${PR_TITLE_ESCAPED}"$'\n'"🔗 <a href=\"${PR_URL}\">查看 PR</a>"
+          
+          # 发送 Telegram 消息（使用 jq 转义 JSON）
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg chat_id "$TELEGRAM_CHAT_ID" \
+              --arg text "$MESSAGE" \
+              '{chat_id: $chat_id, text: $text, parse_mode: "HTML", disable_web_page_preview: false}')" > /tmp/telegram_response.json
+          
+          # 检查发送结果
+          if [ $? -eq 0 ]; then
+            RESPONSE=$(cat /tmp/telegram_response.json)
+            if echo "$RESPONSE" | grep -q '"ok":true'; then
+              echo "✅ Telegram 通知发送成功"
+            else
+              echo "❌ Telegram 通知发送失败: $RESPONSE"
+              exit 1
+            fi
+          else
+            echo "❌ 发送 Telegram 消息时发生错误"
+            exit 1
+          fi
+

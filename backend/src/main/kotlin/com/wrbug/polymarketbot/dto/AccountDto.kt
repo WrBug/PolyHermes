@@ -7,7 +7,8 @@ data class AccountImportRequest(
     val privateKey: String,  // 私钥（前端加密后传输）
     val walletAddress: String,  // 钱包地址（前端从私钥推导，用于验证）
     val accountName: String? = null,
-    val isEnabled: Boolean = true  // 是否启用（用于订单推送等功能的开关）
+    val isEnabled: Boolean = true,  // 是否启用（用于订单推送等功能的开关）
+    val walletType: String = "magic"  // 钱包类型：magic（邮箱/OAuth登录）或 safe（MetaMask浏览器钱包）
 )
 
 /**
@@ -72,6 +73,7 @@ data class AccountDto(
     val proxyAddress: String,  // Polymarket 代理钱包地址
     val accountName: String?,
     val isEnabled: Boolean,  // 是否启用（用于订单推送等功能的开关）
+    val walletType: String = "magic",  // 钱包类型：magic（邮箱/OAuth登录）或 safe（MetaMask浏览器钱包）
     val apiKeyConfigured: Boolean,  // API Key 是否已配置（不返回实际 Key）
     val apiSecretConfigured: Boolean,  // API Secret 是否已配置
     val apiPassphraseConfigured: Boolean,  // API Passphrase 是否已配置
@@ -195,14 +197,11 @@ data class LatestPriceRequest(
 )
 
 /**
- * 市场价格响应
+ * 市场当前价格响应
  */
 data class MarketPriceResponse(
     val marketId: String,
-    val lastPrice: String?,    // 最新成交价
-    val bestBid: String?,      // 最优买价（用于卖出参考）
-    val bestAsk: String?,      // 最优卖价（用于买入参考）
-    val midpoint: String?      // 中间价
+    val currentPrice: String   // 当前价格（通过 MarketPriceService 获取，支持多数据源降级）
 )
 
 /**

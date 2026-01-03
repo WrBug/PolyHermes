@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Card, Form, Button, Switch, message, Typography, Space, Radio, InputNumber, Modal, Table, Select, Divider, Input } from 'antd'
-import { ArrowLeftOutlined, SaveOutlined, FileTextOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, SaveOutlined, FileTextOutlined, PlusOutlined } from '@ant-design/icons'
 import { apiService } from '../services/api'
 import { useAccountStore } from '../store/accountStore'
 import type { Leader, CopyTradingTemplate, CopyTradingCreateRequest } from '../types'
 import { formatUSDC } from '../utils'
 import { useTranslation } from 'react-i18next'
+import { useMediaQuery } from 'react-responsive'
+import AccountImportForm from '../components/AccountImportForm'
+import LeaderAddForm from '../components/LeaderAddForm'
 
 const { Title } = Typography
 const { Option } = Select
@@ -14,6 +17,7 @@ const { Option } = Select
 const CopyTradingAdd: React.FC = () => {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const isMobile = useMediaQuery({ maxWidth: 768 })
   const { accounts, fetchAccounts } = useAccountStore()
   const [form] = Form.useForm()
   const [loading, setLoading] = useState(false)
@@ -21,6 +25,14 @@ const CopyTradingAdd: React.FC = () => {
   const [templates, setTemplates] = useState<CopyTradingTemplate[]>([])
   const [templateModalVisible, setTemplateModalVisible] = useState(false)
   const [copyMode, setCopyMode] = useState<'RATIO' | 'FIXED'>('RATIO')
+  
+  // 导入账户modal相关状态
+  const [accountImportModalVisible, setAccountImportModalVisible] = useState(false)
+  const [accountImportForm] = Form.useForm()
+  
+  // 添加leader modal相关状态
+  const [leaderAddModalVisible, setLeaderAddModalVisible] = useState(false)
+  const [leaderAddForm] = Form.useForm()
   
   // 生成默认配置名
   const generateDefaultConfigName = (): string => {
@@ -85,7 +97,9 @@ const CopyTradingAdd: React.FC = () => {
       minOrderDepth: template.minOrderDepth ? parseFloat(template.minOrderDepth) : undefined,
       maxSpread: template.maxSpread ? parseFloat(template.maxSpread) : undefined,
       minPrice: template.minPrice ? parseFloat(template.minPrice) : undefined,
-      maxPrice: template.maxPrice ? parseFloat(template.maxPrice) : undefined
+      maxPrice: template.maxPrice ? parseFloat(template.maxPrice) : undefined,
+      maxPositionValue: (template as any).maxPositionValue ? parseFloat((template as any).maxPositionValue) : undefined,
+      maxPositionCount: (template as any).maxPositionCount
     })
     setCopyMode(template.copyMode)
     setTemplateModalVisible(false)
@@ -94,6 +108,36 @@ const CopyTradingAdd: React.FC = () => {
   
   const handleCopyModeChange = (mode: 'RATIO' | 'FIXED') => {
     setCopyMode(mode)
+  }
+  
+  // 处理导入账户成功
+  const handleAccountImportSuccess = async (accountId: number) => {
+    message.success(t('accountImport.importSuccess'))
+    
+    // 刷新账户列表
+    await fetchAccounts()
+    
+    // 自动选择新添加的账户
+    form.setFieldsValue({ accountId })
+    
+    // 关闭modal并重置表单
+    setAccountImportModalVisible(false)
+    accountImportForm.resetFields()
+  }
+  
+  // 处理添加leader成功
+  const handleLeaderAddSuccess = async (leaderId: number) => {
+    message.success(t('leaderAdd.addSuccess') || '添加 Leader 成功')
+    
+    // 刷新leader列表
+    await fetchLeaders()
+    
+    // 自动选择新添加的leader
+    form.setFieldsValue({ leaderId })
+    
+    // 关闭modal并重置表单
+    setLeaderAddModalVisible(false)
+    leaderAddForm.resetFields()
   }
   
   const handleSubmit = async (values: any) => {
@@ -134,6 +178,8 @@ const CopyTradingAdd: React.FC = () => {
         maxSpread: values.maxSpread?.toString(),
         minPrice: values.minPrice?.toString(),
         maxPrice: values.maxPrice?.toString(),
+        maxPositionValue: values.maxPositionValue?.toString(),
+        maxPositionCount: values.maxPositionCount,
         configName: values.configName?.trim(),
         pushFailedOrders: values.pushFailedOrders ?? false
       }
@@ -209,7 +255,24 @@ const CopyTradingAdd: React.FC = () => {
             name="accountId"
             rules={[{ required: true, message: t('copyTradingAdd.walletRequired') || '请选择钱包' }]}
           >
-            <Select placeholder={t('copyTradingAdd.selectWalletPlaceholder') || '请选择钱包'}>
+            <Select 
+              placeholder={t('copyTradingAdd.selectWalletPlaceholder') || '请选择钱包'}
+              notFoundContent={
+                accounts.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '12px' }}>
+                    <div style={{ marginBottom: '8px' }}>{t('copyTradingAdd.noAccounts') || '暂无账户'}</div>
+                    <Button 
+                      type="primary" 
+                      icon={<PlusOutlined />}
+                      onClick={() => setAccountImportModalVisible(true)}
+                      size="small"
+                    >
+                      {t('copyTradingAdd.importAccount') || '导入账户'}
+                    </Button>
+                  </div>
+                ) : null
+              }
+            >
               {accounts.map(account => (
                 <Option key={account.id} value={account.id}>
                   {account.accountName || `账户 ${account.id}`} ({account.walletAddress.slice(0, 6)}...{account.walletAddress.slice(-4)})
@@ -223,7 +286,24 @@ const CopyTradingAdd: React.FC = () => {
             name="leaderId"
             rules={[{ required: true, message: t('copyTradingAdd.leaderRequired') || '请选择 Leader' }]}
           >
-            <Select placeholder={t('copyTradingAdd.selectLeaderPlaceholder') || '请选择 Leader'}>
+            <Select 
+              placeholder={t('copyTradingAdd.selectLeaderPlaceholder') || '请选择 Leader'}
+              notFoundContent={
+                leaders.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '12px' }}>
+                    <div style={{ marginBottom: '8px' }}>{t('copyTradingAdd.noLeaders') || '暂无 Leader'}</div>
+                    <Button 
+                      type="primary" 
+                      icon={<PlusOutlined />}
+                      onClick={() => setLeaderAddModalVisible(true)}
+                      size="small"
+                    >
+                      {t('copyTradingAdd.addLeader') || '添加 Leader'}
+                    </Button>
+                  </div>
+                ) : null
+              }
+            >
               {leaders.map(leader => (
                 <Option key={leader.id} value={leader.id}>
                   {leader.leaderName || `Leader ${leader.id}`} ({leader.leaderAddress.slice(0, 6)}...{leader.leaderAddress.slice(-4)})
@@ -467,6 +547,35 @@ const CopyTradingAdd: React.FC = () => {
             </Input.Group>
           </Form.Item>
           
+          <Divider>{t('copyTradingAdd.positionLimitFilter') || '最大仓位限制'}</Divider>
+          
+          <Form.Item
+            label={t('copyTradingAdd.maxPositionValue') || '最大仓位金额 (USDC)'}
+            name="maxPositionValue"
+            tooltip={t('copyTradingAdd.maxPositionValueTooltip') || '限制单个市场的最大仓位金额。如果该市场的当前仓位金额 + 跟单金额超过此限制，则不会下单。不填写则不启用此限制'}
+          >
+            <InputNumber
+              min={0}
+              step={0.0001}
+              precision={4}
+              style={{ width: '100%' }}
+              placeholder={t('copyTradingAdd.maxPositionValuePlaceholder') || '例如：100（可选，不填写表示不启用）'}
+            />
+          </Form.Item>
+          
+          <Form.Item
+            label={t('copyTradingAdd.maxPositionCount') || '最大仓位数量'}
+            name="maxPositionCount"
+            tooltip={t('copyTradingAdd.maxPositionCountTooltip') || '限制单个市场的最大仓位数量。如果该市场的当前仓位数量达到或超过此限制，则不会下单。不填写则不启用此限制'}
+          >
+            <InputNumber
+              min={1}
+              step={1}
+              style={{ width: '100%' }}
+              placeholder={t('copyTradingAdd.maxPositionCountPlaceholder') || '例如：10（可选，不填写表示不启用）'}
+            />
+          </Form.Item>
+          
           <Divider>{t('copyTradingAdd.advancedSettings') || '高级设置'}</Divider>
           
           {/* 跟单卖出 */}
@@ -548,6 +657,61 @@ const CopyTradingAdd: React.FC = () => {
               render: (supportSell: boolean) => supportSell ? (t('common.yes') || '是') : (t('common.no') || '否')
             }
           ]}
+        />
+      </Modal>
+      
+      {/* 导入账户 Modal */}
+      <Modal
+        title={t('accountImport.title') || '导入账户'}
+        open={accountImportModalVisible}
+        onCancel={() => {
+          setAccountImportModalVisible(false)
+          accountImportForm.resetFields()
+        }}
+        footer={null}
+        width={isMobile ? '95%' : 600}
+        style={{ top: isMobile ? 20 : 50 }}
+        bodyStyle={{ padding: '24px', maxHeight: 'calc(100vh - 150px)', overflow: 'auto' }}
+        destroyOnClose
+        maskClosable
+        closable
+      >
+        <AccountImportForm
+          form={accountImportForm}
+          onSuccess={handleAccountImportSuccess}
+          onCancel={() => {
+            setAccountImportModalVisible(false)
+            accountImportForm.resetFields()
+          }}
+          showAlert={true}
+          showCancelButton={true}
+        />
+      </Modal>
+      
+      {/* 添加 Leader Modal */}
+      <Modal
+        title={t('leaderAdd.title') || '添加 Leader'}
+        open={leaderAddModalVisible}
+        onCancel={() => {
+          setLeaderAddModalVisible(false)
+          leaderAddForm.resetFields()
+        }}
+        footer={null}
+        width={isMobile ? '95%' : 600}
+        style={{ top: isMobile ? 20 : 50 }}
+        bodyStyle={{ padding: '24px', maxHeight: 'calc(100vh - 150px)', overflow: 'auto' }}
+        destroyOnClose
+        maskClosable
+        closable
+      >
+        <LeaderAddForm
+          form={leaderAddForm}
+          onSuccess={handleLeaderAddSuccess}
+          onCancel={() => {
+            setLeaderAddModalVisible(false)
+            leaderAddForm.resetFields()
+          }}
+          showCancelButton={true}
         />
       </Modal>
     </div>

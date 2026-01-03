@@ -189,18 +189,25 @@ export const apiService = {
      */
     login: (data: { username: string; password: string }) =>
       apiClient.post<ApiResponse<{ token: string }>>('/auth/login', data),
-    
+
     /**
      * 重置密码
      */
     resetPassword: (data: { resetKey: string; username: string; newPassword: string }) =>
       apiClient.post<ApiResponse<void>>('/auth/reset-password', data),
-    
+
     /**
      * 检查是否首次使用
      */
     checkFirstUse: () =>
-      apiClient.post<ApiResponse<{ isFirstUse: boolean }>>('/auth/check-first-use', {})
+      apiClient.post<ApiResponse<{ isFirstUse: boolean }>>('/auth/check-first-use', {}),
+
+    /**
+     * 获取 WebSocket 连接票据
+     * 返回一个短期有效（30秒）的一次性票据
+     */
+    getWebSocketTicket: () =>
+      apiClient.post<ApiResponse<{ ticket: string }>>('/auth/ws-ticket', {})
   },
   
   /**
@@ -626,6 +633,33 @@ export const apiService = {
   /**
    * 公告 API
    */
+  /**
+   * RPC 节点配置 API
+   */
+  rpcNodes: {
+    list: () =>
+      apiClient.post<ApiResponse<import('../types').RpcNodeConfig[]>>('/system/rpc-nodes/list', {}),
+    
+    add: (data: import('../types').RpcNodeAddRequest) =>
+      apiClient.post<ApiResponse<import('../types').RpcNodeConfig>>('/system/rpc-nodes/add', data),
+    
+    update: (data: import('../types').RpcNodeUpdateRequest) =>
+      apiClient.post<ApiResponse<import('../types').RpcNodeConfig>>('/system/rpc-nodes/update', data),
+    
+    delete: (data: { id: number }) =>
+      apiClient.post<ApiResponse<void>>('/system/rpc-nodes/delete', data),
+    
+    updatePriority: (data: { id: number; priority: number }) =>
+      apiClient.post<ApiResponse<void>>('/system/rpc-nodes/update-priority', data),
+    
+    checkHealth: (data: { id?: number }) =>
+      apiClient.post<ApiResponse<any>>('/system/rpc-nodes/check-health', data),
+    
+    validate: (data: import('../types').RpcNodeAddRequest) =>
+      apiClient.post<ApiResponse<{ valid: boolean; message: string; responseTimeMs?: number }>>('/system/rpc-nodes/validate', data)
+  },
+  
+
   announcements: {
     /**
      * 获取公告列表（最近10条）

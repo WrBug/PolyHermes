@@ -399,10 +399,10 @@ const PositionList: React.FC = () => {
       })
       if (response.data.code === 0 && response.data.data) {
         setMarketPrice(response.data.data)
-        // 默认使用最优买价作为限价
-        if (response.data.data.bestBid) {
-          setLimitPrice(response.data.data.bestBid)
-          form.setFieldsValue({ limitPrice: response.data.data.bestBid })
+        // 默认使用当前价格作为限价
+        if (response.data.data.currentPrice) {
+          setLimitPrice(response.data.data.currentPrice)
+          form.setFieldsValue({ limitPrice: response.data.data.currentPrice })
         }
       }
     } catch (error: any) {
@@ -449,12 +449,10 @@ const PositionList: React.FC = () => {
   }
 
   // 获取当前卖出价格（市价或限价）
-  // 卖出操作应该使用 bestBid（最优买价），因为你要卖给愿意买入的人
   const getCurrentSellPrice = (): string => {
     if (orderType === 'MARKET') {
-      // 市价订单（卖出）：优先使用最优买价（bestBid），因为卖出是卖给买单
-      // 如果没有 bestBid，则使用当前价格，最后使用最新成交价
-      return marketPrice?.bestBid || selectedPosition?.currentPrice || marketPrice?.lastPrice || '0'
+      // 市价订单（卖出）：使用当前价格
+      return marketPrice?.currentPrice || selectedPosition?.currentPrice || '0'
     }
     return limitPrice || '0'
   }
@@ -1377,7 +1375,7 @@ const PositionList: React.FC = () => {
                   // 切换订单类型时重新计算收益
                   if (sellQuantity) {
                     const price = e.target.value === 'MARKET' 
-                      ? (marketPrice?.bestBid || selectedPosition?.currentPrice || marketPrice?.lastPrice || '0')
+                      ? (marketPrice?.currentPrice || selectedPosition?.currentPrice || '0')
                       : limitPrice || '0'
                     calculatePnl(sellQuantity, price)
                   }
@@ -1457,9 +1455,9 @@ const PositionList: React.FC = () => {
                   }}
                   placeholder="请输入限价价格"
                 />
-                {marketPrice?.bestBid && (
+                {marketPrice?.currentPrice && (
                   <div style={{ marginTop: '4px', fontSize: '12px', color: '#999' }}>
-                    参考价格（最优买价，卖出参考）: {formatNumber(marketPrice.bestBid, 4)}
+                    参考价格（卖出参考）: {formatNumber(marketPrice.currentPrice, 4)}
                   </div>
                 )}
               </Form.Item>
@@ -1469,21 +1467,14 @@ const PositionList: React.FC = () => {
               <div style={{ marginBottom: '16px', padding: '12px', background: '#f0f7ff', borderRadius: '8px' }}>
                 <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>市价参考（卖出）</div>
                 <div style={{ fontSize: '14px' }}>
-                  {marketPrice?.bestBid ? (
-                    <>最优买价（卖出参考）: <span style={{ fontWeight: '500' }}>{formatNumber(marketPrice.bestBid, 4)}</span></>
+                  {marketPrice?.currentPrice ? (
+                    <>当前价格: <span style={{ fontWeight: '500' }}>{formatNumber(marketPrice.currentPrice, 4)}</span></>
                   ) : selectedPosition?.currentPrice ? (
                     <>当前价格: <span style={{ fontWeight: '500' }}>{formatNumber(selectedPosition.currentPrice, 4)}</span></>
-                  ) : marketPrice?.lastPrice ? (
-                    <>最新成交价: <span style={{ fontWeight: '500' }}>{formatNumber(marketPrice.lastPrice, 4)}</span></>
                   ) : (
                     <span style={{ color: '#999' }}>暂无价格数据</span>
                   )}
                 </div>
-                {marketPrice?.bestAsk && (
-                  <div style={{ fontSize: '12px', color: '#999', marginTop: '4px' }}>
-                    最优卖价（买入参考）: {formatNumber(marketPrice.bestAsk, 4)}
-                  </div>
-                )}
               </div>
             )}
             
