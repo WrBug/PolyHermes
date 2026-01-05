@@ -9,6 +9,7 @@ import com.wrbug.polymarketbot.util.toSafeBigDecimal
 import org.slf4j.LoggerFactory
 import com.wrbug.polymarketbot.service.common.PolymarketClobService
 import com.wrbug.polymarketbot.service.accounts.AccountService
+import com.wrbug.polymarketbot.repository.CopyOrderTrackingRepository
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 
@@ -18,7 +19,8 @@ import java.math.BigDecimal
 @Service
 class CopyTradingFilterService(
     private val clobService: PolymarketClobService,
-    private val accountService: AccountService
+    private val accountService: AccountService,
+    private val copyOrderTrackingRepository: CopyOrderTrackingRepository
 ) {
     
     private val logger = LoggerFactory.getLogger(CopyTradingFilterService::class.java)
@@ -234,32 +236,46 @@ class CopyTradingFilterService(
             
             // 检查最大仓位金额（如果配置了）
             if (copyTrading.maxPositionValue != null) {
-                // 计算该市场的当前仓位总价值（累加该市场所有仓位的 currentValue）
-                val currentPositionValue = marketPositions.sumOf { position ->
-                    position.currentValue.toSafeBigDecimal()
-                }
+                // 比较数据库成本价（本地订单记录）和外部持仓市值（可能来自其他终端的操作），取最大值
+                val dbValue = copyOrderTrackingRepository.sumCurrentPositionValueByMarket(copyTrading.id!!, marketId) ?: BigDecimal.ZERO
+                val extValue = marketPositions.sumOf { it.currentValue.toSafeBigDecimal() }
+                val currentPositionValue = dbValue.max(extValue)
                 
                 // 检查：该市场的当前仓位 + 跟单金额 <= 最大仓位金额
                 val totalValueAfterOrder = currentPositionValue.add(copyOrderAmount)
                 
                 if (totalValueAfterOrder.gt(copyTrading.maxPositionValue)) {
                     return FilterResult.maxPositionValueFailed(
-                        "超过最大仓位金额限制: 当前该市场仓位=${currentPositionValue} USDC, 跟单金额=${copyOrderAmount} USDC, 总计=${totalValueAfterOrder} USDC > 最大限制=${copyTrading.maxPositionValue} USDC"
+                        "超过最大仓位金额限制: 当前该市场仓位(取最大值)=${currentPositionValue} USDC (DB=${dbValue}, Ext=${extValue}), 跟单金额=${copyOrderAmount} USDC, 总计=${totalValueAfterOrder} USDC > 最大限制=${copyTrading.maxPositionValue} USDC"
                     )
                 }
             }
             
             // 检查最大仓位数量（如果配置了）
             if (copyTrading.maxPositionCount != null) {
-                // 计算该市场的当前仓位数量（该市场不同方向的仓位算不同仓位）
-                val currentPositionCount = marketPositions.size
+                // 使用数据库中的订单记录计算活跃仓位数量（解决延迟问题）
+                val dbCount = copyOrderTrackingRepository.countActivePositions(copyTrading.id!!)
                 
-                // 检查：该市场的当前仓位数量 <= 最大仓位数量
-                // 注意：如果该市场已有仓位，跟单可能会增加新的仓位（不同方向）或增加现有仓位
-                // 为了简化，我们检查当前该市场的仓位数量是否已经达到或超过限制
-                if (currentPositionCount >= copyTrading.maxPositionCount) {
+                // 计算外部持仓中的唯一市场数量（防止遗漏非本项目创建的仓位）
+                val extCount = positions.currentPositions
+                    .filter { it.accountId == copyTrading.accountId }
+                    .map { it.marketId }
+                    .distinct()
+                    .size
+                
+                val currentPositionCount = maxOf(dbCount, extCount)
+                
+                // 检查：如果当前没有该市场的活跃仓位，且总仓位数量已达到限制，则不允许开新仓
+                // 判断当前市场是否已有活跃仓位（数据库或外部持仓）
+                val hasDbPosition = copyOrderTrackingRepository.existsByCopyTradingIdAndMarketIdAndRemainingQuantityGreaterThan(
+                    copyTrading.id, marketId, BigDecimal.ZERO
+                )
+                val hasExtPosition = marketPositions.isNotEmpty()
+                val hasCurrentMarketPosition = hasDbPosition || hasExtPosition
+                
+                if (!hasCurrentMarketPosition && currentPositionCount >= copyTrading.maxPositionCount) {
                     return FilterResult.maxPositionCountFailed(
-                        "超过最大仓位数量限制: 当前该市场仓位数量=${currentPositionCount} >= 最大限制=${copyTrading.maxPositionCount}"
+                        "超过最大仓位数量限制: 当前活跃仓位总数(取最大值)=${currentPositionCount} (DB=${dbCount}, Ext=${extCount}) >= 最大限制=${copyTrading.maxPositionCount}"
                     )
                 }
             }

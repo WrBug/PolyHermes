@@ -66,5 +66,23 @@ interface CopyOrderTrackingRepository : JpaRepository<CopyOrderTracking, Long> {
      * 查询指定时间之前创建且状态不为指定状态的订单
      */
     fun findByCreatedAtBeforeAndStatusNot(beforeTime: Long, status: String): List<CopyOrderTracking>
+
+    /**
+     * 查询指定跟单配置下的活跃仓位数量
+     * 活跃仓位定义为 remainingQuantity > 0 的不同 (marketId, outcomeIndex) 组合
+     */
+    @Query("SELECT COUNT(DISTINCT CONCAT(t.marketId, '_', COALESCE(t.outcomeIndex, -1))) FROM CopyOrderTracking t WHERE t.copyTradingId = :copyTradingId AND t.remainingQuantity > 0")
+    fun countActivePositions(copyTradingId: Long): Int
+
+    /**
+     * 检查指定市场是否存在活跃仓位
+     */
+    fun existsByCopyTradingIdAndMarketIdAndRemainingQuantityGreaterThan(copyTradingId: Long, marketId: String, remainingQuantity: BigDecimal): Boolean
+
+    /**
+     * 计算指定跟单配置和市场下的当前持仓总价值 (成本价计算)
+     */
+    @Query("SELECT SUM(t.remainingQuantity * t.price) FROM CopyOrderTracking t WHERE t.copyTradingId = :copyTradingId AND t.marketId = :marketId AND t.remainingQuantity > 0")
+    fun sumCurrentPositionValueByMarket(copyTradingId: Long, marketId: String): BigDecimal?
 }
 
