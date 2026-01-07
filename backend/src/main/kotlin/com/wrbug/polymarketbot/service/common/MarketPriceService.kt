@@ -119,7 +119,7 @@ class MarketPriceService(
                     if (isRpcError) {
                         logger.warn("链上查询市场条件出现 RPC 错误（execution reverted），可能市场不存在或尚未创建: marketId=$marketId, error=${e.message}")
                     } else {
-                        logger.debug("链上查询市场条件失败，降级到 API 查询: marketId=$marketId, error=${e.message}")
+                    logger.debug("链上查询市场条件失败，降级到 API 查询: marketId=$marketId, error=${e.message}")
                     }
                     Pair(null, isRpcError)
                 }
@@ -129,7 +129,7 @@ class MarketPriceService(
             if (isRpcError) {
                 logger.warn("链上查询市场条件异常（execution reverted）: marketId=$marketId, outcomeIndex=$outcomeIndex, error=${e.message}")
             } else {
-                logger.debug("链上查询市场条件异常: marketId=$marketId, outcomeIndex=$outcomeIndex, error=${e.message}")
+            logger.debug("链上查询市场条件异常: marketId=$marketId, outcomeIndex=$outcomeIndex, error=${e.message}")
             }
             Pair(null, isRpcError)
         }
