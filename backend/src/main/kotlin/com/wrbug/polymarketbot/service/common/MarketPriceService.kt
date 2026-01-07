@@ -43,10 +43,17 @@ class MarketPriceService(
      */
     suspend fun getCurrentMarketPrice(marketId: String, outcomeIndex: Int): BigDecimal {
         // 1. 优先从链上查询市场结算结果
-        val chainPrice = getPriceFromChainCondition(marketId, outcomeIndex)
+        val (chainPrice, hasRpcError) = getPriceFromChainCondition(marketId, outcomeIndex)
         if (chainPrice != null) {
             // 截位到 4 位小数（向下截断，不四舍五入）
             return chainPrice.setScale(4, java.math.RoundingMode.DOWN)
+        }
+        
+        // 如果链上查询出现 RPC 错误（execution reverted），说明市场可能不存在或尚未创建
+        // 在这种情况下，降级到其他数据源（CLOB API 或 Gamma API），而不是直接抛出异常
+        // 因为 marketId 可能在 API 中存在，但在链上尚未创建
+        if (hasRpcError) {
+            logger.debug("链上查询市场条件出现 RPC 错误（execution reverted），降级到 API 查询: marketId=$marketId, outcomeIndex=$outcomeIndex")
         }
         
         // 2. 从 CLOB API 查询订单簿价格（最准确，优先使用）
@@ -75,8 +82,10 @@ class MarketPriceService(
      *   - payout > 0（赢了）→ 返回 1.0
      *   - payout == 0（输了）→ 返回 0.0
      * 如果市场未结算或查询失败，返回 null
+     * 
+     * @return Pair<BigDecimal?, Boolean> 第一个值是价格（如果已结算），第二个值表示是否发生了 RPC 错误（execution reverted）
      */
-    private suspend fun getPriceFromChainCondition(marketId: String, outcomeIndex: Int): BigDecimal? {
+    private suspend fun getPriceFromChainCondition(marketId: String, outcomeIndex: Int): Pair<BigDecimal?, Boolean> {
         return try {
             val chainResult = blockchainService.getCondition(marketId)
             chainResult.fold(
@@ -87,30 +96,41 @@ class MarketPriceService(
                         when {
                             payout > BigInteger.ZERO -> {
                                 logger.info("从链上查询到市场已结算，该 outcome 赢了: marketId=$marketId, outcomeIndex=$outcomeIndex, payout=$payout")
-                                return BigDecimal.ONE
+                                return Pair(BigDecimal.ONE, false)
                             }
                             payout == BigInteger.ZERO -> {
                                 logger.info("从链上查询到市场已结算，该 outcome 输了: marketId=$marketId, outcomeIndex=$outcomeIndex, payout=$payout")
-                                return BigDecimal.ZERO
+                                return Pair(BigDecimal.ZERO, false)
                             }
                             else -> {
                                 logger.warn("从链上查询到异常的 payout 值: marketId=$marketId, outcomeIndex=$outcomeIndex, payout=$payout")
-                                null
+                                Pair(null, false)
                             }
                         }
                     } else {
                         logger.debug("从链上查询到市场尚未结算: marketId=$marketId, payouts=${payouts.size}")
-                        null
+                        Pair(null, false)
                     }
                 },
                 onFailure = { e ->
+                    // 检查是否是 execution reverted 错误
+                    val isRpcError = e.message?.contains("execution reverted", ignoreCase = true) == true
+                    if (isRpcError) {
+                        logger.warn("链上查询市场条件出现 RPC 错误（execution reverted），可能市场不存在或尚未创建: marketId=$marketId, error=${e.message}")
+                    } else {
                     logger.debug("链上查询市场条件失败，降级到 API 查询: marketId=$marketId, error=${e.message}")
-                    null
+                    }
+                    Pair(null, isRpcError)
                 }
             )
         } catch (e: Exception) {
+            val isRpcError = e.message?.contains("execution reverted", ignoreCase = true) == true
+            if (isRpcError) {
+                logger.warn("链上查询市场条件异常（execution reverted）: marketId=$marketId, outcomeIndex=$outcomeIndex, error=${e.message}")
+            } else {
             logger.debug("链上查询市场条件异常: marketId=$marketId, outcomeIndex=$outcomeIndex, error=${e.message}")
-            null
+            }
+            Pair(null, isRpcError)
         }
     }
     

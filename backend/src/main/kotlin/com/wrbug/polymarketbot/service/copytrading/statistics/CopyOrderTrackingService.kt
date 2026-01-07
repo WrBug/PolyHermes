@@ -515,7 +515,16 @@ open class CopyOrderTrackingService(
                     // 解密私钥
                     val decryptedPrivateKey = decryptPrivateKey(account)
 
-                    logger.info("准备创建买入订单: copyTradingId=${copyTrading.id}, tradeId=${trade.id}, leaderPrice=${trade.price}, tolerance=${copyTrading.priceTolerance}, calculatedPrice=$buyPrice, quantity=$finalBuyQuantity")
+                    // 获取费率（根据 Polymarket Maker Rebates Program 要求）
+                    val feeRateResult = clobService.getFeeRate(tokenId)
+                    val feeRateBps = if (feeRateResult.isSuccess) {
+                        feeRateResult.getOrNull()?.toString() ?: "0"
+                    } else {
+                        logger.warn("获取费率失败，使用默认值 0: tokenId=$tokenId, error=${feeRateResult.exceptionOrNull()?.message}")
+                        "0"
+                    }
+
+                    logger.info("准备创建买入订单: copyTradingId=${copyTrading.id}, tradeId=${trade.id}, leaderPrice=${trade.price}, tolerance=${copyTrading.priceTolerance}, calculatedPrice=$buyPrice, quantity=$finalBuyQuantity, baseFee=$feeRateBps")
 
                     // 调用API创建订单（带重试机制）
                     // 重试策略：最多重试 MAX_RETRY_ATTEMPTS 次，每次重试前等待 RETRY_DELAY_MS 毫秒
@@ -530,7 +539,8 @@ open class CopyOrderTrackingService(
                         size = finalBuyQuantity.toString(),
                         owner = account.apiKey,
                         copyTradingId = copyTrading.id!!,
-                        tradeId = trade.id
+                        tradeId = trade.id,
+                        feeRateBps = feeRateBps
                     )
 
                     // 处理订单创建失败
@@ -959,6 +969,15 @@ open class CopyOrderTrackingService(
         // 8. 解密私钥（在方法开始时解密一次，后续复用）
         val decryptedPrivateKey = decryptPrivateKey(account)
 
+        // 获取费率（根据 Polymarket Maker Rebates Program 要求）
+        val feeRateResult = clobService.getFeeRate(tokenId)
+        val feeRateBps = if (feeRateResult.isSuccess) {
+            feeRateResult.getOrNull()?.toString() ?: "0"
+        } else {
+            logger.warn("获取费率失败，使用默认值 0: tokenId=$tokenId, error=${feeRateResult.exceptionOrNull()?.message}")
+            "0"
+        }
+
         // 9. 创建并签名卖出订单
         val signedOrder = try {
             orderSigningService.createAndSignOrder(
@@ -970,7 +989,7 @@ open class CopyOrderTrackingService(
                 size = totalMatched.toString(),
                 signatureType = 2,  // Browser Wallet
                 nonce = "0",
-                feeRateBps = "0",
+                feeRateBps = feeRateBps,  // 使用动态获取的费率
                 expiration = "0"
             )
         } catch (e: Exception) {
@@ -1008,7 +1027,8 @@ open class CopyOrderTrackingService(
             size = totalMatched.toString(),
             owner = account.apiKey,
             copyTradingId = copyTrading.id,
-            tradeId = leaderSellTrade.id
+            tradeId = leaderSellTrade.id,
+            feeRateBps = feeRateBps
         )
 
         if (createOrderResult.isFailure) {
@@ -1100,6 +1120,7 @@ open class CopyOrderTrackingService(
      * @param owner API Key（用于owner字段）
      * @param copyTradingId 跟单配置ID（用于日志）
      * @param tradeId Leader 交易ID（用于日志）
+     * @param feeRateBps 费率基点（从API动态获取）
      * @return 成功返回订单ID，失败返回异常
      */
     private suspend fun createOrderWithRetry(
@@ -1112,7 +1133,8 @@ open class CopyOrderTrackingService(
         size: String,
         owner: String,
         copyTradingId: Long,
-        tradeId: String
+        tradeId: String,
+        feeRateBps: String
     ): Result<String> {
         var lastError: Exception? = null
 
@@ -1129,7 +1151,7 @@ open class CopyOrderTrackingService(
                     size = size,
                     signatureType = 2,  // Browser Wallet
                     nonce = "0",
-                    feeRateBps = "0",
+                    feeRateBps = feeRateBps,  // 使用动态获取的费率
                     expiration = "0"
                 )
 

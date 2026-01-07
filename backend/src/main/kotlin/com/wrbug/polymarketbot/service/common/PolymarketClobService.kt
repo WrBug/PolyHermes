@@ -401,5 +401,37 @@ class PolymarketClobService(
             Result.failure(e)
         }
     }
+    
+    /**
+     * 获取费率
+     * 文档: https://docs.polymarket.com/developers/market-makers/maker-rebates-program#1-fetch-the-fee-rate
+     * 
+     * 注意：根据 TypeScript clob-client 源码，API 返回的字段名是 base_fee，而不是文档中的 fee_rate_bps
+     * 参考: clob-client/src/client.ts:312
+     * 
+     * @param tokenId Token ID
+     * @return 费率基点（0 表示无费率，1000 表示 10%）
+     */
+    suspend fun getFeeRate(tokenId: String): Result<Int> {
+        return try {
+            val response = clobApi.getFeeRate(tokenId)
+            if (response.isSuccessful && response.body() != null) {
+                val baseFee = response.body()!!.baseFee
+                logger.debug("获取费率成功: tokenId=$tokenId, baseFee=$baseFee")
+                Result.success(baseFee)
+            } else {
+                val errorBody = try {
+                    response.errorBody()?.string()
+                } catch (e: Exception) {
+                    null
+                }
+                logger.error("获取费率失败: tokenId=$tokenId, code=${response.code()}, errorBody=$errorBody")
+                Result.failure(Exception("获取费率失败: ${response.code()} ${response.message()}"))
+            }
+        } catch (e: Exception) {
+            logger.error("获取费率异常: tokenId=$tokenId, error=${e.message}", e)
+            Result.failure(e)
+        }
+    }
 }
 

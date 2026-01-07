@@ -1,3 +1,151 @@
+# v1.1.7
+
+## 🚀 主要功能
+
+### 💰 Polymarket Maker Rebates Program 费率支持
+
+- **新增费率查询 API 接口** (`getFeeRate`)
+  - 支持动态查询 Maker Rebates Program 费率
+  - 修正 API 返回字段名：使用 `base_fee` 而非 `fee_rate_bps`（与 TypeScript clob-client 一致）
+  
+- **动态费率获取**
+  - 在所有订单创建处动态获取费率：
+    * 跟单买入订单 (`processBuyTrade`)
+    * 跟单卖出订单 (`matchSellOrder`)
+    * 账户卖出订单 (`sellPosition`)
+  - 费率获取失败时降级到默认值 "0"，确保系统可用性
+  - 添加详细的日志记录，便于监控和调试
+
+- **参考文档**: https://docs.polymarket.com/developers/market-makers/maker-rebates-program
+
+### 🔧 Docker 部署优化
+
+- **日志级别环境变量支持**
+  - 在 `application.properties` 中支持通过 `LOG_LEVEL_ROOT` 和 `LOG_LEVEL_APP` 环境变量配置日志级别
+  - 在 `docker-compose.yml` 和 `docker-compose.prod.yml` 中添加日志级别环境变量配置
+  - 在 `deploy.sh` 的 `.env` 模板中添加日志级别配置说明
+  - 支持通过环境变量动态配置日志级别，无需修改配置文件
+  - 默认值：`root=INFO`, `app=DEBUG`
+
+## 🐛 Bug 修复
+
+### 修复市场条件查询的 RPC 调用错误
+
+- **问题**：使用错误的函数签名 `conditions(bytes32)` 导致 RPC 调用失败（execution reverted）
+- **修复**：
+  - 将错误的 `conditions(bytes32)` 函数调用改为正确的 `getOutcomeSlotCount(bytes32)` 和 `payoutDenominator(bytes32)` 函数调用
+  - 修复 `BlockchainService.getCondition` 方法，使用正确的 ConditionalTokens 合约函数签名
+  - 改进 `MarketPriceService` 的错误处理：当链上查询出现 RPC 错误时，降级到 CLOB API 或 Gamma API 查询，而不是直接抛出异常，提高容错性
+
+### 修复 RPC 错误时误创建自动卖出记录的问题
+
+- **问题**：当链上查询市场条件出现 RPC 错误（execution reverted）时，系统会误判为市场已卖出，创建错误的自动卖出记录
+- **修复**：
+  - 修改 `getPriceFromChainCondition` 返回 `Pair<BigDecimal?, Boolean>`，第二个值表示是否发生 RPC 错误
+  - 在 `getCurrentMarketPrice` 中检测到 RPC 错误时抛出异常，`PositionCheckService` 会捕获并跳过该市场的处理
+  - 避免在市场不存在或尚未创建时误判为已卖出
+
+## 📝 文档更新
+
+### 更新 Telegram 群链接
+
+- 将所有 Telegram 群链接统一更新为 `t.me/polyhermes`
+- 更新了以下文件：
+  - `frontend/src/components/Layout.tsx` - 桌面端和移动端导航链接
+  - `RELEASE.md` - 相关链接
+  - `README.md` 和 `README_EN.md` - 相关链接部分
+
+### 添加 Docker 版本徽章
+
+- 在 README 和 README_EN.md 中添加动态 Docker 版本徽章
+- 使用 shields.io 自动显示 Docker Hub 上 `wrbug/polyhermes` 镜像的最新版本
+- 版本信息自动更新，无需手动维护
+
+## 📊 变更统计
+
+- **提交数量**：5 个提交
+- **文件变更**：16 个文件
+- **代码变更**：+205 行 / -886 行（净减少 681 行）
+
+### 详细文件变更
+
+**后端变更**：
+- `PolymarketClobApi.kt` - 添加费率查询接口（+25 行）
+- `AccountService.kt` - 在订单创建处添加动态费率获取（+11 行）
+- `BlockchainService.kt` - 修复市场条件查询的 RPC 调用错误（+84 行）
+- `MarketPriceService.kt` - 改进错误处理，支持降级到其他数据源（+36 行）
+- `PolymarketClobService.kt` - 添加费率查询服务（+32 行）
+- `CopyOrderTrackingService.kt` - 在跟单订单创建处添加费率获取（+34 行）
+- `PositionCheckService.kt` - 修复 RPC 错误处理逻辑（+2 行）
+- `application.properties` - 添加日志级别环境变量支持（+6 行）
+
+**前端变更**：
+- `Layout.tsx` - 更新 Telegram 群链接（+4 行）
+
+**配置文件变更**：
+- `docker-compose.yml` - 添加日志级别环境变量（+4 行）
+- `docker-compose.prod.yml` - 添加日志级别环境变量（+4 行）
+- `deploy.sh` - 添加日志级别配置说明（+5 行）
+
+**文档变更**：
+- `README.md` - 更新 Telegram 链接，添加 Docker 版本徽章（+2 行）
+- `README_EN.md` - 更新 Telegram 链接，添加 Docker 版本徽章（+2 行）
+- `RELEASE.md` - 更新 Telegram 链接（+4 行）
+- `docs/zh/smart-money-analysis.md` - 删除文档（-836 行）
+
+## 🔧 技术细节
+
+### API 变更
+
+- **新增接口**：
+  - `POST /api/clob/fee-rate` - 获取 Maker Rebates Program 费率（内部使用）
+- **无移除接口**
+
+### 环境变量变更
+
+- **新增环境变量**：
+  - `LOG_LEVEL_ROOT` - Root 日志级别（默认：INFO）
+  - `LOG_LEVEL_APP` - 应用日志级别（默认：DEBUG）
+
+### 合约调用修复
+
+- **修复的函数调用**：
+  - 从 `conditions(bytes32)` 改为 `getOutcomeSlotCount(bytes32)` 和 `payoutDenominator(bytes32)`
+  - 使用正确的 ConditionalTokens 合约函数签名
+  - 参考：https://polygonscan.com/address/0x4d97dcd97ec945f40cf65f87097ace5ea0476045#code
+
+## 📝 升级说明
+
+### 数据库升级
+
+- **无需数据库迁移**：本次更新不涉及数据库结构变更
+
+### 配置更新
+
+- **可选配置**：新增日志级别环境变量，如不配置将使用默认值
+  - `LOG_LEVEL_ROOT=INFO`（默认）
+  - `LOG_LEVEL_APP=DEBUG`（默认）
+
+### Docker 部署
+
+- **推荐更新**：使用 Docker Hub 镜像部署的用户，建议更新到最新版本
+  ```bash
+  docker pull wrbug/polyhermes:latest
+  docker-compose -f docker-compose.prod.yml up -d
+  ```
+
+## 🔗 相关链接
+
+- **GitHub 仓库**：https://github.com/WrBug/PolyHermes
+- **Twitter**：@polyhermes
+- **Telegram 群组**：https://t.me/polyhermes
+
+---
+
+**发布日期**：2026-01-07
+
+---
+
 # v1.1.5
 
 ## 🔧 功能优化与改进
@@ -232,7 +380,7 @@ docker pull wrbug/polyhermes:v1.1.2
 
 * **GitHub 仓库**：https://github.com/WrBug/PolyHermes
 * **Twitter**：@polyhermes
-* **Telegram 群组**：加入群组
+* **Telegram 群组**：https://t.me/polyhermes
 
 ---
 
@@ -399,7 +547,7 @@ docker pull wrbug/polyhermes:v1.1.1
 
 * **GitHub 仓库**：https://github.com/WrBug/PolyHermes
 * **Twitter**：@polyhermes
-* **Telegram 群组**：加入群组
+* **Telegram 群组**：https://t.me/polyhermes
 
 ---
 

@@ -863,6 +863,15 @@ class AccountService(
             // 7. 解密私钥
             val decryptedPrivateKey = decryptPrivateKey(account)
 
+            // 获取费率（根据 Polymarket Maker Rebates Program 要求）
+            val feeRateResult = clobService.getFeeRate(tokenId)
+            val feeRateBps = if (feeRateResult.isSuccess) {
+                feeRateResult.getOrNull()?.toString() ?: "0"
+            } else {
+                logger.warn("获取费率失败，使用默认值 0: tokenId=$tokenId, error=${feeRateResult.exceptionOrNull()?.message}")
+                "0"
+            }
+
             // 11. 创建并签名订单（使用计算后的卖出数量）
             val signedOrder = try {
                 orderSigningService.createAndSignOrder(
@@ -874,7 +883,7 @@ class AccountService(
                     size = sellQuantity.toPlainString(),  // 使用计算后的卖出数量
                     signatureType = 2,  // Browser Wallet（与正确订单数据一致）
                     nonce = "0",
-                    feeRateBps = "0",
+                    feeRateBps = feeRateBps,  // 使用动态获取的费率
                     expiration = expiration
                 )
             } catch (e: Exception) {

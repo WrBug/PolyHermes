@@ -76,6 +76,11 @@ JWT_SECRET=${JWT_SECRET}
 
 # 管理员密码重置密钥（已自动生成随机值，生产环境建议修改）
 ADMIN_RESET_PASSWORD_KEY=${ADMIN_RESET_KEY}
+
+# 日志级别配置（可选，默认值：root=INFO, app=DEBUG）
+# 可选值：TRACE, DEBUG, INFO, WARN, ERROR, OFF
+# LOG_LEVEL_ROOT=INFO
+# LOG_LEVEL_APP=DEBUG
 EOF
         info ".env 文件已创建，已自动生成随机密码和密钥"
         warn "生产环境建议修改以下参数："

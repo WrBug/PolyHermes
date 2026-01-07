@@ -150,6 +150,19 @@ interface PolymarketClobApi {
     suspend fun deriveApiKey(): Response<ApiKeyResponse>
     
     /**
+     * 获取费率
+     * 文档: https://docs.polymarket.com/developers/market-makers/maker-rebates-program#1-fetch-the-fee-rate
+     * 端点: GET /fee-rate
+     * 
+     * @param tokenId Token ID
+     * @return 费率响应
+     */
+    @GET("/fee-rate")
+    suspend fun getFeeRate(
+        @Query("token_id") tokenId: String
+    ): Response<FeeRateResponse>
+    
+    /**
      * 获取服务器时间
      * 端点: /time
      */
@@ -355,6 +368,18 @@ data class ApiKeyResponse(
  */
 data class ServerTimeResponse(
     val timestamp: Long
+)
+
+/**
+ * 费率响应
+ * 文档: https://docs.polymarket.com/developers/market-makers/maker-rebates-program#1-fetch-the-fee-rate
+ * 
+ * 注意：根据 TypeScript clob-client 源码，API 返回的字段名是 base_fee，而不是文档中的 fee_rate_bps
+ * 参考: clob-client/src/client.ts:312
+ */
+data class FeeRateResponse(
+    @SerializedName("base_fee")
+    val baseFee: Int  // 费率基点（0 表示无费率，1000 表示 10%）
 )
 
 /**

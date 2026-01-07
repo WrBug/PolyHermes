@@ -27,6 +27,10 @@ services:
       # 生成随机密钥：openssl rand -hex 32 (ADMIN_RESET_PASSWORD_KEY) 或 openssl rand -hex 64 (JWT_SECRET)
       - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
       - ADMIN_RESET_PASSWORD_KEY=${ADMIN_RESET_PASSWORD_KEY:-change-me-in-production}
+      # 日志级别配置（可选，默认值：root=INFO, app=DEBUG）
+      # 可选值：TRACE, DEBUG, INFO, WARN, ERROR, OFF
+      - LOG_LEVEL_ROOT=${LOG_LEVEL_ROOT:-INFO}
+      - LOG_LEVEL_APP=${LOG_LEVEL_APP:-DEBUG}
     depends_on:
       mysql:
         condition: service_healthy

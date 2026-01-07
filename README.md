@@ -2,6 +2,7 @@
 
 [![GitHub](https://img.shields.io/badge/GitHub-WrBug%2FPolyHermes-blue?logo=github)](https://github.com/WrBug/PolyHermes)
 [![Twitter](https://img.shields.io/badge/Twitter-@polyhermes-blue?logo=twitter)](https://x.com/polyhermes)
+[![Docker](https://img.shields.io/docker/v/wrbug/polyhermes?label=Docker&logo=docker)](https://hub.docker.com/r/wrbug/polyhermes)
 
 > 🌐 **Language**: [English](README_EN.md) | 中文
 
@@ -432,6 +433,7 @@ cd frontend
 
 - [GitHub 仓库](https://github.com/WrBug/PolyHermes)
 - [Twitter](https://x.com/polyhermes)
+- [Telegram 群组](https://t.me/polyhermes)
 - [Polymarket 官网](https://polymarket.com)
 - [Polymarket API 文档](https://docs.polymarket.com)
 

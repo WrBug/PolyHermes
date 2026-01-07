@@ -2,6 +2,7 @@
 
 [![GitHub](https://img.shields.io/badge/GitHub-WrBug%2FPolyHermes-blue?logo=github)](https://github.com/WrBug/PolyHermes)
 [![Twitter](https://img.shields.io/badge/Twitter-@polyhermes-blue?logo=twitter)](https://x.com/polyhermes)
+[![Docker](https://img.shields.io/docker/v/wrbug/polyhermes?label=Docker&logo=docker)](https://hub.docker.com/r/wrbug/polyhermes)
 
 > 🌐 **Language**: English | [中文](README.md)
 
@@ -432,6 +433,7 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 - [GitHub Repository](https://github.com/WrBug/PolyHermes)
 - [Twitter](https://x.com/polyhermes)
+- [Telegram Group](https://t.me/polyhermes)
 - [Polymarket Official Website](https://polymarket.com)
 - [Polymarket API Documentation](https://docs.polymarket.com)
 
