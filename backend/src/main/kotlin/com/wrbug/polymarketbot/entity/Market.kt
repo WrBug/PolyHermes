@@ -22,7 +22,10 @@ data class Market(
     val title: String,  // 市场名称（question）
     
     @Column(name = "slug", length = 200)
-    val slug: String? = null,  // 市场slug
+    val slug: String? = null,  // 市场slug（用于显示）
+    
+    @Column(name = "event_slug", length = 200)
+    val eventSlug: String? = null,  // 跳转用的 slug（从 events[0].slug 获取）
     
     @Column(name = "category", length = 50)
     val category: String? = null,  // 市场分类

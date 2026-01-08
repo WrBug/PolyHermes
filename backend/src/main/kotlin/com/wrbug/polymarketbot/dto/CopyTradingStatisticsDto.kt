@@ -41,7 +41,8 @@ data class BuyOrderInfo(
     val leaderTradeId: String,
     val marketId: String,
     val marketTitle: String? = null,  // 市场名称
-    val marketSlug: String? = null,  // 市场 slug（用于构建 URL）
+    val marketSlug: String? = null,  // 市场 slug（用于显示）
+    val eventSlug: String? = null,  // 跳转用的 slug（从 events[0].slug 获取）
     val marketCategory: String? = null,  // 市场分类（sports, crypto 等）
     val side: String,
     val quantity: String,
@@ -61,7 +62,8 @@ data class SellOrderInfo(
     val leaderTradeId: String,
     val marketId: String,
     val marketTitle: String? = null,  // 市场名称
-    val marketSlug: String? = null,  // 市场 slug（用于构建 URL）
+    val marketSlug: String? = null,  // 市场 slug（用于显示）
+    val eventSlug: String? = null,  // 跳转用的 slug（从 events[0].slug 获取）
     val marketCategory: String? = null,  // 市场分类（sports, crypto 等）
     val side: String,
     val quantity: String,
@@ -79,7 +81,8 @@ data class MatchedOrderInfo(
     val buyOrderId: String,
     val marketId: String? = null,  // 市场ID（从买入订单获取）
     val marketTitle: String? = null,  // 市场名称
-    val marketSlug: String? = null,  // 市场 slug（用于构建 URL）
+    val marketSlug: String? = null,  // 市场 slug（用于显示）
+    val eventSlug: String? = null,  // 跳转用的 slug（从 events[0].slug 获取）
     val marketCategory: String? = null,  // 市场分类（sports, crypto 等）
     val matchedQuantity: String,
     val buyPrice: String,
@@ -142,7 +145,8 @@ data class MarketOrderStats(
 data class MarketOrderGroup(
     val marketId: String,
     val marketTitle: String?,
-    val marketSlug: String?,
+    val marketSlug: String?,  // 显示用的 slug
+    val eventSlug: String? = null,  // 跳转用的 slug（从 events[0].slug 获取）
     val marketCategory: String?,
     val stats: MarketOrderStats,
     val orders: List<Any>  // BuyOrderInfo, SellOrderInfo 或 MatchedOrderInfo 的列表

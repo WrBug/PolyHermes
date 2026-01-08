@@ -227,8 +227,8 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
             <Radio value="safe">
               {t('accountImport.walletTypeSafe')}
             </Radio>
-            <Radio value="magic">
-              {t('accountImport.walletTypeMagic')}
+            <Radio value="magic" disabled>
+              {t('accountImport.walletTypeMagic')} {t('accountImport.magicNotSupported')}
             </Radio>
           </Radio.Group>
         </Form.Item>

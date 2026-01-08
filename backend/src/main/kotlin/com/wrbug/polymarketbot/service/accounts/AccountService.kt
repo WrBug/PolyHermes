@@ -8,6 +8,7 @@ import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.toSafeBigDecimal
 import com.wrbug.polymarketbot.util.eq
 import com.wrbug.polymarketbot.util.JsonUtils
+import com.wrbug.polymarketbot.util.getEventSlug
 import com.wrbug.polymarketbot.service.common.PolymarketClobService
 import com.wrbug.polymarketbot.service.common.BlockchainService
 import com.wrbug.polymarketbot.service.common.PolymarketApiKeyService
@@ -656,7 +657,8 @@ class AccountService(
                                     proxyAddress = account.proxyAddress,
                                     marketId = pos.conditionId ?: "",
                                     marketTitle = pos.title ?: "",
-                                    marketSlug = pos.slug ?: "",
+                                    marketSlug = pos.slug ?: "",  // 显示用的 slug
+                                    eventSlug = pos.eventSlug,  // 跳转用的 slug（从 events[0].slug 获取）
                                     marketIcon = pos.icon,  // 市场图标
                                     side = pos.outcome ?: "",
                                     outcomeIndex = pos.outcomeIndex,  // 添加 outcomeIndex
@@ -949,7 +951,6 @@ class AccountService(
                             }
                             
                             val marketTitle = marketInfo?.question ?: request.marketId
-                            val marketSlug = marketInfo?.slug
                             
                             // 获取当前语言设置（从 LocaleContextHolder）
                             val locale = try {
@@ -962,7 +963,7 @@ class AccountService(
                                 orderId = orderId,
                                 marketTitle = marketTitle,
                                 marketId = request.marketId,
-                                marketSlug = marketSlug,
+                                marketSlug = marketInfo.getEventSlug(),  // 跳转用的 slug
                                 side = request.side,
                                 price = sellPrice,  // 直接传递卖出价格
                                 size = sellQuantity.toPlainString(),  // 直接传递卖出数量
@@ -1017,7 +1018,6 @@ class AccountService(
                             }
                             
                             val marketTitle = marketInfo?.question ?: request.marketId
-                            val marketSlug = marketInfo?.slug
                             
                             // 获取当前语言设置（从 LocaleContextHolder）
                             val locale = try {
@@ -1029,7 +1029,7 @@ class AccountService(
                             telegramNotificationService?.sendOrderFailureNotification(
                                 marketTitle = marketTitle,
                                 marketId = request.marketId,
-                                marketSlug = marketSlug,
+                                marketSlug = marketInfo.getEventSlug(),  // 跳转用的 slug
                                 side = request.side,
                                 outcome = null,  // 失败时可能没有 outcome
                                 price = if (request.orderType == "LIMIT") sellPrice.toString() else "MARKET",
@@ -1075,7 +1075,6 @@ class AccountService(
                         }
                         
                         val marketTitle = marketInfo?.question ?: request.marketId
-                        val marketSlug = marketInfo?.slug
                         
                         // 获取当前语言设置（从 LocaleContextHolder）
                         val locale = try {
@@ -1090,7 +1089,7 @@ class AccountService(
                         telegramNotificationService?.sendOrderFailureNotification(
                             marketTitle = marketTitle,
                             marketId = request.marketId,
-                            marketSlug = marketSlug,
+                            marketSlug = marketInfo.getEventSlug(),  // 跳转用的 slug
                             side = request.side,
                             outcome = null,  // 失败时可能没有 outcome
                             price = if (request.orderType == "LIMIT") sellPrice.toString() else "MARKET",

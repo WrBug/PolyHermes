@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { Card, Table, Button, Space, Tag, Popconfirm, Switch, message, Select, Dropdown, Divider, Spin } from 'antd'
 import { PlusOutlined, DeleteOutlined, BarChartOutlined, UnorderedListOutlined, ArrowUpOutlined, ArrowDownOutlined, EditOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
@@ -13,12 +12,12 @@ import CopyTradingOrdersModal from './CopyTradingOrders/index'
 import StatisticsModal from './CopyTradingOrders/StatisticsModal'
 import FilteredOrdersModal from './CopyTradingOrders/FilteredOrdersModal'
 import EditModal from './CopyTradingOrders/EditModal'
+import AddModal from './CopyTradingOrders/AddModal'
 
 const { Option } = Select
 
 const CopyTradingList: React.FC = () => {
   const { t } = useTranslation()
-  const navigate = useNavigate()
   const isMobile = useMediaQuery({ maxWidth: 768 })
   const { accounts, fetchAccounts } = useAccountStore()
   const [copyTradings, setCopyTradings] = useState<CopyTrading[]>([])
@@ -42,6 +41,7 @@ const CopyTradingList: React.FC = () => {
   const [filteredOrdersModalCopyTradingId, setFilteredOrdersModalCopyTradingId] = useState<string>('')
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [editModalCopyTradingId, setEditModalCopyTradingId] = useState<string>('')
+  const [addModalOpen, setAddModalOpen] = useState(false)
   
   useEffect(() => {
     fetchAccounts()
@@ -369,7 +369,7 @@ const CopyTradingList: React.FC = () => {
           <Button
             type="primary"
             icon={<PlusOutlined />}
-            onClick={() => navigate('/copy-trading/add')}
+            onClick={() => setAddModalOpen(true)}
           >
             {t('copyTradingList.addCopyTrading') || '新增跟单'}
           </Button>
@@ -664,6 +664,13 @@ const CopyTradingList: React.FC = () => {
         open={editModalOpen}
         onClose={() => setEditModalOpen(false)}
         copyTradingId={editModalCopyTradingId}
+        onSuccess={() => {
+          fetchCopyTradings()
+        }}
+      />
+      <AddModal
+        open={addModalOpen}
+        onClose={() => setAddModalOpen(false)}
         onSuccess={() => {
           fetchCopyTradings()
         }}

@@ -582,9 +582,9 @@ const PositionList: React.FC = () => {
                     )}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       {position.marketTitle ? (
-                        position.marketSlug ? (
+                        (position.eventSlug || position.marketSlug) ? (
                           <a 
-                            href={`https://polymarket.com/event/${position.marketSlug}`}
+                            href={`https://polymarket.com/event/${position.eventSlug || position.marketSlug}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
@@ -838,8 +838,8 @@ const PositionList: React.FC = () => {
       dataIndex: 'marketTitle',
       key: 'marketTitle',
       render: (text: string | undefined, record: AccountPosition) => {
-        const url = record.marketSlug 
-          ? `https://polymarket.com/event/${record.marketSlug}`
+        const url = record.eventSlug || record.marketSlug
+          ? `https://polymarket.com/event/${record.eventSlug || record.marketSlug}`
           : null
         
         const handleTitleClick = (e: React.MouseEvent) => {

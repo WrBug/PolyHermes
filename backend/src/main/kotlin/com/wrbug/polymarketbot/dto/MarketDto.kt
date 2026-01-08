@@ -25,7 +25,8 @@ data class MarketDto(
     val liquidityNum: Double?,
     val bestBid: Double?,
     val bestAsk: Double?,
-    val lastTradePrice: Double?
+    val lastTradePrice: Double?,
+    val events: List<MarketDto>? = null  // 事件列表（从 events[0] 获取 slug）
 )
 
 /**
@@ -37,9 +38,9 @@ data class OutcomeDto(
 )
 
 /**
- * 事件 DTO
+ * 事件 DTO（用于其他 API 调用）
  */
-data class EventDto(
+data class EventListDto(
     val id: String,
     val title: String,
     val category: String,
@@ -55,7 +56,7 @@ data class SeriesDto(
     val id: String,
     val title: String,
     val category: String,
-    val events: List<EventDto>?,
+    val events: List<EventListDto>?,
     val createdAt: Long?  // 时间戳（毫秒）
 )
 
@@ -70,4 +71,3 @@ data class CommentDto(
     val createdAt: Long,  // 时间戳（毫秒）
     val user: String?
 )
-

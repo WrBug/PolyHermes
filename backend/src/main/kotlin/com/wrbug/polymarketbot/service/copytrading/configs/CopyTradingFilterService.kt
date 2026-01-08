@@ -6,6 +6,7 @@ import com.wrbug.polymarketbot.util.gt
 import com.wrbug.polymarketbot.util.lt
 import com.wrbug.polymarketbot.util.multi
 import com.wrbug.polymarketbot.util.toSafeBigDecimal
+import com.wrbug.polymarketbot.util.JsonUtils
 import org.slf4j.LoggerFactory
 import com.wrbug.polymarketbot.service.common.PolymarketClobService
 import com.wrbug.polymarketbot.service.accounts.AccountService
@@ -20,7 +21,8 @@ import java.math.BigDecimal
 class CopyTradingFilterService(
     private val clobService: PolymarketClobService,
     private val accountService: AccountService,
-    private val copyOrderTrackingRepository: CopyOrderTrackingRepository
+    private val copyOrderTrackingRepository: CopyOrderTrackingRepository,
+    private val jsonUtils: JsonUtils
 ) {
     
     private val logger = LoggerFactory.getLogger(CopyTradingFilterService::class.java)
@@ -32,6 +34,7 @@ class CopyTradingFilterService(
      * @param tradePrice Leader 交易价格，用于价格区间检查
      * @param copyOrderAmount 跟单金额（USDC），用于仓位检查，如果为null则不进行仓位检查
      * @param marketId 市场ID，用于仓位检查（按市场过滤仓位）
+     * @param marketTitle 市场标题，用于关键字过滤
      * @return 过滤结果
      */
     suspend fun checkFilters(
@@ -39,9 +42,18 @@ class CopyTradingFilterService(
         tokenId: String,
         tradePrice: BigDecimal? = null,  // Leader 交易价格，用于价格区间检查
         copyOrderAmount: BigDecimal? = null,  // 跟单金额（USDC），用于仓位检查
-        marketId: String? = null  // 市场ID，用于仓位检查（按市场过滤仓位）
+        marketId: String? = null,  // 市场ID，用于仓位检查（按市场过滤仓位）
+        marketTitle: String? = null  // 市场标题，用于关键字过滤
     ): FilterResult {
-        // 1. 价格区间检查（如果配置了价格区间）
+        // 1. 关键字过滤检查（如果配置了关键字过滤）
+        if (copyTrading.keywordFilterMode != null && copyTrading.keywordFilterMode != "DISABLED") {
+            val keywordCheck = checkKeywordFilter(copyTrading, marketTitle)
+            if (!keywordCheck.isPassed) {
+                return keywordCheck
+            }
+        }
+        
+        // 2. 价格区间检查（如果配置了价格区间）
         if (tradePrice != null) {
             val priceRangeCheck = checkPriceRange(copyTrading, tradePrice)
             if (!priceRangeCheck.isPassed) {
@@ -49,7 +61,7 @@ class CopyTradingFilterService(
             }
         }
         
-        // 2. 检查是否需要获取订单簿
+        // 3. 检查是否需要获取订单簿
         // 只有在配置了需要订单簿的过滤条件时才获取
         val needOrderbook = copyTrading.maxSpread != null || copyTrading.minOrderDepth != null
         
@@ -58,7 +70,7 @@ class CopyTradingFilterService(
             return FilterResult.passed()
         }
         
-        // 3. 获取订单簿（仅在需要时，只请求一次）
+        // 4. 获取订单簿（仅在需要时，只请求一次）
         val orderbookResult = clobService.getOrderbookByTokenId(tokenId)
         if (!orderbookResult.isSuccess) {
             val error = orderbookResult.exceptionOrNull()
@@ -68,7 +80,7 @@ class CopyTradingFilterService(
         val orderbook = orderbookResult.getOrNull()
             ?: return FilterResult.orderbookEmpty()
         
-        // 4. 买一卖一价差过滤（如果配置了）
+        // 5. 买一卖一价差过滤（如果配置了）
         if (copyTrading.maxSpread != null) {
             val spreadCheck = checkSpread(copyTrading, orderbook)
             if (!spreadCheck.isPassed) {
@@ -76,7 +88,7 @@ class CopyTradingFilterService(
             }
         }
         
-        // 5. 订单深度过滤（如果配置了，检查所有方向）
+        // 6. 订单深度过滤（如果配置了，检查所有方向）
         if (copyTrading.minOrderDepth != null) {
             val depthCheck = checkOrderDepth(copyTrading, orderbook)
             if (!depthCheck.isPassed) {
@@ -84,7 +96,7 @@ class CopyTradingFilterService(
             }
         }
         
-        // 6. 仓位检查（如果配置了最大仓位限制且提供了跟单金额和市场ID）
+        // 7. 仓位检查（如果配置了最大仓位限制且提供了跟单金额和市场ID）
         if (copyOrderAmount != null && marketId != null) {
             val positionCheck = checkPositionLimits(copyTrading, copyOrderAmount, marketId)
             if (!positionCheck.isPassed) {
@@ -93,6 +105,65 @@ class CopyTradingFilterService(
         }
         
         return FilterResult.passed(orderbook)
+    }
+    
+    /**
+     * 检查关键字过滤
+     * @param copyTrading 跟单配置
+     * @param marketTitle 市场标题
+     * @return 过滤结果
+     */
+    private fun checkKeywordFilter(
+        copyTrading: CopyTrading,
+        marketTitle: String?
+    ): FilterResult {
+        // 如果未启用关键字过滤，直接通过
+        if (copyTrading.keywordFilterMode == null || copyTrading.keywordFilterMode == "DISABLED") {
+            return FilterResult.passed()
+        }
+        
+        // 如果没有市场标题，无法进行关键字过滤，为了安全起见，不通过
+        if (marketTitle.isNullOrBlank()) {
+            return FilterResult.keywordFilterFailed("市场标题为空，无法进行关键字过滤")
+        }
+        
+        // 解析关键字列表
+        val keywords = jsonUtils.parseStringArray(copyTrading.keywords)
+        if (keywords.isEmpty()) {
+            // 如果关键字列表为空，白名单模式不通过，黑名单模式通过
+            return if (copyTrading.keywordFilterMode == "WHITELIST") {
+                FilterResult.keywordFilterFailed("白名单模式但关键字列表为空")
+            } else {
+                FilterResult.passed()
+            }
+        }
+        
+        // 将市场标题转换为小写，用于不区分大小写的匹配
+        val titleLower = marketTitle.lowercase()
+        
+        // 检查市场标题是否包含任意关键字
+        val containsKeyword = keywords.any { keyword ->
+            titleLower.contains(keyword.lowercase())
+        }
+        
+        // 根据过滤模式决定是否通过
+        return when (copyTrading.keywordFilterMode) {
+            "WHITELIST" -> {
+                if (containsKeyword) {
+                    FilterResult.passed()
+                } else {
+                    FilterResult.keywordFilterFailed("白名单模式：市场标题不包含任何关键字。市场标题：$marketTitle，关键字列表：${keywords.joinToString(", ")}")
+                }
+            }
+            "BLACKLIST" -> {
+                if (containsKeyword) {
+                    FilterResult.keywordFilterFailed("黑名单模式：市场标题包含关键字。市场标题：$marketTitle，匹配的关键字：${keywords.filter { titleLower.contains(it.lowercase()) }.joinToString(", ")}")
+                } else {
+                    FilterResult.passed()
+                }
+            }
+            else -> FilterResult.passed()
+        }
     }
     
     /**

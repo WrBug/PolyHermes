@@ -173,7 +173,7 @@ const BuyOrdersTab: React.FC<BuyOrdersTabProps> = ({ copyTradingId, active = fal
       key: 'marketId',
       width: isMobile ? 120 : 200,
       render: (text: string, record: BuyOrderInfo) => {
-        const marketUrl = getPolymarketUrl(record.marketSlug, record.marketCategory, record.marketId)
+        const marketUrl = getPolymarketUrl(record.marketSlug, record.eventSlug, record.marketCategory, record.marketId)
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
             {record.marketTitle ? (
@@ -307,7 +307,7 @@ const BuyOrdersTab: React.FC<BuyOrdersTabProps> = ({ copyTradingId, active = fal
         {groupedOrders.map((group) => {
           const isExpanded = expandedMarkets.has(group.marketId)
           const marketDisplayName = group.marketTitle || group.marketId.slice(0, 8) + '...' + group.marketId.slice(-6)
-          const marketUrl = getPolymarketUrl(group.marketSlug, group.marketCategory, group.marketId)
+          const marketUrl = getPolymarketUrl(group.marketSlug, group.eventSlug, group.marketCategory, group.marketId)
           const orders = group.orders as BuyOrderInfo[]
 
           return (
@@ -564,7 +564,7 @@ const BuyOrdersTab: React.FC<BuyOrdersTabProps> = ({ copyTradingId, active = fal
                       <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>{t('copyTradingOrders.market') || '市场'}</div>
                       {order.marketTitle ? (
                         (() => {
-                          const marketUrl = getPolymarketUrl(order.marketSlug, order.marketCategory, order.marketId)
+                          const marketUrl = getPolymarketUrl(order.marketSlug, order.eventSlug, order.marketCategory, order.marketId)
                           return marketUrl ? (
                             <a
                               href={marketUrl}
@@ -717,7 +717,7 @@ const BuyOrdersTab: React.FC<BuyOrdersTabProps> = ({ copyTradingId, active = fal
                 {t('common.previous') || '上一页'}
               </Button>
               <span style={{ margin: '0 16px' }}>
-                {t('common.page') || '第'} {page} / {Math.ceil(groupedTotal / limit)} {t('common.page') || '页'}
+                {t('common.pageOf') || '第'} {page} / {Math.ceil(groupedTotal / limit)} {t('common.page') || '页'}
               </span>
               <Button
                 onClick={() => {

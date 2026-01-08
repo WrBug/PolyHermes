@@ -5,6 +5,7 @@ import com.wrbug.polymarketbot.api.PolymarketGammaApi
 import com.wrbug.polymarketbot.entity.Market
 import com.wrbug.polymarketbot.repository.MarketRepository
 import com.wrbug.polymarketbot.util.RetrofitFactory
+import com.wrbug.polymarketbot.util.getEventSlug
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -151,11 +152,17 @@ class MarketService(
         return try {
             val existingMarket = marketRepository.findByMarketId(marketId)
             
+            // 保存原来的 slug（用于显示）
+            val slug = marketResponse.slug
+            // 保存跳转用的 slug（从 events[0].slug 获取）
+            val eventSlug = marketResponse.getEventSlug()
+            
             val market = if (existingMarket != null) {
                 // 更新现有市场信息
                 existingMarket.copy(
                     title = marketResponse.question ?: existingMarket.title,
-                    slug = marketResponse.slug ?: existingMarket.slug,
+                    slug = slug ?: existingMarket.slug,
+                    eventSlug = eventSlug ?: existingMarket.eventSlug,
                     category = marketResponse.category ?: existingMarket.category,
                     icon = marketResponse.icon ?: existingMarket.icon,
                     image = marketResponse.image ?: existingMarket.image,
@@ -170,14 +177,17 @@ class MarketService(
                 Market(
                     marketId = marketId,
                     title = marketResponse.question ?: marketId,
-                    slug = marketResponse.slug,
+                    slug = slug,
+                    eventSlug = eventSlug,
                     category = marketResponse.category,
                     icon = marketResponse.icon,
                     image = marketResponse.image,
                     description = marketResponse.description,
                     active = marketResponse.active ?: true,
                     closed = marketResponse.closed ?: false,
-                    archived = marketResponse.archived ?: false
+                    archived = marketResponse.archived ?: false,
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
                 )
             }
             

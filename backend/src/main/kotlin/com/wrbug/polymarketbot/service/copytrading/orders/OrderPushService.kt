@@ -3,6 +3,7 @@ package com.wrbug.polymarketbot.service.copytrading.orders
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.wrbug.polymarketbot.api.MarketResponse
 import com.wrbug.polymarketbot.dto.OrderDetailDto
+import com.wrbug.polymarketbot.util.getEventSlug
 import com.wrbug.polymarketbot.dto.OrderMessageDto
 import com.wrbug.polymarketbot.dto.OrderPushMessage
 import com.wrbug.polymarketbot.entity.Account
@@ -437,7 +438,7 @@ class OrderPushService(
                         status = openOrder.status,
                         createdAt = openOrder.createdAt.toString(),  // unix timestamp 转换为字符串
                         marketName = marketInfo?.question,
-                        marketSlug = marketInfo?.slug,
+                        marketSlug = marketInfo?.slug,  // 显示用的 slug
                         marketIcon = marketInfo?.icon
                     )
                 },

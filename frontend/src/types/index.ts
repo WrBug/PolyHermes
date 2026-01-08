@@ -210,6 +210,9 @@ export interface CopyTrading {
   // 最大仓位配置
   maxPositionValue?: string  // 最大仓位金额（USDC），NULL表示不启用
   maxPositionCount?: number  // 最大仓位数量，NULL表示不启用
+  // 关键字过滤配置
+  keywordFilterMode?: 'DISABLED' | 'WHITELIST' | 'BLACKLIST'  // 关键字过滤模式
+  keywords?: string[]  // 关键字列表，当keywordFilterMode为DISABLED时为null
   // 新增配置字段
   configName?: string  // 配置名（可选，但提供时必须非空）
   pushFailedOrders: boolean  // 推送失败订单（默认关闭）
@@ -256,6 +259,9 @@ export interface CopyTradingCreateRequest {
   // 最大仓位配置
   maxPositionValue?: string  // 最大仓位金额（USDC），NULL表示不启用
   maxPositionCount?: number  // 最大仓位数量，NULL表示不启用
+  // 关键字过滤配置
+  keywordFilterMode?: 'DISABLED' | 'WHITELIST' | 'BLACKLIST'  // 关键字过滤模式
+  keywords?: string[]  // 关键字列表，当keywordFilterMode为DISABLED时为null
   // 新增配置字段
   configName?: string  // 配置名（可选，但提供时必须非空）
   pushFailedOrders?: boolean  // 推送失败订单（可选）
@@ -290,6 +296,9 @@ export interface CopyTradingUpdateRequest {
   // 最大仓位配置
   maxPositionValue?: string  // 最大仓位金额（USDC），NULL表示不启用
   maxPositionCount?: number  // 最大仓位数量，NULL表示不启用
+  // 关键字过滤配置
+  keywordFilterMode?: 'DISABLED' | 'WHITELIST' | 'BLACKLIST'  // 关键字过滤模式
+  keywords?: string[]  // 关键字列表，当keywordFilterMode为DISABLED时为null
   // 新增配置字段
   configName?: string  // 配置名（可选，但提供时必须非空）
   pushFailedOrders?: boolean  // 推送失败订单（可选）
@@ -372,7 +381,8 @@ export interface AccountPosition {
   proxyAddress: string
   marketId: string
   marketTitle?: string
-  marketSlug?: string
+  marketSlug?: string  // 显示用的 slug
+  eventSlug?: string  // 跳转用的 slug（从 events[0].slug 获取）
   marketIcon?: string  // 市场图标 URL
   side: string  // 结果名称（如 "YES", "NO", "Pakistan" 等）
   outcomeIndex?: number  // 结果索引（0, 1, 2...），用于计算 tokenId
@@ -628,7 +638,8 @@ export interface BuyOrderInfo {
   leaderTradeId: string
   marketId: string
   marketTitle?: string  // 市场名称
-  marketSlug?: string  // 市场 slug（用于构建 URL）
+  marketSlug?: string  // 市场 slug（用于显示）
+  eventSlug?: string  // 跳转用的 slug（从 events[0].slug 获取）
   marketCategory?: string  // 市场分类（sports, crypto 等）
   side: string
   quantity: string
@@ -648,7 +659,8 @@ export interface SellOrderInfo {
   leaderTradeId: string
   marketId: string
   marketTitle?: string  // 市场名称
-  marketSlug?: string  // 市场 slug（用于构建 URL）
+  marketSlug?: string  // 市场 slug（用于显示）
+  eventSlug?: string  // 跳转用的 slug（从 events[0].slug 获取）
   marketCategory?: string  // 市场分类（sports, crypto 等）
   side: string
   quantity: string
@@ -666,7 +678,8 @@ export interface MatchedOrderInfo {
   buyOrderId: string
   marketId?: string  // 市场ID
   marketTitle?: string  // 市场名称
-  marketSlug?: string  // 市场 slug（用于构建 URL）
+  marketSlug?: string  // 市场 slug（用于显示）
+  eventSlug?: string  // 跳转用的 slug（从 events[0].slug 获取）
   marketCategory?: string  // 市场分类（sports, crypto 等）
   matchedQuantity: string
   buyPrice: string
@@ -729,7 +742,8 @@ export interface MarketOrderStats {
 export interface MarketOrderGroup {
   marketId: string
   marketTitle?: string
-  marketSlug?: string
+  marketSlug?: string  // 显示用的 slug
+  eventSlug?: string  // 跳转用的 slug（从 events[0].slug 获取）
   marketCategory?: string
   stats: MarketOrderStats
   orders: BuyOrderInfo[] | SellOrderInfo[]  // 订单列表

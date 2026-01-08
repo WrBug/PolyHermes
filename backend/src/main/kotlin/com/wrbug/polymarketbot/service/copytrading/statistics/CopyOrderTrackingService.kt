@@ -7,6 +7,7 @@ import com.wrbug.polymarketbot.entity.*
 import com.wrbug.polymarketbot.repository.*
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.*
+import com.wrbug.polymarketbot.util.getEventSlug
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -264,16 +265,32 @@ open class CopyOrderTrackingService(
                     // 计算跟单金额（USDC）= 买入数量 × 价格
                     val copyOrderAmount = buyQuantity.multi(tradePrice)
 
+                    // 如果启用了关键字过滤，需要先获取市场标题
+                    var marketTitle: String? = null
+                    if (copyTrading.keywordFilterMode != null && copyTrading.keywordFilterMode != "DISABLED") {
+                        try {
+                            val gammaApi = retrofitFactory.createGammaApi()
+                            val marketResponse = gammaApi.listMarkets(conditionIds = listOf(trade.market))
+                            if (marketResponse.isSuccessful && marketResponse.body() != null) {
+                                marketTitle = marketResponse.body()!!.firstOrNull()?.question
+                            }
+                        } catch (e: Exception) {
+                            logger.warn("获取市场标题失败（关键字过滤需要）: ${e.message}", e)
+                        }
+                    }
+
                     // 过滤条件检查（在计算订单参数之前）
                     // 传入 Leader 交易价格，用于价格区间检查
                     // 传入跟单金额和市场ID，用于仓位检查（按市场检查仓位）
+                    // 传入市场标题，用于关键字过滤
                     // 订单簿只请求一次，返回给后续逻辑使用
                     val filterResult = filterService.checkFilters(
                         copyTrading,
                         tokenId,
                         tradePrice = tradePrice,
                         copyOrderAmount = copyOrderAmount,
-                        marketId = trade.market
+                        marketId = trade.market,
+                        marketTitle = marketTitle
                     )
                     val orderbook = filterResult.orderbook  // 获取订单簿（如果需要）
                     if (!filterResult.isPassed) {
@@ -299,7 +316,7 @@ open class CopyOrderTrackingService(
                                 }
 
                                 val marketTitle = marketInfo?.question ?: trade.market
-                                val marketSlug = marketInfo?.slug
+                                val marketSlug = marketInfo?.slug  // 显示用的 slug
 
                                 // 从过滤结果中提取 filterType
                                 val filterType = extractFilterType(filterResult.status, filterResult.reason)
@@ -348,7 +365,7 @@ open class CopyOrderTrackingService(
                                 telegramNotificationService?.sendOrderFilteredNotification(
                                     marketTitle = marketTitle,
                                     marketId = trade.market,
-                                    marketSlug = marketSlug,
+                                    marketSlug = marketInfo.getEventSlug(),  // 跳转用的 slug
                                     side = "BUY",
                                     outcome = trade.outcome,
                                     price = trade.price,
@@ -571,7 +588,6 @@ open class CopyOrderTrackingService(
                                     }
 
                                     val marketTitle = marketInfo?.question ?: trade.market
-                                    val marketSlug = marketInfo?.slug
 
                                     // 获取当前语言设置（从 LocaleContextHolder）
                                     val locale = try {
@@ -583,7 +599,7 @@ open class CopyOrderTrackingService(
                                     telegramNotificationService?.sendOrderFailureNotification(
                                         marketTitle = marketTitle,
                                         marketId = trade.market,
-                                        marketSlug = marketSlug,
+                                        marketSlug = marketInfo.getEventSlug(),  // 跳转用的 slug
                                         side = "BUY",
                                         outcome = null,  // 失败时可能没有 outcome
                                         price = buyPrice.toString(),
@@ -1416,6 +1432,7 @@ open class CopyOrderTrackingService(
             FilterStatus.FAILED_ORDER_DEPTH -> "ORDER_DEPTH"
             FilterStatus.FAILED_MAX_POSITION_VALUE -> "MAX_POSITION_VALUE"
             FilterStatus.FAILED_MAX_POSITION_COUNT -> "MAX_POSITION_COUNT"
+            FilterStatus.FAILED_KEYWORD_FILTER -> "KEYWORD_FILTER"
         }
     }
 

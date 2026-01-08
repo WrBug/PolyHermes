@@ -23,8 +23,6 @@ import TemplateList from './pages/TemplateList'
 import TemplateAdd from './pages/TemplateAdd'
 import TemplateEdit from './pages/TemplateEdit'
 import CopyTradingList from './pages/CopyTradingList'
-import CopyTradingAdd from './pages/CopyTradingAdd'
-import CopyTradingEdit from './pages/CopyTradingEdit'
 import CopyTradingStatistics from './pages/CopyTradingStatistics'
 import CopyTradingBuyOrders from './pages/CopyTradingBuyOrders'
 import CopyTradingSellOrders from './pages/CopyTradingSellOrders'
@@ -250,8 +248,6 @@ function App() {
           <Route path="/templates/add" element={<ProtectedRoute><TemplateAdd /></ProtectedRoute>} />
           <Route path="/templates/edit/:id" element={<ProtectedRoute><TemplateEdit /></ProtectedRoute>} />
           <Route path="/copy-trading" element={<ProtectedRoute><CopyTradingList /></ProtectedRoute>} />
-          <Route path="/copy-trading/add" element={<ProtectedRoute><CopyTradingAdd /></ProtectedRoute>} />
-          <Route path="/copy-trading/edit/:id" element={<ProtectedRoute><CopyTradingEdit /></ProtectedRoute>} />
           <Route path="/copy-trading/statistics/:copyTradingId" element={<ProtectedRoute><CopyTradingStatistics /></ProtectedRoute>} />
           {/* 保留旧路由以保持向后兼容 */}
           <Route path="/copy-trading/orders/buy/:copyTradingId" element={<ProtectedRoute><CopyTradingBuyOrders /></ProtectedRoute>} />

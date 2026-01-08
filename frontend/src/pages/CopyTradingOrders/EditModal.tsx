@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Modal, Form, Button, message, Radio, InputNumber, Divider, Spin, Select, Input, Space, Switch } from 'antd'
+import React, { useEffect, useState, useRef } from 'react'
+import { Modal, Form, Button, message, Radio, InputNumber, Divider, Spin, Select, Input, Space, Switch, Tag, InputRef } from 'antd'
 import { SaveOutlined } from '@ant-design/icons'
 import { apiService } from '../../services/api'
 import type { CopyTrading, CopyTradingUpdateRequest } from '../../types'
@@ -27,6 +27,8 @@ const EditModal: React.FC<EditModalProps> = ({
   const [copyTrading, setCopyTrading] = useState<CopyTrading | null>(null)
   const [copyMode, setCopyMode] = useState<'RATIO' | 'FIXED'>('RATIO')
   const [originalEnabled, setOriginalEnabled] = useState<boolean>(true)
+  const [keywords, setKeywords] = useState<string[]>([])
+  const keywordInputRef = useRef<InputRef>(null)
   
   useEffect(() => {
     if (open && copyTradingId) {
@@ -67,9 +69,12 @@ const EditModal: React.FC<EditModalProps> = ({
             maxPrice: found.maxPrice ? parseFloat(found.maxPrice) : undefined,
             maxPositionValue: found.maxPositionValue ? parseFloat(found.maxPositionValue) : undefined,
             maxPositionCount: found.maxPositionCount,
+            keywordFilterMode: found.keywordFilterMode || 'DISABLED',
             configName: found.configName || '',
             pushFailedOrders: found.pushFailedOrders ?? false
           })
+          // 设置关键字列表
+          setKeywords(found.keywords || [])
         } else {
           message.error(t('copyTradingEdit.fetchFailed') || '跟单配置不存在')
           onClose()
@@ -88,6 +93,40 @@ const EditModal: React.FC<EditModalProps> = ({
   
   const handleCopyModeChange = (mode: 'RATIO' | 'FIXED') => {
     setCopyMode(mode)
+  }
+  
+  // 添加关键字
+  const handleAddKeyword = (e?: React.KeyboardEvent<HTMLInputElement>) => {
+    let inputValue = ''
+    
+    if (e) {
+      const target = e.target as HTMLInputElement
+      inputValue = target.value.trim()
+    } else if (keywordInputRef.current) {
+      inputValue = keywordInputRef.current.input?.value?.trim() || ''
+    }
+    
+    if (!inputValue) {
+      return
+    }
+    
+    if (keywords.includes(inputValue)) {
+      message.warning(t('copyTradingEdit.keywordExists') || t('copyTradingAdd.keywordExists') || '关键字已存在')
+      return
+    }
+    
+    const newKeywords = [...keywords, inputValue]
+    setKeywords(newKeywords)
+    
+    if (keywordInputRef.current) {
+      keywordInputRef.current.input!.value = ''
+    }
+  }
+  
+  // 删除关键字
+  const handleRemoveKeyword = (index: number) => {
+    const newKeywords = keywords.filter((_, i) => i !== index)
+    setKeywords(newKeywords)
   }
   
   const handleSubmit = async (values: any) => {
@@ -133,6 +172,10 @@ const EditModal: React.FC<EditModalProps> = ({
         maxPrice: values.maxPrice?.toString(),
         maxPositionValue: values.maxPositionValue?.toString(),
         maxPositionCount: values.maxPositionCount,
+        keywordFilterMode: values.keywordFilterMode || 'DISABLED',
+        keywords: (values.keywordFilterMode === 'WHITELIST' || values.keywordFilterMode === 'BLACKLIST') 
+          ? keywords 
+          : undefined,
         configName: values.configName?.trim() || undefined,
         pushFailedOrders: values.pushFailedOrders
       }
@@ -178,6 +221,9 @@ const EditModal: React.FC<EditModalProps> = ({
           form={form}
           layout="vertical"
           onFinish={handleSubmit}
+          initialValues={{
+            keywordFilterMode: 'DISABLED'
+          }}
         >
           <Form.Item
             label={t('copyTradingEdit.configName') || '配置名'}
@@ -565,6 +611,76 @@ const EditModal: React.FC<EditModalProps> = ({
               style={{ width: '100%' }}
               placeholder={t('copyTradingEdit.maxPositionCountPlaceholder') || '例如：10（可选，不填写表示不启用）'}
             />
+          </Form.Item>
+          
+          {/* 关键字过滤 */}
+          <Divider>{t('copyTradingEdit.keywordFilter') || t('copyTradingAdd.keywordFilter') || '关键字过滤'}</Divider>
+          
+          <Form.Item
+            label={t('copyTradingEdit.keywordFilterMode') || t('copyTradingAdd.keywordFilterMode') || '过滤模式'}
+            name="keywordFilterMode"
+            tooltip={t('copyTradingEdit.keywordFilterModeTooltip') || t('copyTradingAdd.keywordFilterModeTooltip') || '选择关键字过滤模式。白名单：只跟单包含关键字的市场；黑名单：不跟单包含关键字的市场；不启用：不进行关键字过滤'}
+          >
+            <Radio.Group>
+              <Radio value="DISABLED">{t('copyTradingEdit.disabled') || t('copyTradingAdd.disabled') || '不启用'}</Radio>
+              <Radio value="WHITELIST">{t('copyTradingEdit.whitelist') || t('copyTradingAdd.whitelist') || '白名单'}</Radio>
+              <Radio value="BLACKLIST">{t('copyTradingEdit.blacklist') || t('copyTradingAdd.blacklist') || '黑名单'}</Radio>
+            </Radio.Group>
+          </Form.Item>
+          
+          <Form.Item noStyle shouldUpdate={(prevValues, currentValues) => 
+            prevValues.keywordFilterMode !== currentValues.keywordFilterMode
+          }>
+            {({ getFieldValue }) => {
+              const filterMode = getFieldValue('keywordFilterMode')
+              if (filterMode !== 'WHITELIST' && filterMode !== 'BLACKLIST') {
+                return null
+              }
+              
+              return (
+                <>
+                  <Form.Item label={t('copyTradingEdit.keywords') || t('copyTradingAdd.keywords') || '关键字'}>
+                    <Space.Compact style={{ width: '100%' }}>
+                      <Input
+                        ref={keywordInputRef}
+                        placeholder={t('copyTradingEdit.keywordPlaceholder') || t('copyTradingAdd.keywordPlaceholder') || '输入关键字，按回车添加'}
+                        onPressEnter={(e) => handleAddKeyword(e)}
+                      />
+                      <Button 
+                        type="primary" 
+                        onClick={() => handleAddKeyword()}
+                      >
+                        {t('common.add') || '添加'}
+                      </Button>
+                    </Space.Compact>
+                    
+                    {keywords.length > 0 && (
+                      <div style={{ marginTop: 8 }}>
+                        <Space wrap>
+                          {keywords.map((keyword, index) => (
+                            <Tag
+                              key={index}
+                              closable
+                              onClose={() => handleRemoveKeyword(index)}
+                              color={filterMode === 'WHITELIST' ? 'green' : 'red'}
+                            >
+                              {keyword}
+                            </Tag>
+                          ))}
+                        </Space>
+                      </div>
+                    )}
+                    
+                    <div style={{ marginTop: 8, fontSize: 12, color: '#999' }}>
+                      {filterMode === 'WHITELIST' 
+                        ? (t('copyTradingEdit.whitelistTooltip') || t('copyTradingAdd.whitelistTooltip') || '💡 白名单模式：只跟单包含上述任意关键字的市场标题')
+                        : (t('copyTradingEdit.blacklistTooltip') || t('copyTradingAdd.blacklistTooltip') || '💡 黑名单模式：不跟单包含上述任意关键字的市场标题')
+                      }
+                    </div>
+                  </Form.Item>
+                </>
+              )
+            }}
           </Form.Item>
           
           <Divider>{t('copyTradingEdit.advancedSettings') || '高级设置'}</Divider>

@@ -8,6 +8,7 @@ import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.CryptoUtils
 import com.wrbug.polymarketbot.util.toSafeBigDecimal
 import com.wrbug.polymarketbot.util.multi
+import com.wrbug.polymarketbot.util.getEventSlug
 import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.event.ApplicationReadyEvent
@@ -730,7 +731,6 @@ class OrderStatusUpdateService(
             }
             
             val marketTitle = marketInfo?.question ?: order.marketId
-            val marketSlug = marketInfo?.slug
             
             // 获取 Leader 和跟单配置信息
             val leader = leaderRepository.findById(order.leaderId).orElse(null)
@@ -761,7 +761,7 @@ class OrderStatusUpdateService(
                 orderId = order.buyOrderId,
                 marketTitle = marketTitle,
                 marketId = order.marketId,
-                marketSlug = marketSlug,
+                marketSlug = marketInfo.getEventSlug(),  // 跳转用的 slug
                 side = "BUY",
                 price = actualPrice ?: order.price.toString(),  // 使用实际价格或临时价格
                 size = actualSize ?: order.quantity.toString(),  // 使用实际数量或临时数量
@@ -835,7 +835,6 @@ class OrderStatusUpdateService(
             }
             
             val marketTitle = marketInfo?.question ?: record.marketId
-            val marketSlug = marketInfo?.slug
             
             // 获取 Leader 和跟单配置信息
             val leader = leaderRepository.findById(finalCopyTrading.leaderId).orElse(null)
@@ -866,7 +865,7 @@ class OrderStatusUpdateService(
                 orderId = record.sellOrderId,
                 marketTitle = marketTitle,
                 marketId = record.marketId,
-                marketSlug = marketSlug,
+                marketSlug = marketInfo.getEventSlug(),  // 跳转用的 slug
                 side = "SELL",
                 price = actualPrice ?: record.sellPrice.toString(),  // 使用实际价格或临时价格
                 size = actualSize ?: record.totalMatchedQuantity.toString(),  // 使用实际数量或临时数量

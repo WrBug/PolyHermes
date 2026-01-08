@@ -125,7 +125,8 @@ data class AccountPositionDto(
     val proxyAddress: String,
     val marketId: String,
     val marketTitle: String?,
-    val marketSlug: String?,
+    val marketSlug: String?,  // 显示用的 slug
+    val eventSlug: String? = null,  // 跳转用的 slug（从 events[0].slug 获取）
     val marketIcon: String?,  // 市场图标 URL
     val side: String,  // 结果名称（如 "YES", "NO", "Pakistan" 等）
     val outcomeIndex: Int? = null,  // 结果索引（0, 1, 2...），用于计算 tokenId

@@ -91,6 +91,13 @@ data class CopyTrading(
     @Column(name = "max_position_count")
     val maxPositionCount: Int? = null,  // 最大仓位数量，NULL表示不启用
     
+    // 关键字过滤配置
+    @Column(name = "keyword_filter_mode", nullable = false, length = 20)
+    val keywordFilterMode: String = "DISABLED",  // 关键字过滤模式：DISABLED（不启用）、WHITELIST（白名单）、BLACKLIST（黑名单）
+    
+    @Column(name = "keywords", columnDefinition = "JSON")
+    val keywords: String? = null,  // 关键字列表（JSON数组），例如：["NBA", "足球", "NBA总决赛"]，当keywordFilterMode为DISABLED时为NULL
+    
     // 新增配置字段
     @Column(name = "config_name", length = 255)
     val configName: String? = null,  // 配置名（可选）

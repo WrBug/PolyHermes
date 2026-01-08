@@ -179,7 +179,8 @@ class CopyTradingStatisticsService(
                 leaderTradeId = order.leaderBuyTradeId,
                 marketId = order.marketId,
                 marketTitle = market?.title,
-                marketSlug = market?.slug,
+                marketSlug = market?.slug,  // 显示用的 slug
+                eventSlug = market?.eventSlug,  // 跳转用的 slug（从数据库读取）
                 marketCategory = market?.category,
                 side = order.side,
                 quantity = order.quantity.toString(),
@@ -234,7 +235,8 @@ class CopyTradingStatisticsService(
                 leaderTradeId = record.leaderSellTradeId,
                 marketId = record.marketId,
                 marketTitle = market?.title,
-                marketSlug = market?.slug,
+                marketSlug = market?.slug,  // 显示用的 slug
+                eventSlug = market?.eventSlug,  // 跳转用的 slug（从数据库读取）
                 marketCategory = market?.category,
                 side = record.side,
                 quantity = record.totalMatchedQuantity.toString(),
@@ -297,7 +299,8 @@ class CopyTradingStatisticsService(
                 buyOrderId = detail.buyOrderId,
                 marketId = matchRecord?.marketId,
                 marketTitle = market?.title,
-                marketSlug = market?.slug,
+                marketSlug = market?.slug,  // 显示用的 slug
+                eventSlug = market?.eventSlug,  // 跳转用的 slug（从数据库读取）
                 marketCategory = market?.category,
                 matchedQuantity = detail.matchedQuantity.toString(),
                 buyPrice = detail.buyPrice.toString(),
@@ -791,7 +794,8 @@ class CopyTradingStatisticsService(
                         leaderTradeId = order.leaderBuyTradeId,
                         marketId = order.marketId,
                         marketTitle = market?.title,
-                        marketSlug = market?.slug,
+                        marketSlug = market?.slug,  // 显示用的 slug
+                        eventSlug = market?.eventSlug,  // 跳转用的 slug（从数据库读取）
                         marketCategory = market?.category,
                         side = order.side,
                         quantity = order.quantity.toString(),
@@ -807,7 +811,8 @@ class CopyTradingStatisticsService(
                 MarketOrderGroup(
                     marketId = marketId,
                     marketTitle = markets[marketId]?.title,
-                    marketSlug = markets[marketId]?.slug,
+                    marketSlug = markets[marketId]?.slug,  // 显示用的 slug
+                    eventSlug = markets[marketId]?.eventSlug,  // 跳转用的 slug（从数据库读取）
                     marketCategory = markets[marketId]?.category,
                     stats = stats,
                     orders = orderDtos as List<Any>
@@ -895,7 +900,8 @@ class CopyTradingStatisticsService(
                         leaderTradeId = record.leaderSellTradeId,
                         marketId = record.marketId,
                         marketTitle = market?.title,
-                        marketSlug = market?.slug,
+                        marketSlug = market?.slug,  // 显示用的 slug
+                        eventSlug = market?.eventSlug,  // 跳转用的 slug（从数据库读取）
                         marketCategory = market?.category,
                         side = record.side,
                         quantity = record.totalMatchedQuantity.toString(),
@@ -909,7 +915,8 @@ class CopyTradingStatisticsService(
                 MarketOrderGroup(
                     marketId = marketId,
                     marketTitle = markets[marketId]?.title,
-                    marketSlug = markets[marketId]?.slug,
+                    marketSlug = markets[marketId]?.slug,  // 显示用的 slug
+                    eventSlug = markets[marketId]?.eventSlug,  // 跳转用的 slug（从数据库读取）
                     marketCategory = markets[marketId]?.category,
                     stats = stats,
                     orders = orderDtos as List<Any>
@@ -938,4 +945,5 @@ class CopyTradingStatisticsService(
             Result.failure(e)
         }
     }
+    
 }
