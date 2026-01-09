@@ -13,7 +13,6 @@ path: backend/**
 
 ## 项目范围
 - **平台**: 仅支持 Polymarket
-- **分类**: 仅支持 `sports` 和 `crypto`
 - **包名**: `com.wrbug.polymarketbot`
 
 ## 实体类规范
@@ -109,6 +108,57 @@ if (total.lt(BigDecimal.ONE)) {
 }
 ```
 
+## JSON 解析规范
+
+### 使用扩展函数（推荐）
+- **优先**使用扩展函数 `fromJson<T>()` 和 `toJson()`，禁止直接使用 `Gson`
+- 扩展函数提供了类型安全的解析，使用方便
+
+```kotlin
+// ✅ 正确：使用扩展函数（推荐）
+val json = "{\"name\":\"test\"}"
+val obj = json.fromJson<MyDataClass>()
+val jsonStr = obj.toJson()
+
+// ✅ 也可以：使用 JsonUtils 类（兼容旧代码）
+val obj = jsonUtils.fromJson<MyDataClass>(json)
+
+// ❌ 错误：直接使用 Gson
+val obj = gson.fromJson(json, MyDataClass::class.java)
+```
+
+### 扩展函数列表
+- `String?.fromJson<T>()` - 解析 JSON 字符串为对象（支持泛型）
+- `JsonElement?.fromJson<T>()` - 解析 JsonElement 为对象（支持泛型）
+- `Any?.toJson()` - 将对象转换为 JSON 字符串
+- `String?.parseStringArray()` - 解析 JSON 字符串数组
+
+### JsonUtils 类
+- `JsonUtils` 主要用于初始化全局 Gson 实例，供扩展函数使用
+- 保留 `parseStringArray()` 方法用于兼容旧代码
+- 不推荐直接使用 `JsonUtils` 的方法，优先使用扩展函数
+
+### Data Class 规范
+- **所有 data class 字段必须提供默认值**
+- 可空字段使用 `? = null`
+- 非空字段提供合适的默认值（空字符串、空集合、默认数值等）
+
+```kotlin
+// ✅ 正确：所有字段都有默认值
+data class MyDto(
+    val name: String = "",
+    val age: Int = 0,
+    val tags: List<String> = emptyList(),
+    val optional: String? = null
+)
+
+// ❌ 错误：缺少默认值
+data class MyDto(
+    val name: String,  // 缺少默认值
+    val age: Int = 0
+)
+```
+
 ## Side 判断规范
 **禁止**使用 "YES"/"NO" 字符串判断 side
 
@@ -165,6 +215,8 @@ return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_EMPTY, messageSource)
 - ❌ 禁止使用 `Double` 进行数值计算
 - ❌ 禁止使用 `LocalDateTime` 存储时间
 - ❌ 禁止实体类 ID 使用非空默认值
+- ❌ 禁止直接使用 `Gson`（必须使用 `JsonUtils`）
+- ❌ 禁止 data class 字段缺少默认值
 
 ### API 接口
 - ❌ 禁止使用 GET/PUT/DELETE（统一使用 POST）

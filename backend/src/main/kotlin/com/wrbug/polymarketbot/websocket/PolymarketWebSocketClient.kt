@@ -139,7 +139,8 @@ class PolymarketWebSocketClient(
     
     /**
      * 启动 PING 保活机制
-     * 根据官方文档，每 10 秒发送一次 "PING"
+     * 根据 @polymarket/real-time-data-client，发送小写 "ping"
+     * 每 10 秒发送一次
      */
     private fun startPing() {
         stopPing()  // 先停止之前的 PING 任务
@@ -149,7 +150,7 @@ class PolymarketWebSocketClient(
                 delay(10000)  // 10 秒
                 if (isConnected) {
                     try {
-                        sendMessage("PING")
+                        sendMessage("ping")  // 使用小写，与官方客户端保持一致
                     } catch (e: Exception) {
                         logger.warn("发送 PING 失败: $sessionId, ${e.message}")
                         break

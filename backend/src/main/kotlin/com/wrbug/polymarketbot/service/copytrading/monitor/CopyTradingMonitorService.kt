@@ -14,7 +14,9 @@ import org.springframework.stereotype.Service
 /**
  * 跟单监听服务（主服务）
  * 管理所有Leader的交易监听
- * 使用链上 WebSocket 监听 Leader 的交易（实时，秒级延迟）
+ * 使用双重监听机制：
+ * 1. Activity WebSocket - 低延迟（< 100ms），优先使用
+ * 2. OnChain WebSocket - 高可靠性（~2-3s），作为兜底
  * 同时监听跟单账户的卖出/赎回事件（通过链上 WebSocket）
  */
 @Service
@@ -22,6 +24,7 @@ class CopyTradingMonitorService(
     private val copyTradingRepository: CopyTradingRepository,
     private val leaderRepository: LeaderRepository,
     private val accountRepository: AccountRepository,
+    private val activityWsService: PolymarketActivityWsService,
     private val onChainWsService: OnChainWsService,
     private val accountOnChainMonitorService: AccountOnChainMonitorService
 ) {
@@ -50,14 +53,17 @@ class CopyTradingMonitorService(
     @PreDestroy
     fun destroy() {
         scope.cancel()
-        // 停止链上 WS 监听
+        // 停止所有监听
+        activityWsService.stop()
         onChainWsService.stop()
         accountOnChainMonitorService.stop()
     }
     
     /**
      * 启动监听
-     * 启动链上 WebSocket 监听 Leader 的交易（实时，秒级延迟）
+     * 启动双重监听机制：
+     * 1. Activity WebSocket - 低延迟（< 100ms），优先使用
+     * 2. OnChain WebSocket - 高可靠性（~2-3s），作为兜底
      * 同时启动跟单账户的链上 WebSocket 监听（用于检测卖出/赎回事件）
      */
     suspend fun startMonitoring() {
@@ -80,10 +86,13 @@ class CopyTradingMonitorService(
             accountRepository.findById(accountId).orElse(null)
         }
         
-        // 4. 启动链上 WebSocket 监听 Leader 的交易（实时，秒级延迟）
+        // 4. 启动 Activity WebSocket 监听（优先，低延迟）
+        activityWsService.start(leaders)
+        
+        // 5. 启动链上 WebSocket 监听（兜底，高可靠性）
         onChainWsService.start(leaders)
         
-        // 5. 启动跟单账户的链上 WebSocket 监听（用于检测卖出/赎回事件）
+        // 6. 启动跟单账户的链上 WebSocket 监听（用于检测卖出/赎回事件）
         accountOnChainMonitorService.start(accounts)
     }
     
@@ -100,7 +109,8 @@ class CopyTradingMonitorService(
             return
         }
         
-        // 添加到链上 WS 监听（如果不在列表中才添加）
+        // 同时添加到两种监听
+        activityWsService.addLeader(leader)
         onChainWsService.addLeader(leader)
     }
     
@@ -115,7 +125,8 @@ class CopyTradingMonitorService(
             return
         }
         
-        // 没有启用的跟单配置了，移除监听
+        // 没有启用的跟单配置了，同时从两种监听移除
+        activityWsService.removeLeader(leaderId)
         onChainWsService.removeLeader(leaderId)
     }
     
@@ -130,6 +141,7 @@ class CopyTradingMonitorService(
         
         if (copyTradings.isNotEmpty()) {
             // 有启用的跟单配置，确保在监听列表中
+            activityWsService.addLeader(leader)
             onChainWsService.addLeader(leader)
             
             // 更新账户监听（添加该配置关联的账户）
@@ -141,7 +153,8 @@ class CopyTradingMonitorService(
                 }
             }
         } else {
-            // 没有启用的跟单配置，移除监听
+            // 没有启用的跟单配置，同时从两种监听移除
+            activityWsService.removeLeader(leaderId)
             onChainWsService.removeLeader(leaderId)
         }
     }
@@ -171,6 +184,7 @@ class CopyTradingMonitorService(
      */
     suspend fun restartMonitoring() {
         // 停止所有监听
+        activityWsService.stop()
         onChainWsService.stop()
         delay(1000)  // 等待1秒
         startMonitoring()

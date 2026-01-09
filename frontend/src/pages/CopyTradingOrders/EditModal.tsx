@@ -731,9 +731,9 @@ const EditModal: React.FC<EditModalProps> = ({
                 style={{ width: '60%' }}
                 placeholder={t('copyTradingEdit.maxMarketEndDatePlaceholder') || '输入时间值（可选）'}
                 parser={(value) => {
-                  if (!value) return ''
+                  if (!value) return 0
                   const num = parseInt(value.replace(/\D/g, ''), 10)
-                  return isNaN(num) ? '' : num.toString()
+                  return isNaN(num) ? 0 : num
                 }}
                 formatter={(value) => {
                   if (!value && value !== 0) return ''

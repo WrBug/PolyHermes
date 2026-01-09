@@ -124,13 +124,14 @@ open class CopyOrderTrackingService(
     suspend fun processTrade(leaderId: Long, trade: TradeResponse, source: String): Result<Unit> {
         // 获取该交易的 Mutex（按交易ID锁定，不同交易可以并行处理）
         val mutex = getMutex(leaderId, trade.id)
-
+        logger.debug("processTrade: ${trade.id}, $source")
         return mutex.withLock {
             try {
                 // 1. 检查是否已处理（去重，包括失败状态）
                 val existingProcessed = processedTradeRepository.findByLeaderIdAndLeaderTradeId(leaderId, trade.id)
 
                 if (existingProcessed != null) {
+                    logger.debug("processTrade: 重复 ${trade.id}, $source")
                     if (existingProcessed.status == "FAILED") {
                         return@withLock Result.success(Unit)
                     }
@@ -269,8 +270,9 @@ open class CopyOrderTrackingService(
                     // 如果启用了关键字过滤或市场截止时间过滤，需要先获取市场信息
                     var marketTitle: String? = null
                     var marketEndDate: Long? = null
-                    val needMarketInfo = copyTrading.keywordFilterMode != "DISABLED" || copyTrading.maxMarketEndDate != null
-                    
+                    val needMarketInfo =
+                        copyTrading.keywordFilterMode != "DISABLED" || copyTrading.maxMarketEndDate != null
+
                     if (needMarketInfo) {
                         try {
                             val market = marketService.getMarket(trade.market)
