@@ -72,6 +72,7 @@ const TemplateList: React.FC = () => {
       maxDailyOrders: template.maxDailyOrders,
       priceTolerance: parseFloat(template.priceTolerance),
       supportSell: template.supportSell,
+      pushFilteredOrders: template.pushFilteredOrders ?? false,
       minOrderDepth: template.minOrderDepth ? parseFloat(template.minOrderDepth) : undefined,
       maxSpread: template.maxSpread ? parseFloat(template.maxSpread) : undefined,
       minPrice: template.minPrice ? parseFloat(template.minPrice) : undefined,
@@ -122,7 +123,8 @@ const TemplateList: React.FC = () => {
         minOrderDepth: values.minOrderDepth?.toString(),
         maxSpread: values.maxSpread?.toString(),
         minPrice: values.minPrice?.toString(),
-        maxPrice: values.maxPrice?.toString()
+        maxPrice: values.maxPrice?.toString(),
+        pushFilteredOrders: values.pushFilteredOrders ?? false
       })
       
       if (response.data.code === 0) {
@@ -626,6 +628,15 @@ const TemplateList: React.FC = () => {
             label="跟单卖出"
             name="supportSell"
             tooltip="是否跟单 Leader 的卖出订单。开启：跟单 Leader 的买入和卖出订单；关闭：只跟单 Leader 的买入订单，忽略卖出订单。"
+            valuePropName="checked"
+          >
+            <Switch />
+          </Form.Item>
+          
+          <Form.Item
+            label={t('templateList.pushFilteredOrders') || '推送已过滤订单'}
+            name="pushFilteredOrders"
+            tooltip={t('templateList.pushFilteredOrdersTooltip') || '开启后，被过滤的订单会推送到 Telegram'}
             valuePropName="checked"
           >
             <Switch />

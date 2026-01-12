@@ -120,7 +120,8 @@ const AddModal: React.FC<AddModalProps> = ({
       minPrice: template.minPrice ? parseFloat(template.minPrice) : undefined,
       maxPrice: template.maxPrice ? parseFloat(template.maxPrice) : undefined,
       maxPositionValue: (template as any).maxPositionValue ? parseFloat((template as any).maxPositionValue) : undefined,
-      maxPositionCount: (template as any).maxPositionCount
+      maxPositionCount: (template as any).maxPositionCount,
+      pushFilteredOrders: template.pushFilteredOrders ?? false
     })
     setCopyMode(template.copyMode)
     setTemplateModalVisible(false)
@@ -255,6 +256,7 @@ const AddModal: React.FC<AddModalProps> = ({
           : undefined,
         configName: values.configName?.trim(),
         pushFailedOrders: values.pushFailedOrders ?? false,
+        pushFilteredOrders: values.pushFilteredOrders ?? false,
         maxMarketEndDate
       }
       
@@ -307,6 +309,7 @@ const AddModal: React.FC<AddModalProps> = ({
             websocketMaxRetries: 10,
             supportSell: true,
             pushFailedOrders: false,
+            pushFilteredOrders: false,
             keywordFilterMode: 'DISABLED'
           }}
         >
@@ -804,12 +807,29 @@ const AddModal: React.FC<AddModalProps> = ({
           >
             <Input.Group compact style={{ display: 'flex' }}>
               <InputNumber
-                min={1}
+                min={0}
                 max={9999}
                 step={1}
                 precision={0}
                 value={maxMarketEndDateValue}
-                onChange={(value) => setMaxMarketEndDateValue(value !== null && value !== undefined ? Math.floor(value) : undefined)}
+                onChange={(value) => {
+                  // 允许设置为 null 或 undefined（清空）
+                  if (value === null || value === undefined) {
+                    setMaxMarketEndDateValue(undefined)
+                  } else {
+                    const num = Math.floor(value)
+                    // 如果值为 0，也设置为 undefined（表示清空）
+                    setMaxMarketEndDateValue(num > 0 ? num : undefined)
+                  }
+                }}
+                onBlur={(e) => {
+                  // 失去焦点时，如果值为 0 或空，设置为 undefined
+                  const input = e.target as HTMLInputElement
+                  const value = input.value
+                  if (!value || value === '0') {
+                    setMaxMarketEndDateValue(undefined)
+                  }
+                }}
                 style={{ width: '60%' }}
                 placeholder={t('copyTradingAdd.maxMarketEndDatePlaceholder') || '输入时间值（可选）'}
                 parser={(value) => {
@@ -857,6 +877,16 @@ const AddModal: React.FC<AddModalProps> = ({
             label={t('copyTradingAdd.pushFailedOrders') || '推送失败订单'}
             name="pushFailedOrders"
             tooltip={t('copyTradingAdd.pushFailedOrdersTooltip') || '开启后，失败的订单会推送到 Telegram'}
+            valuePropName="checked"
+          >
+            <Switch />
+          </Form.Item>
+          
+          {/* 推送已过滤订单 */}
+          <Form.Item
+            label={t('copyTradingAdd.pushFilteredOrders') || '推送已过滤订单'}
+            name="pushFilteredOrders"
+            tooltip={t('copyTradingAdd.pushFilteredOrdersTooltip') || '开启后，被过滤的订单会推送到 Telegram'}
             valuePropName="checked"
           >
             <Switch />

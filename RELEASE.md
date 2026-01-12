@@ -1,3 +1,223 @@
+# v1.1.10
+
+## 🚀 主要功能
+
+### 📢 推送已过滤订单功能
+
+- **新增推送已过滤订单功能（pushFilteredOrders）**，默认关闭
+  - 支持在模板和跟单配置中配置是否推送被过滤的订单通知
+  - 开启后，当订单因过滤条件（价格区间、订单深度、价差、仓位限制等）被过滤时，会发送 Telegram 通知
+  - 帮助用户了解哪些订单被过滤以及过滤原因
+  
+- **数据库迁移**：
+  - 添加 `push_filtered_orders` 字段到 `copy_trading_templates` 表
+  - 添加 `push_filtered_orders` 字段到 `copy_trading` 表
+  - 迁移脚本：`V24__add_push_filtered_orders_to_templates.sql`
+  
+- **后端实现**：
+  - 在实体类（`CopyTradingTemplate`、`CopyTrading`）中添加 `pushFilteredOrders` 字段
+  - 在 DTO 中添加字段支持（创建、更新、查询）
+  - 在 Service 中处理字段的创建、更新和传递
+  - 在发送过滤订单通知时检查 `pushFilteredOrders` 字段，只有为 `true` 时才发送
+  
+- **前端实现**：
+  - 在模板新增、编辑、推送页面添加"推送已过滤订单"开关
+  - 在跟单配置新增、编辑页面添加"推送已过滤订单"开关
+  - 从模板创建跟单配置时，自动填充 `pushFilteredOrders` 字段
+  - 支持多语言（中文、繁体中文、英文）
+
+### 🔍 优化订单列表筛选功能
+
+- **支持按市场标题搜索**：
+  - 买入订单列表：添加市场标题筛选，移除方向筛选
+  - 卖出订单列表：添加市场标题筛选，将方向筛选改为状态筛选
+  - 已成交订单列表：添加市场标题筛选和市场列显示
+  
+- **改进分组体验**：
+  - 记录用户的分组偏好到 localStorage，跨会话持久化
+  - 所有搜索输入框添加 0.5 秒防抖优化，提升性能
+  
+- **后端优化**：
+  - `MarketGroupedOrdersRequest` 添加 `marketId` 和 `marketTitle` 字段
+  - 买入/卖出订单分组接口支持市场 ID 模糊匹配和市场标题关键字筛选
+
+### ⚡ 优化跟单关系统计性能
+
+- **移除未实现盈亏计算**：
+  - 移除未实现盈亏和持仓价值的计算逻辑
+  - 总盈亏现在仅包含已实现盈亏，计算更准确
+  - 简化盈亏百分比计算，仅基于已实现盈亏
+  
+- **性能提升**：
+  - 从 1+N 次网络请求减少到 0 次
+  - 删除不再使用的方法和依赖注入
+  - 统计查询速度显著提升
+
+### 🐳 Docker 容器时区配置
+
+- **支持通过 .env 自定义时区**：
+  - 在 `docker-compose.yml` 和 `docker-compose.prod.yml` 中添加时区环境变量配置
+  - 支持通过 `TZ` 环境变量自定义容器时区
+  - 默认使用系统时区
+
+## 🐛 Bug 修复
+
+### 修复跟单配置更新时清空可选字段无法保存的问题
+
+- **问题**：修改跟单配置时，清空价格区间、最大仓位数量、截止时间等可选字段后，无法保存到数据库
+- **修复**：
+  - 修复价格区间（`minPrice`/`maxPrice`）清空后无法保存的问题
+  - 修复最大仓位数量（`maxPositionCount`）清空后无法保存的问题
+  - 修复市场截止时间（`maxMarketEndDate`）清空后无法保存的问题
+  - 修复其他可选字段（`minOrderDepth`/`maxSpread`/`maxPositionValue`）清空后无法保存的问题
+  
+- **实现方案**：
+  - 前端：清空字段时传空字符串或 `-1` 标记，让后端识别为清空操作
+  - 后端：处理空字符串和 `-1` 标记，正确设置为 `null` 以清空字段
+
+### 修复新建和编辑页面的截止时间输入框交互问题
+
+- **问题**：删除截止时间输入框内容后，失去焦点会自动填充 1
+- **修复**：
+  - 将 `min` 从 `1` 改为 `0`，允许空值
+  - 优化 `onChange` 处理，当值为 `0`、`null` 或 `undefined` 时设置为 `undefined`（清空）
+  - 添加 `onBlur` 处理，确保失去焦点时如果值为空或 `0`，设置为 `undefined`
+  - 修改 `parser`，空值时返回空字符串而不是 `0`
+
+### 修复订单通知重复发送和时间显示问题
+
+- **修复并发导致的重复通知问题**：
+  - 在 `OrderStatusUpdateService` 中实现双重检查机制
+  - 先保存订单标记为已发送，再重新查询数据库检查
+  - 防止定时任务并发时重复发送同一订单的通知
+  - 同时修复买入订单和卖出订单的通知逻辑
+  
+- **修复 Telegram 通知时间显示**：
+  - `TelegramNotificationService.sendOrderSuccessNotification` 添加 `orderTime` 参数
+  - 使用订单的 `createdAt` 时间戳作为通知显示时间
+  - 而不是使用当前通知发送时间
+  - 更准确反映订单的实际创建时间
+
+### 修复新建跟单配置时 pushFilteredOrders 字段未生效的问题
+
+- **问题**：新建跟单配置时，即使设置了 `pushFilteredOrders: true`，也没有生效
+- **修复**：
+  - 修复手动输入模式下 `pushFilteredOrders` 被硬编码为 `false` 的问题
+  - 修复从模板填充表单时未加载 `pushFilteredOrders` 的问题
+  - 添加 `CopyTradingTemplate` 接口的 `pushFilteredOrders` 字段定义
+
+## 📝 技术细节
+
+### 数据库变更
+
+- **迁移脚本**：`V24__add_push_filtered_orders_to_templates.sql`
+- **变更内容**：
+  - `copy_trading_templates.push_filtered_orders`: BOOLEAN NOT NULL DEFAULT FALSE
+  - `copy_trading.push_filtered_orders`: BOOLEAN NOT NULL DEFAULT FALSE
+- **自动执行**：升级时会自动执行迁移脚本
+
+### API 变更
+
+- **无新增接口**
+- **无移除接口**
+- **请求/响应变更**：
+  - `CopyTradingCreateRequest` 添加 `pushFilteredOrders` 字段
+  - `CopyTradingUpdateRequest` 添加 `pushFilteredOrders` 字段
+  - `TemplateCreateRequest` 添加 `pushFilteredOrders` 字段
+  - `TemplateUpdateRequest` 添加 `pushFilteredOrders` 字段
+  - `MarketGroupedOrdersRequest` 添加 `marketId` 和 `marketTitle` 字段
+
+### 前端变更
+
+- **新增字段**：
+  - `CopyTradingTemplate` 接口添加 `pushFilteredOrders` 字段
+- **组件更新**：
+  - 模板新增、编辑、推送页面添加"推送已过滤订单"开关
+  - 跟单配置新增、编辑页面添加"推送已过滤订单"开关
+  - 优化截止时间输入框交互逻辑
+- **多语言支持**：
+  - 添加中文、繁体中文、英文翻译
+
+## 📊 变更统计
+
+- **提交数量**：6 个提交
+- **文件变更**：30 个文件
+- **代码变更**：+651 行 / -555 行（净增加 96 行）
+
+### 详细文件变更
+
+**后端变更**：
+- `CopyTrading.kt` - 添加 `pushFilteredOrders` 字段（+3 行）
+- `CopyTradingTemplate.kt` - 添加 `pushFilteredOrders` 字段（+3 行）
+- `CopyTradingDto.kt` - 添加 `pushFilteredOrders` 字段支持（+3 行）
+- `CopyTradingTemplateDto.kt` - 添加 `pushFilteredOrders` 字段支持（+10 行）
+- `CopyTradingService.kt` - 处理 `pushFilteredOrders` 字段和清空字段逻辑（+93 行）
+- `CopyTradingTemplateService.kt` - 处理 `pushFilteredOrders` 字段（+8 行）
+- `CopyOrderTrackingService.kt` - 检查 `pushFilteredOrders` 字段发送通知（+42 行）
+- `CopyTradingStatisticsService.kt` - 优化统计性能（-328 行）
+- `OrderStatusUpdateService.kt` - 修复重复通知问题（+142 行）
+- `TelegramNotificationService.kt` - 添加订单时间参数（+17 行）
+- `V24__add_push_filtered_orders_to_templates.sql` - 数据库迁移脚本（+13 行）
+
+**前端变更**：
+- `AddModal.tsx` - 添加 `pushFilteredOrders` 字段和优化截止时间输入框（+40 行）
+- `EditModal.tsx` - 添加 `pushFilteredOrders` 字段和优化截止时间输入框（+59 行）
+- `TemplateAdd.tsx` - 添加 `pushFilteredOrders` 字段（+15 行）
+- `TemplateEdit.tsx` - 添加 `pushFilteredOrders` 字段（+15 行）
+- `TemplateList.tsx` - 添加 `pushFilteredOrders` 字段（+13 行）
+- `BuyOrdersTab.tsx` - 优化筛选功能（+94 行）
+- `SellOrdersTab.tsx` - 优化筛选功能（+77 行）
+- `MatchedOrdersTab.tsx` - 优化筛选功能（+26 行）
+- `types/index.ts` - 添加 `pushFilteredOrders` 字段定义（+6 行）
+- `locales/*/common.json` - 添加多语言翻译（+31 行）
+
+**配置文件变更**：
+- `docker-compose.yml` - 添加时区配置（+5 行）
+- `docker-compose.prod.yml` - 添加时区配置（+5 行）
+- `Dockerfile` - 优化构建配置（+4 行）
+
+## 🔄 主要提交
+
+```
+9c303e0 feat: 添加推送已过滤订单功能并修复相关问题
+cb8e469 fix: 修复跟单配置更新时清空可选字段无法保存的问题
+279806d feat: 优化订单列表筛选功能，支持按市场标题搜索并改进分组体验
+90fa487 refactor: 移除未实现盈亏计算以优化跟单关系统计性能
+b58bb26 feat: 添加 Docker 容器时区配置，支持通过 .env 自定义
+6af76c4 fix: 修复订单通知重复发送和时间显示问题
+```
+
+## 🎯 升级建议
+
+1. **数据库迁移**：本次版本包含数据库迁移脚本，升级时会自动执行
+   - 自动添加 `push_filtered_orders` 字段到模板表和跟单配置表
+   - 现有数据不受影响，新字段默认值为 `false`
+   
+2. **配置更新**：
+   - 可选：在 `.env` 文件中添加 `TZ` 环境变量自定义容器时区
+   - 无需其他配置变更
+   
+3. **兼容性**：
+   - 完全向后兼容，不影响现有功能
+   - API 变更都是新增字段，不影响现有调用
+
+## 📦 Docker 镜像
+
+Docker 镜像会自动构建并推送到 Docker Hub：
+- `wrbug/polyhermes:v1.1.10`
+- `wrbug/polyhermes:latest`（如果这是最新版本）
+
+## 🔗 相关链接
+
+- [GitHub Release](https://github.com/WrBug/PolyHermes/releases/tag/v1.1.10)
+- [完整更新日志](https://github.com/WrBug/PolyHermes/compare/v1.1.9...v1.1.10)
+
+---
+
+**发布日期**：2026-01-12
+
+---
+
 # v1.1.9
 
 ## 🐛 Bug 修复

@@ -23,7 +23,8 @@ data class TemplateCreateRequest(
     val minOrderDepth: String? = null,  // 最小订单深度（USDC金额），NULL表示不启用
     val maxSpread: String? = null,  // 最大价差（绝对价格），NULL表示不启用
     val minPrice: String? = null,  // 最低价格（可选），NULL表示不限制最低价
-    val maxPrice: String? = null  // 最高价格（可选），NULL表示不限制最高价
+    val maxPrice: String? = null,  // 最高价格（可选），NULL表示不限制最高价
+    val pushFilteredOrders: Boolean? = null  // 推送已过滤订单（默认关闭）
 )
 
 /**
@@ -50,7 +51,8 @@ data class TemplateUpdateRequest(
     val minOrderDepth: String? = null,  // 最小订单深度（USDC金额），NULL表示不启用
     val maxSpread: String? = null,  // 最大价差（绝对价格），NULL表示不启用
     val minPrice: String? = null,  // 最低价格（可选），NULL表示不限制最低价
-    val maxPrice: String? = null  // 最高价格（可选），NULL表示不限制最高价
+    val maxPrice: String? = null,  // 最高价格（可选），NULL表示不限制最高价
+    val pushFilteredOrders: Boolean? = null  // 推送已过滤订单（默认关闭）
 )
 
 /**
@@ -84,7 +86,8 @@ data class TemplateCopyRequest(
     val minOrderDepth: String? = null,  // 最小订单深度（USDC金额），NULL表示不启用
     val maxSpread: String? = null,  // 最大价差（绝对价格），NULL表示不启用
     val minPrice: String? = null,  // 最低价格（可选），NULL表示不限制最低价
-    val maxPrice: String? = null  // 最高价格（可选），NULL表示不限制最高价
+    val maxPrice: String? = null,  // 最高价格（可选），NULL表示不限制最高价
+    val pushFilteredOrders: Boolean? = null  // 推送已过滤订单（默认关闭）
 )
 
 /**
@@ -119,6 +122,7 @@ data class TemplateDto(
     val maxSpread: String?,
     val minPrice: String?,  // 最低价格（可选），NULL表示不限制最低价
     val maxPrice: String?,  // 最高价格（可选），NULL表示不限制最高价
+    val pushFilteredOrders: Boolean,  // 推送已过滤订单（默认关闭）
     val createdAt: Long,
     val updatedAt: Long
 )

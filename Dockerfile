@@ -47,9 +47,9 @@ FROM eclipse-temurin:17-jre-jammy
 
 WORKDIR /app
 
-# 安装 Nginx 和必要的工具
+# 安装 Nginx 和必要的工具（包含时区数据）
 RUN apt-get update && \
-    apt-get install -y nginx curl && \
+    apt-get install -y nginx curl tzdata && \
     rm -rf /var/lib/apt/lists/* && \
     rm -rf /etc/nginx/sites-enabled/default
 

@@ -116,6 +116,7 @@ export interface CopyTradingTemplate {
   maxSpread?: string
   minPrice?: string  // 最低价格（可选），NULL表示不限制最低价
   maxPrice?: string  // 最高价格（可选），NULL表示不限制最高价
+  pushFilteredOrders?: boolean  // 推送已过滤订单（默认关闭）
   createdAt: number
   updatedAt: number
 }
@@ -266,6 +267,7 @@ export interface CopyTradingCreateRequest {
   // 新增配置字段
   configName?: string  // 配置名（可选，但提供时必须非空）
   pushFailedOrders?: boolean  // 推送失败订单（可选）
+  pushFilteredOrders?: boolean  // 推送已过滤订单（可选）
   maxMarketEndDate?: number  // 市场截止时间限制（毫秒时间戳），仅跟单截止时间小于此时间的订单，NULL表示不启用
 }
 
@@ -304,6 +306,7 @@ export interface CopyTradingUpdateRequest {
   // 新增配置字段
   configName?: string  // 配置名（可选，但提供时必须非空）
   pushFailedOrders?: boolean  // 推送失败订单（可选）
+  pushFilteredOrders?: boolean  // 推送已过滤订单（可选）
   maxMarketEndDate?: number  // 市场截止时间限制（毫秒时间戳），仅跟单截止时间小于此时间的订单，NULL表示不启用
 }
 
@@ -670,6 +673,7 @@ export interface SellOrderInfo {
   price: string
   amount: string
   realizedPnl: string
+  status?: string  // 卖出状态（filled, partially_matched, fully_matched）
   createdAt: number
 }
 
@@ -710,7 +714,7 @@ export interface OrderTrackingRequest {
   page?: number
   limit?: number
   marketId?: string
-  side?: string
+  marketTitle?: string
   status?: string
   sellOrderId?: string
   buyOrderId?: string
@@ -724,6 +728,8 @@ export interface MarketGroupedOrdersRequest {
   type: 'buy' | 'sell'
   page?: number
   limit?: number
+  marketId?: string
+  marketTitle?: string
 }
 
 /**

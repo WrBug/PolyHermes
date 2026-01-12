@@ -77,6 +77,7 @@ class TelegramNotificationService(
      * @param apiPassphrase API Passphrase（可选，用于查询订单详情）
      * @param walletAddressForApi 钱包地址（可选，用于查询订单详情）
      * @param locale 语言设置（可选，如果提供则使用，否则使用 LocaleContextHolder 获取）
+     * @param orderTime 订单时间（可选，如果提供则使用订单创建时间，否则使用当前通知时间）
      */
     suspend fun sendOrderSuccessNotification(
         orderId: String?,
@@ -96,7 +97,8 @@ class TelegramNotificationService(
         walletAddressForApi: String? = null,
         locale: java.util.Locale? = null,
         leaderName: String? = null,  // Leader 名称（备注）
-        configName: String? = null  // 跟单配置名
+        configName: String? = null,  // 跟单配置名
+        orderTime: Long? = null  // 订单创建时间（毫秒时间戳），用于通知中的时间显示
     ) {
         // 1. 如果提供了 orderId，检查是否已发送过通知（去重）
         if (orderId != null) {
@@ -189,7 +191,8 @@ class TelegramNotificationService(
             walletAddress = walletAddress,
             locale = currentLocale,
             leaderName = leaderName,
-            configName = configName
+            configName = configName,
+            orderTime = orderTime
         )
         sendMessage(message)
     }
@@ -699,7 +702,8 @@ class TelegramNotificationService(
         walletAddress: String?,
         locale: java.util.Locale,
         leaderName: String? = null,  // Leader 名称（备注）
-        configName: String? = null  // 跟单配置名
+        configName: String? = null,  // 跟单配置名
+        orderTime: Long? = null  // 订单创建时间（毫秒时间戳）
     ): String {
         
         // 获取多语言文本
@@ -749,7 +753,12 @@ class TelegramNotificationService(
             ""
         }
 
-        val time = DateUtils.formatDateTime()
+        // 使用订单时间（如果提供），否则使用当前通知时间
+        val time = if (orderTime != null) {
+            DateUtils.formatDateTime(orderTime)
+        } else {
+            DateUtils.formatDateTime()
+        }
 
         // 转义 HTML 特殊字符
         val escapedMarketTitle = marketTitle.replace("<", "&lt;").replace(">", "&gt;")

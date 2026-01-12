@@ -25,18 +25,44 @@ const SellOrdersTab: React.FC<SellOrdersTabProps> = ({ copyTradingId, active = f
   const [limit, setLimit] = useState(20)
   const [filters, setFilters] = useState<{
     marketId?: string
-    side?: string
+    marketTitle?: string
+    status?: string
   }>({})
-  const [groupByMarket, setGroupByMarket] = useState(false)  // 是否按市场分组
+  // 从 localStorage 读取用户分组偏好，如果没有则默认为 false
+  const [groupByMarket, setGroupByMarket] = useState(() => {
+    const savedPreference = localStorage.getItem('copyTradingOrders_groupByMarket_sell')
+    return savedPreference === 'true'
+  })
   const [expandedMarkets, setExpandedMarkets] = useState<Set<string>>(new Set())  // 展开的市场ID集合
   const [groupedOrders, setGroupedOrders] = useState<MarketOrderGroup[]>([])  // 分组数据（从后端获取）
   const [groupedTotal, setGroupedTotal] = useState(0)  // 分组总数（市场数量）
+
+  const handleMarketTitleChange = (value: string) => {
+    setFilters({ ...filters, marketTitle: value || undefined })
+  }
+
+  // 切换分组模式时，保存用户偏好到 localStorage
+  const handleToggleGroupByMarket = (checked: boolean) => {
+    setGroupByMarket(checked)
+    localStorage.setItem('copyTradingOrders_groupByMarket_sell', String(checked))
+  }
 
   useEffect(() => {
     if (copyTradingId && active) {
       fetchOrders()
     }
-  }, [copyTradingId, active, page, limit, filters, groupByMarket])
+  }, [copyTradingId, active, page, limit, filters.marketId, filters.status, groupByMarket])
+
+  // 防抖搜索 - marketTitle 变化时延迟0.5秒再搜索
+  useEffect(() => {
+    if (!copyTradingId || !active) return
+
+    const timer = setTimeout(() => {
+      fetchOrders()
+    }, 500) // 0.5秒延迟
+
+    return () => clearTimeout(timer)
+  }, [filters.marketTitle])
 
   const fetchOrders = async () => {
     if (!copyTradingId) return
@@ -49,7 +75,9 @@ const SellOrdersTab: React.FC<SellOrdersTabProps> = ({ copyTradingId, active = f
           copyTradingId: parseInt(copyTradingId),
           type: 'sell',
           page,
-          limit
+          limit,
+          marketId: filters.marketId,
+          marketTitle: filters.marketTitle
         }
 
         const response = await apiService.orderTracking.listGroupedByMarket(request)
@@ -202,16 +230,6 @@ const SellOrdersTab: React.FC<SellOrdersTabProps> = ({ copyTradingId, active = f
             </span>
           </div>
         )
-      }
-    },
-    {
-      title: t('copyTradingOrders.side') || '方向',
-      dataIndex: 'side',
-      key: 'side',
-      width: isMobile ? 60 : 80,
-      render: (side: string) => {
-        const displaySide = side === '0' ? 'YES' : side === '1' ? 'NO' : side
-        return <Tag style={{ fontSize: isMobile ? 11 : 12 }}>{displaySide}</Tag>
       }
     },
     {
@@ -378,7 +396,6 @@ const SellOrdersTab: React.FC<SellOrdersTabProps> = ({ copyTradingId, active = f
                           minute: '2-digit'
                         })
                         const amount = (parseFloat(order.quantity) * parseFloat(order.price)).toString()
-                        const displaySide = order.side === '0' ? 'YES' : order.side === '1' ? 'NO' : order.side
 
                         return (
                           <Card
@@ -412,9 +429,6 @@ const SellOrdersTab: React.FC<SellOrdersTabProps> = ({ copyTradingId, active = f
                                     title={t('common.copy') || '复制'}
                                   />
                                 )}
-                              </div>
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
-                                <Tag style={{ fontSize: '11px' }}>{displaySide}</Tag>
                               </div>
                             </div>
 
@@ -473,7 +487,6 @@ const SellOrdersTab: React.FC<SellOrdersTabProps> = ({ copyTradingId, active = f
                   minute: '2-digit'
                 })
                 const amount = (parseFloat(order.quantity) * parseFloat(order.price)).toString()
-                const displaySide = order.side === '0' ? 'YES' : order.side === '1' ? 'NO' : order.side
 
                 return (
                   <Card
@@ -506,9 +519,6 @@ const SellOrdersTab: React.FC<SellOrdersTabProps> = ({ copyTradingId, active = f
                             title={t('common.copy') || '复制'}
                           />
                         )}
-                      </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
-                        <Tag>{displaySide}</Tag>
                       </div>
                     </div>
 
@@ -622,17 +632,24 @@ const SellOrdersTab: React.FC<SellOrdersTabProps> = ({ copyTradingId, active = f
           onChange={(e) => setFilters({ ...filters, marketId: e.target.value || undefined })}
         />
 
+        <Input
+          placeholder={t('copyTradingOrders.filterMarketTitle') || '筛选市场标题'}
+          allowClear
+          style={{ width: isMobile ? '100%' : 200 }}
+          value={filters.marketTitle}
+          onChange={(e) => handleMarketTitleChange(e.target.value)}
+        />
+
         <Select
-          placeholder={t('copyTradingOrders.filterSide') || '筛选方向'}
+          placeholder={t('copyTradingOrders.filterStatus') || '筛选状态'}
           allowClear
           style={{ width: isMobile ? '100%' : 150 }}
-          value={filters.side}
-          onChange={(value) => setFilters({ ...filters, side: value || undefined })}
+          value={filters.status}
+          onChange={(value) => setFilters({ ...filters, status: value || undefined })}
         >
-          <Option value="0">YES</Option>
-          <Option value="1">NO</Option>
-          <Option value="YES">YES</Option>
-          <Option value="NO">NO</Option>
+          <Option value="filled">{t('copyTradingOrders.statusFilled') || '未成交'}</Option>
+          <Option value="partially_matched">{t('copyTradingOrders.statusPartiallyMatched') || '部分成交'}</Option>
+          <Option value="fully_matched">{t('copyTradingOrders.statusFullyMatched') || '完全成交'}</Option>
         </Select>
 
         <Space>
@@ -641,7 +658,7 @@ const SellOrdersTab: React.FC<SellOrdersTabProps> = ({ copyTradingId, active = f
           </span>
           <Switch
             checked={groupByMarket}
-            onChange={setGroupByMarket}
+            onChange={handleToggleGroupByMarket}
             checkedChildren={<AppstoreOutlined />}
             unCheckedChildren={<UnorderedListOutlined />}
           />

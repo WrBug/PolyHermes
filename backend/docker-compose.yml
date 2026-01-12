@@ -9,6 +9,7 @@ services:
     ports:
       - "${SERVER_PORT:-8000}:8000"
     environment:
+      - TZ=${TZ:-Asia/Shanghai}
       - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-prod}
       - DB_URL=${DB_URL:-jdbc:mysql://mysql:3306/polyhermes?useSSL=false&serverTimezone=UTC&characterEncoding=utf8&allowPublicKeyRetrieval=true}
       - DB_USERNAME=${DB_USERNAME:-root}
@@ -16,6 +17,8 @@ services:
       - SERVER_PORT=8000
       - JWT_SECRET=${JWT_SECRET:-change-me-in-production}
       - ADMIN_RESET_PASSWORD_KEY=${ADMIN_RESET_PASSWORD_KEY:-change-me-in-production}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
     depends_on:
       mysql:
         condition: service_healthy
@@ -29,12 +32,14 @@ services:
     ports:
       - "${MYSQL_PORT:-3306}:3306"
     environment:
+      - TZ=${TZ:-Asia/Shanghai}
       - MYSQL_ROOT_PASSWORD=${DB_PASSWORD:-rootpassword}
       - MYSQL_DATABASE=polyhermes
       - MYSQL_CHARACTER_SET_SERVER=utf8mb4
       - MYSQL_COLLATION_SERVER=utf8mb4_unicode_ci
     volumes:
       - mysql-data:/var/lib/mysql
+      - /etc/localtime:/etc/localtime:ro
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD:-rootpassword}"]
       interval: 10s

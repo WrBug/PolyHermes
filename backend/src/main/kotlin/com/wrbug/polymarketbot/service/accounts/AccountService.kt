@@ -948,6 +948,9 @@ class AccountService(
                                 java.util.Locale("zh", "CN")  // 默认简体中文
                             }
 
+                            // 使用当前时间作为订单创建时间
+                            val orderTime = System.currentTimeMillis()
+
                             telegramNotificationService?.sendOrderSuccessNotification(
                                 orderId = orderId,
                                 marketTitle = marketTitle,
@@ -963,7 +966,8 @@ class AccountService(
                                 apiSecret = try { cryptoUtils.decrypt(account.apiSecret!!) } catch (e: Exception) { null },
                                 apiPassphrase = try { cryptoUtils.decrypt(account.apiPassphrase!!) } catch (e: Exception) { null },
                                 walletAddressForApi = account.walletAddress,
-                                locale = locale
+                                locale = locale,
+                                orderTime = orderTime  // 使用订单创建时间
                             )
                         } catch (e: Exception) {
                             logger.warn("发送订单成功通知失败: ${e.message}", e)

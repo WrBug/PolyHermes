@@ -91,7 +91,8 @@ const EditModal: React.FC<EditModalProps> = ({
             maxPositionCount: found.maxPositionCount,
             keywordFilterMode: found.keywordFilterMode || 'DISABLED',
             configName: found.configName || '',
-            pushFailedOrders: found.pushFailedOrders ?? false
+            pushFailedOrders: found.pushFailedOrders ?? false,
+            pushFilteredOrders: found.pushFilteredOrders ?? false
           })
           // 设置关键字列表
           setKeywords(found.keywords || [])
@@ -168,12 +169,17 @@ const EditModal: React.FC<EditModalProps> = ({
     }
     
     // 计算市场截止时间（毫秒）
+    // 如果用户清空了，传 -1 表示要清空（后端会识别并设置为 null）
     let maxMarketEndDate: number | undefined
-    if (maxMarketEndDateValue !== undefined && maxMarketEndDateValue > 0) {
+    if (maxMarketEndDateValue !== undefined && maxMarketEndDateValue !== null && maxMarketEndDateValue > 0) {
       const multiplier = maxMarketEndDateUnit === 'HOUR' 
         ? 60 * 60 * 1000  // 小时转毫秒
         : 24 * 60 * 60 * 1000  // 天转毫秒
       maxMarketEndDate = maxMarketEndDateValue * multiplier
+    } else {
+      // 如果值为 null/undefined/0/负数，传 -1 表示要清空
+      // 这样无论之前是否有值，清空后都会设置为 null
+      maxMarketEndDate = -1
     }
     
     setLoading(true)
@@ -195,18 +201,21 @@ const EditModal: React.FC<EditModalProps> = ({
         websocketReconnectInterval: values.websocketReconnectInterval,
         websocketMaxRetries: values.websocketMaxRetries,
         supportSell: values.supportSell,
-        minOrderDepth: values.minOrderDepth?.toString(),
-        maxSpread: values.maxSpread?.toString(),
-        minPrice: values.minPrice?.toString(),
-        maxPrice: values.maxPrice?.toString(),
-        maxPositionValue: values.maxPositionValue?.toString(),
-        maxPositionCount: values.maxPositionCount,
+        // 对于可选字段，始终发送（即使为空也发送空字符串，让后端知道要清空）
+        minOrderDepth: values.minOrderDepth != null ? values.minOrderDepth.toString() : '',
+        maxSpread: values.maxSpread != null ? values.maxSpread.toString() : '',
+        minPrice: values.minPrice != null ? values.minPrice.toString() : '',
+        maxPrice: values.maxPrice != null ? values.maxPrice.toString() : '',
+        maxPositionValue: values.maxPositionValue != null ? values.maxPositionValue.toString() : '',
+        // 对于 maxPositionCount，如果值为 null/undefined，传 -1 表示要清空（后端会识别并设置为 null）
+        maxPositionCount: values.maxPositionCount != null ? values.maxPositionCount : -1,
         keywordFilterMode: values.keywordFilterMode || 'DISABLED',
         keywords: (values.keywordFilterMode === 'WHITELIST' || values.keywordFilterMode === 'BLACKLIST') 
           ? keywords 
           : undefined,
         configName: values.configName?.trim() || undefined,
         pushFailedOrders: values.pushFailedOrders,
+        pushFilteredOrders: values.pushFilteredOrders,
         maxMarketEndDate
       }
       
@@ -722,12 +731,29 @@ const EditModal: React.FC<EditModalProps> = ({
           >
             <Input.Group compact style={{ display: 'flex' }}>
               <InputNumber
-                min={1}
+                min={0}
                 max={9999}
                 step={1}
                 precision={0}
                 value={maxMarketEndDateValue}
-                onChange={(value) => setMaxMarketEndDateValue(value !== null && value !== undefined ? Math.floor(value) : undefined)}
+                onChange={(value) => {
+                  // 允许设置为 null 或 undefined（清空）
+                  if (value === null || value === undefined) {
+                    setMaxMarketEndDateValue(undefined)
+                  } else {
+                    const num = Math.floor(value)
+                    // 如果值为 0，也设置为 undefined（表示清空）
+                    setMaxMarketEndDateValue(num > 0 ? num : undefined)
+                  }
+                }}
+                onBlur={(e) => {
+                  // 失去焦点时，如果值为 0 或空，设置为 undefined
+                  const input = e.target as HTMLInputElement
+                  const value = input.value
+                  if (!value || value === '0') {
+                    setMaxMarketEndDateValue(undefined)
+                  }
+                }}
                 style={{ width: '60%' }}
                 placeholder={t('copyTradingEdit.maxMarketEndDatePlaceholder') || '输入时间值（可选）'}
                 parser={(value) => {
@@ -773,6 +799,15 @@ const EditModal: React.FC<EditModalProps> = ({
             label={t('copyTradingEdit.pushFailedOrders') || '推送失败订单'}
             name="pushFailedOrders"
             tooltip={t('copyTradingEdit.pushFailedOrdersTooltip') || '开启后，失败的订单会推送到 Telegram'}
+            valuePropName="checked"
+          >
+            <Switch />
+          </Form.Item>
+          
+          <Form.Item
+            label={t('copyTradingEdit.pushFilteredOrders') || '推送已过滤订单'}
+            name="pushFilteredOrders"
+            tooltip={t('copyTradingEdit.pushFilteredOrdersTooltip') || '开启后，被过滤的订单会推送到 Telegram'}
             valuePropName="checked"
           >
             <Switch />

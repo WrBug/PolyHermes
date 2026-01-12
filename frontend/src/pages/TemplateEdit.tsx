@@ -41,7 +41,8 @@ const TemplateEdit: React.FC = () => {
           minOrderDepth: template.minOrderDepth ? parseFloat(template.minOrderDepth) : undefined,
           maxSpread: template.maxSpread ? parseFloat(template.maxSpread) : undefined,
           minPrice: template.minPrice ? parseFloat(template.minPrice) : undefined,
-          maxPrice: template.maxPrice ? parseFloat(template.maxPrice) : undefined
+          maxPrice: template.maxPrice ? parseFloat(template.maxPrice) : undefined,
+          pushFilteredOrders: template.pushFilteredOrders ?? false
         })
       } else {
         message.error(response.data.msg || t('templateEdit.fetchFailed') || '获取模板详情失败')
@@ -99,7 +100,8 @@ const TemplateEdit: React.FC = () => {
         minOrderDepth: values.minOrderDepth?.toString(),
         maxSpread: values.maxSpread?.toString(),
         minPrice: values.minPrice?.toString(),
-        maxPrice: values.maxPrice?.toString()
+        maxPrice: values.maxPrice?.toString(),
+        pushFilteredOrders: values.pushFilteredOrders
       })
       
       if (response.data.code === 0) {
@@ -404,6 +406,15 @@ const TemplateEdit: React.FC = () => {
             label={t('templateEdit.supportSell') || '跟单卖出'}
             name="supportSell"
             tooltip={t('templateEdit.supportSellTooltip') || '是否跟单 Leader 的卖出订单。开启：跟单 Leader 的买入和卖出订单；关闭：只跟单 Leader 的买入订单，忽略卖出订单。'}
+            valuePropName="checked"
+          >
+            <Switch />
+          </Form.Item>
+          
+          <Form.Item
+            label={t('templateEdit.pushFilteredOrders') || '推送已过滤订单'}
+            name="pushFilteredOrders"
+            tooltip={t('templateEdit.pushFilteredOrdersTooltip') || '开启后，被过滤的订单会推送到 Telegram'}
             valuePropName="checked"
           >
             <Switch />
