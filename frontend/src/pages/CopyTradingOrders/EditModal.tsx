@@ -91,7 +91,8 @@ const EditModal: React.FC<EditModalProps> = ({
             maxPositionCount: found.maxPositionCount,
             keywordFilterMode: found.keywordFilterMode || 'DISABLED',
             configName: found.configName || '',
-            pushFailedOrders: found.pushFailedOrders ?? false
+            pushFailedOrders: found.pushFailedOrders ?? false,
+            pushFilteredOrders: found.pushFilteredOrders ?? false
           })
           // 设置关键字列表
           setKeywords(found.keywords || [])
@@ -214,6 +215,7 @@ const EditModal: React.FC<EditModalProps> = ({
           : undefined,
         configName: values.configName?.trim() || undefined,
         pushFailedOrders: values.pushFailedOrders,
+        pushFilteredOrders: values.pushFilteredOrders,
         maxMarketEndDate
       }
       
@@ -797,6 +799,15 @@ const EditModal: React.FC<EditModalProps> = ({
             label={t('copyTradingEdit.pushFailedOrders') || '推送失败订单'}
             name="pushFailedOrders"
             tooltip={t('copyTradingEdit.pushFailedOrdersTooltip') || '开启后，失败的订单会推送到 Telegram'}
+            valuePropName="checked"
+          >
+            <Switch />
+          </Form.Item>
+          
+          <Form.Item
+            label={t('copyTradingEdit.pushFilteredOrders') || '推送已过滤订单'}
+            name="pushFilteredOrders"
+            tooltip={t('copyTradingEdit.pushFilteredOrdersTooltip') || '开启后，被过滤的订单会推送到 Telegram'}
             valuePropName="checked"
           >
             <Switch />

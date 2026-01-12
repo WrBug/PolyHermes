@@ -87,7 +87,8 @@ class CopyTradingService(
                     maxPositionCount = request.maxPositionCount,
                     keywordFilterMode = request.keywordFilterMode ?: "DISABLED",
                     keywords = convertKeywordsToJson(request.keywords),
-                    maxMarketEndDate = request.maxMarketEndDate
+                    maxMarketEndDate = request.maxMarketEndDate,
+                    pushFilteredOrders = request.pushFilteredOrders ?: template.pushFilteredOrders
                 )
             } else {
                 // 手动输入（所有字段必须提供）
@@ -118,7 +119,8 @@ class CopyTradingService(
                     maxPositionCount = request.maxPositionCount,
                     keywordFilterMode = request.keywordFilterMode ?: "DISABLED",
                     keywords = convertKeywordsToJson(request.keywords),
-                    maxMarketEndDate = request.maxMarketEndDate
+                    maxMarketEndDate = request.maxMarketEndDate,
+                    pushFilteredOrders = request.pushFilteredOrders ?: false  // 手动输入时使用请求中的值，默认为 false
                 )
             }
             
@@ -151,7 +153,8 @@ class CopyTradingService(
                 keywords = config.keywords,
                 configName = configName,
                 pushFailedOrders = request.pushFailedOrders ?: false,
-                maxMarketEndDate = config.maxMarketEndDate
+                maxMarketEndDate = config.maxMarketEndDate,
+                pushFilteredOrders = config.pushFilteredOrders
             )
             
             val saved = copyTradingRepository.save(copyTrading)
@@ -283,6 +286,7 @@ class CopyTradingService(
                 },
                 configName = configName,
                 pushFailedOrders = request.pushFailedOrders ?: copyTrading.pushFailedOrders,
+                pushFilteredOrders = request.pushFilteredOrders ?: copyTrading.pushFilteredOrders,
                 // 处理 maxMarketEndDate：-1 表示要清空（设置为 null），null 表示不更新
                 maxMarketEndDate = if (request.maxMarketEndDate != null) {
                     if (request.maxMarketEndDate == -1L) {
@@ -505,6 +509,7 @@ class CopyTradingService(
             keywords = convertJsonToKeywords(copyTrading.keywords),
             configName = copyTrading.configName,
             pushFailedOrders = copyTrading.pushFailedOrders,
+            pushFilteredOrders = copyTrading.pushFilteredOrders,
             maxMarketEndDate = copyTrading.maxMarketEndDate,
             createdAt = copyTrading.createdAt,
             updatedAt = copyTrading.updatedAt
@@ -567,6 +572,7 @@ class CopyTradingService(
         val maxPositionCount: Int?,
         val keywordFilterMode: String,
         val keywords: String?,  // JSON 字符串
-        val maxMarketEndDate: Long?  // 市场截止时间限制（毫秒时间戳）
+        val maxMarketEndDate: Long?,  // 市场截止时间限制（毫秒时间戳）
+        val pushFilteredOrders: Boolean  // 推送已过滤订单（默认关闭）
     )
 }

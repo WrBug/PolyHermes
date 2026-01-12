@@ -100,6 +100,9 @@ data class CopyTrading(
     @Column(name = "push_failed_orders", nullable = false)
     val pushFailedOrders: Boolean = false,  // 推送失败订单（默认关闭）
     
+    @Column(name = "push_filtered_orders", nullable = false)
+    val pushFilteredOrders: Boolean = false,  // 推送已过滤订单（默认关闭）
+    
     @Column(name = "max_market_end_date")
     val maxMarketEndDate: Long? = null,  // 市场截止时间限制（毫秒时间戳），仅跟单截止时间小于此时间的订单，NULL表示不启用
     

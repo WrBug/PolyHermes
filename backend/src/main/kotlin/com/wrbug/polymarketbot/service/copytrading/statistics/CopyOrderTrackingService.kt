@@ -347,27 +347,29 @@ open class CopyOrderTrackingService(
                                     logger.error("保存被过滤订单失败: ${e.message}", e)
                                 }
 
-                                // 发送 Telegram 通知
-                                val locale = try {
-                                    org.springframework.context.i18n.LocaleContextHolder.getLocale()
-                                } catch (e: Exception) {
-                                    java.util.Locale("zh", "CN")  // 默认简体中文
-                                }
+                                // 发送 Telegram 通知（仅在 pushFilteredOrders 为 true 时发送）
+                                if (copyTrading.pushFilteredOrders) {
+                                    val locale = try {
+                                        org.springframework.context.i18n.LocaleContextHolder.getLocale()
+                                    } catch (e: Exception) {
+                                        java.util.Locale("zh", "CN")  // 默认简体中文
+                                    }
 
-                                telegramNotificationService?.sendOrderFilteredNotification(
-                                    marketTitle = marketTitle,
-                                    marketId = trade.market,
-                                    marketSlug = marketSlug,
-                                    side = "BUY",
-                                    outcome = trade.outcome,
-                                    price = trade.price,
-                                    size = trade.size,
-                                    filterReason = filterResult.reason,
-                                    filterType = filterType,
-                                    accountName = account.accountName,
-                                    walletAddress = account.walletAddress,
-                                    locale = locale
-                                )
+                                    telegramNotificationService?.sendOrderFilteredNotification(
+                                        marketTitle = marketTitle,
+                                        marketId = trade.market,
+                                        marketSlug = marketSlug,
+                                        side = "BUY",
+                                        outcome = trade.outcome,
+                                        price = trade.price,
+                                        size = trade.size,
+                                        filterReason = filterResult.reason,
+                                        filterType = filterType,
+                                        accountName = account.accountName,
+                                        walletAddress = account.walletAddress,
+                                        locale = locale
+                                    )
+                                }
                             } catch (e: Exception) {
                                 logger.error("处理被过滤订单通知失败: ${e.message}", e)
                             }

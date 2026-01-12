@@ -116,6 +116,7 @@ export interface CopyTradingTemplate {
   maxSpread?: string
   minPrice?: string  // 最低价格（可选），NULL表示不限制最低价
   maxPrice?: string  // 最高价格（可选），NULL表示不限制最高价
+  pushFilteredOrders?: boolean  // 推送已过滤订单（默认关闭）
   createdAt: number
   updatedAt: number
 }

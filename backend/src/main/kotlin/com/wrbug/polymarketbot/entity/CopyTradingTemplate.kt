@@ -72,6 +72,9 @@ data class CopyTradingTemplate(
     @Column(name = "max_price", precision = 20, scale = 8)
     val maxPrice: BigDecimal? = null,  // 最高价格（可选），NULL表示不限制最高价
     
+    @Column(name = "push_filtered_orders", nullable = false)
+    val pushFilteredOrders: Boolean = false,  // 推送已过滤订单（默认关闭）
+    
     @Column(name = "created_at", nullable = false)
     val createdAt: Long = System.currentTimeMillis(),
     
