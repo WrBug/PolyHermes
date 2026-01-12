@@ -450,27 +450,19 @@ class OrderStatusUpdateService(
                         
                         logger.info("更新卖出订单价格成功: orderId=${record.sellOrderId}, 原价格=${record.sellPrice}, 新价格=$actualSellPrice")
                         
-                        // 重新从数据库查询最新的记录状态，检查是否已被其他任务标记为已处理
-                        val latestRecord = sellMatchRecordRepository.findById(record.id!!).orElse(null)
-                        if (latestRecord == null) {
-                            logger.warn("卖出记录已被删除，跳过发送通知: orderId=${record.sellOrderId}, recordId=${record.id}")
-                        } else if (latestRecord.priceUpdated) {
-                            logger.debug("卖出记录已被标记为已处理，跳过重复发送通知: orderId=${record.sellOrderId}, recordId=${record.id}")
-                        } else {
-                            // 发送通知（使用实际价格）
-                            sendSellOrderNotification(
-                                record = updatedRecord,
-                                actualPrice = actualSellPrice.toString(),
-                                actualSize = record.totalMatchedQuantity.toString(),
-                                account = account,
-                                copyTrading = copyTrading,
-                                clobApi = clobApi,
-                                apiSecret = apiSecret,
-                                apiPassphrase = apiPassphrase,
-                                orderCreatedAt = record.createdAt
-                            )
-                            logger.info("卖出订单通知已发送: orderId=${record.sellOrderId}")
-                        }
+                        // 发送通知（使用实际价格）
+                        sendSellOrderNotification(
+                            record = updatedRecord,
+                            actualPrice = actualSellPrice.toString(),
+                            actualSize = record.totalMatchedQuantity.toString(),
+                            account = account,
+                            copyTrading = copyTrading,
+                            clobApi = clobApi,
+                            apiSecret = apiSecret,
+                            apiPassphrase = apiPassphrase,
+                            orderCreatedAt = record.createdAt
+                        )
+                        logger.info("卖出订单通知已发送: orderId=${record.sellOrderId}")
                     } else {
                         // 价格相同，但已经查询过，先标记为已处理再发送通知
                         val updatedRecord = SellMatchRecord(
@@ -491,27 +483,19 @@ class OrderStatusUpdateService(
                         
                         logger.debug("卖出订单价格无需更新: orderId=${record.sellOrderId}, price=$actualSellPrice")
                         
-                        // 重新从数据库查询最新的记录状态，检查是否已被其他任务标记为已处理
-                        val latestRecord = sellMatchRecordRepository.findById(record.id!!).orElse(null)
-                        if (latestRecord == null) {
-                            logger.warn("卖出记录已被删除，跳过发送通知: orderId=${record.sellOrderId}, recordId=${record.id}")
-                        } else if (latestRecord.priceUpdated) {
-                            logger.debug("卖出记录已被标记为已处理，跳过重复发送通知: orderId=${record.sellOrderId}, recordId=${record.id}")
-                        } else {
-                            // 发送通知
-                            sendSellOrderNotification(
-                                record = updatedRecord,
-                                actualPrice = actualSellPrice.toString(),
-                                actualSize = record.totalMatchedQuantity.toString(),
-                                account = account,
-                                copyTrading = copyTrading,
-                                clobApi = clobApi,
-                                apiSecret = apiSecret,
-                                apiPassphrase = apiPassphrase,
-                                orderCreatedAt = record.createdAt
-                            )
-                            logger.info("卖出订单通知已发送: orderId=${record.sellOrderId}")
-                        }
+                        // 发送通知
+                        sendSellOrderNotification(
+                            record = updatedRecord,
+                            actualPrice = actualSellPrice.toString(),
+                            actualSize = record.totalMatchedQuantity.toString(),
+                            account = account,
+                            copyTrading = copyTrading,
+                            clobApi = clobApi,
+                            apiSecret = apiSecret,
+                            apiPassphrase = apiPassphrase,
+                            orderCreatedAt = record.createdAt
+                        )
+                        logger.info("卖出订单通知已发送: orderId=${record.sellOrderId}")
                     }
                 } catch (e: Exception) {
                     logger.warn("更新卖出订单价格失败: orderId=${record.sellOrderId}, error=${e.message}", e)
@@ -566,15 +550,7 @@ class OrderStatusUpdateService(
                         )
                         copyOrderTrackingRepository.save(updatedOrder)
                         
-                        // 重新从数据库查询最新的订单状态，检查是否已被其他任务标记为已发送通知
-                        val latestOrder = copyOrderTrackingRepository.findById(order.id!!).orElse(null)
-                        if (latestOrder == null) {
-                            logger.warn("订单已被删除，跳过发送通知: orderId=${order.buyOrderId}, copyOrderTrackingId=${order.id}")
-                        } else if (latestOrder.notificationSent) {
-                            logger.debug("订单已被标记为已发送通知，跳过重复发送: orderId=${order.buyOrderId}, copyOrderTrackingId=${order.id}")
-                        } else {
-                            sendBuyOrderNotification(updatedOrder, useTemporaryData = true, orderCreatedAt = order.createdAt)
-                        }
+                        sendBuyOrderNotification(updatedOrder, useTemporaryData = true, orderCreatedAt = order.createdAt)
                         continue
                     }
                     
@@ -662,44 +638,37 @@ class OrderStatusUpdateService(
                     // 更新订单数据（如果实际数据与临时数据不同）
                     val needUpdate = actualPrice != order.price || actualSize != order.quantity
                     
-                    // 先保存更新后的订单，标记 notificationSent = true
-                    // 这样可以防止其他并发任务重复发送通知
-                    val updatedOrder = CopyOrderTracking(
-                        id = order.id,
-                        copyTradingId = order.copyTradingId,
-                        accountId = order.accountId,
-                        leaderId = order.leaderId,
-                        marketId = order.marketId,
-                        side = order.side,
-                        outcomeIndex = order.outcomeIndex,
-                        buyOrderId = order.buyOrderId,
-                        leaderBuyTradeId = order.leaderBuyTradeId,
-                        quantity = actualSize,  // 使用实际数量
-                        price = actualPrice,  // 使用实际价格
-                        matchedQuantity = order.matchedQuantity,
-                        remainingQuantity = order.remainingQuantity,
-                        status = order.status,
-                        notificationSent = true,  // 标记为已发送通知
-                        createdAt = order.createdAt,
-                        updatedAt = System.currentTimeMillis()
-                    )
-                    
-                    // 保存更新后的订单（在发送通知之前保存）
-                    copyOrderTrackingRepository.save(updatedOrder)
-                    
-                    if (needUpdate) {
-                        logger.info("更新买入订单数据成功: orderId=${order.buyOrderId}, 原价格=${order.price}, 新价格=$actualPrice, 原数量=${order.quantity}, 新数量=$actualSize")
-                    } else {
-                        logger.debug("买入订单数据无需更新: orderId=${order.buyOrderId}")
-                    }
-                    
-                    // 重新从数据库查询最新的订单状态，检查是否已被其他任务标记为已发送通知
-                    val latestOrder = copyOrderTrackingRepository.findById(order.id!!).orElse(null)
-                    if (latestOrder == null) {
-                        logger.warn("订单已被删除，跳过发送通知: orderId=${order.buyOrderId}, copyOrderTrackingId=${order.id}")
-                    } else if (latestOrder.notificationSent) {
-                        logger.debug("订单已被标记为已发送通知，跳过重复发送: orderId=${order.buyOrderId}, copyOrderTrackingId=${order.id}")
-                    } else {
+                        // 先保存更新后的订单，标记 notificationSent = true
+                        // 这样可以防止其他并发任务重复发送通知
+                        val updatedOrder = CopyOrderTracking(
+                            id = order.id,
+                            copyTradingId = order.copyTradingId,
+                            accountId = order.accountId,
+                            leaderId = order.leaderId,
+                            marketId = order.marketId,
+                            side = order.side,
+                            outcomeIndex = order.outcomeIndex,
+                            buyOrderId = order.buyOrderId,
+                            leaderBuyTradeId = order.leaderBuyTradeId,
+                            quantity = actualSize,  // 使用实际数量
+                            price = actualPrice,  // 使用实际价格
+                            matchedQuantity = order.matchedQuantity,
+                            remainingQuantity = order.remainingQuantity,
+                            status = order.status,
+                            notificationSent = true,  // 标记为已发送通知
+                            createdAt = order.createdAt,
+                            updatedAt = System.currentTimeMillis()
+                        )
+                        
+                        // 保存更新后的订单（在发送通知之前保存）
+                        copyOrderTrackingRepository.save(updatedOrder)
+                        
+                        if (needUpdate) {
+                            logger.info("更新买入订单数据成功: orderId=${order.buyOrderId}, 原价格=${order.price}, 新价格=$actualPrice, 原数量=${order.quantity}, 新数量=$actualSize")
+                        } else {
+                            logger.debug("买入订单数据无需更新: orderId=${order.buyOrderId}")
+                        }
+                        
                         // 发送通知（使用实际数据）
                         sendBuyOrderNotification(
                             order = updatedOrder,
@@ -713,7 +682,6 @@ class OrderStatusUpdateService(
                             apiPassphrase = apiPassphrase,
                             orderCreatedAt = order.createdAt
                         )
-                    }
                 } catch (e: Exception) {
                     logger.warn("更新买入订单失败: orderId=${order.buyOrderId}, error=${e.message}", e)
                     // 继续处理下一条记录
