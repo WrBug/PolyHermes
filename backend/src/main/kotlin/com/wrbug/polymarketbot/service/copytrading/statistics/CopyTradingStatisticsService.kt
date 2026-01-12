@@ -134,12 +134,21 @@ class CopyTradingStatisticsService(
     private fun getBuyOrderList(request: OrderTrackingRequest): Pair<List<BuyOrderInfo>, Long> {
         var orders = copyOrderTrackingRepository.findByCopyTradingId(request.copyTradingId)
         
+        // 批量获取市场信息（用于筛选）
+        val allMarketIds = orders.map { it.marketId }.distinct()
+        val markets = marketService.getMarkets(allMarketIds)
+        
         // 筛选
         if (!request.marketId.isNullOrBlank()) {
-            orders = orders.filter { it.marketId == request.marketId }
+            // marketId 支持模糊匹配
+            orders = orders.filter { it.marketId.contains(request.marketId!!, ignoreCase = true) }
         }
-        if (!request.side.isNullOrBlank()) {
-            orders = orders.filter { it.side == request.side }
+        if (!request.marketTitle.isNullOrBlank()) {
+            // marketTitle 关键字筛选
+            orders = orders.filter { order ->
+                val market = markets[order.marketId]
+                market?.title?.contains(request.marketTitle!!, ignoreCase = true) == true
+            }
         }
         if (!request.status.isNullOrBlank()) {
             orders = orders.filter { it.status == request.status }
@@ -156,10 +165,6 @@ class CopyTradingStatisticsService(
         val start = page * limit
         val end = minOf(start + limit, orders.size)
         val pagedOrders = if (start < orders.size) orders.subList(start, end) else emptyList()
-        
-        // 批量获取市场信息
-        val marketIds = pagedOrders.map { it.marketId }.distinct()
-        val markets = marketService.getMarkets(marketIds)
         
         // 转换为DTO
         val list = pagedOrders.map { order ->
@@ -193,12 +198,21 @@ class CopyTradingStatisticsService(
     private fun getSellOrderList(request: OrderTrackingRequest): Pair<List<SellOrderInfo>, Long> {
         var records = sellMatchRecordRepository.findByCopyTradingId(request.copyTradingId)
         
+        // 批量获取市场信息（用于筛选）
+        val allMarketIds = records.map { it.marketId }.distinct()
+        val markets = marketService.getMarkets(allMarketIds)
+        
         // 筛选
         if (!request.marketId.isNullOrBlank()) {
-            records = records.filter { it.marketId == request.marketId }
+            // marketId 支持模糊匹配
+            records = records.filter { it.marketId.contains(request.marketId!!, ignoreCase = true) }
         }
-        if (!request.side.isNullOrBlank()) {
-            records = records.filter { it.side == request.side }
+        if (!request.marketTitle.isNullOrBlank()) {
+            // marketTitle 关键字筛选
+            records = records.filter { record ->
+                val market = markets[record.marketId]
+                market?.title?.contains(request.marketTitle!!, ignoreCase = true) == true
+            }
         }
         
         val total = records.size.toLong()
@@ -212,10 +226,6 @@ class CopyTradingStatisticsService(
         val start = page * limit
         val end = minOf(start + limit, records.size)
         val pagedRecords = if (start < records.size) records.subList(start, end) else emptyList()
-        
-        // 批量获取市场信息
-        val marketIds = pagedRecords.map { it.marketId }.distinct()
-        val markets = marketService.getMarkets(marketIds)
         
         // 转换为DTO
         val list = pagedRecords.map { record ->
@@ -247,6 +257,14 @@ class CopyTradingStatisticsService(
     private fun getMatchedOrderList(request: OrderTrackingRequest): Pair<List<MatchedOrderInfo>, Long> {
         val matchDetails = sellMatchDetailRepository.findByCopyTradingId(request.copyTradingId)
         
+        // 获取所有相关的卖出记录（用于筛选）
+        val matchRecordIds = matchDetails.map { it.matchRecordId }.distinct()
+        val matchRecords = matchRecordIds.mapNotNull { id ->
+            sellMatchRecordRepository.findById(id).orElse(null)
+        }
+        val marketIds = matchRecords.map { it.marketId }.distinct()
+        val markets = marketService.getMarkets(marketIds)
+        
         // 筛选
         var filtered = matchDetails
         if (!request.sellOrderId.isNullOrBlank()) {
@@ -259,6 +277,21 @@ class CopyTradingStatisticsService(
         }
         if (!request.buyOrderId.isNullOrBlank()) {
             filtered = filtered.filter { it.buyOrderId == request.buyOrderId }
+        }
+        if (!request.marketId.isNullOrBlank()) {
+            // marketId 支持模糊匹配
+            filtered = filtered.filter { detail ->
+                val matchRecord = matchRecords.find { it.id == detail.matchRecordId }
+                matchRecord?.marketId?.contains(request.marketId!!, ignoreCase = true) == true
+            }
+        }
+        if (!request.marketTitle.isNullOrBlank()) {
+            // marketTitle 关键字筛选
+            filtered = filtered.filter { detail ->
+                val matchRecord = matchRecords.find { it.id == detail.matchRecordId }
+                val market = matchRecord?.let { markets[it.marketId] }
+                market?.title?.contains(request.marketTitle!!, ignoreCase = true) == true
+            }
         }
         
         val total = filtered.size.toLong()
@@ -274,17 +307,17 @@ class CopyTradingStatisticsService(
         val pagedDetails = if (start < filtered.size) filtered.subList(start, end) else emptyList()
         
         // 获取匹配记录以获取市场ID
-        val matchRecordIds = pagedDetails.map { it.matchRecordId }.distinct()
-        val matchRecords = matchRecordIds.mapNotNull { id ->
+        val pagedMatchRecordIds = pagedDetails.map { it.matchRecordId }.distinct()
+        val pagedMatchRecords = pagedMatchRecordIds.mapNotNull { id ->
             sellMatchRecordRepository.findById(id).orElse(null)
         }
-        val marketIds = matchRecords.map { it.marketId }.distinct()
-        val markets = marketService.getMarkets(marketIds)
+        val pagedMarketIds = pagedMatchRecords.map { it.marketId }.distinct()
+        val pagedMarkets = marketService.getMarkets(pagedMarketIds)
         
         // 转换为DTO
         val list = pagedDetails.map { detail ->
-            val matchRecord = matchRecords.find { it.id == detail.matchRecordId }
-            val market = matchRecord?.let { markets[it.marketId] }
+            val matchRecord = pagedMatchRecords.find { it.id == detail.matchRecordId }
+            val market = matchRecord?.let { pagedMarkets[it.marketId] }
             MatchedOrderInfo(
                 sellOrderId = matchRecord?.sellOrderId ?: "",
                 buyOrderId = detail.buyOrderId,
@@ -550,7 +583,23 @@ class CopyTradingStatisticsService(
             // 2. 获取所有买入订单
             var orders = copyOrderTrackingRepository.findByCopyTradingId(request.copyTradingId)
             
-            // 3. 按市场ID分组
+            // 3. 批量获取市场信息（用于筛选）
+            val allMarketIds = orders.map { it.marketId }.distinct()
+            val markets = marketService.getMarkets(allMarketIds)
+            
+            // 4. 筛选
+            if (!request.marketId.isNullOrBlank()) {
+                // marketId 支持模糊匹配
+                orders = orders.filter { it.marketId.contains(request.marketId!!, ignoreCase = true) }
+            }
+            if (!request.marketTitle.isNullOrBlank()) {
+                // marketTitle 关键字筛选
+                orders = orders.filter { order ->
+                    val market = markets[order.marketId]
+                    market?.title?.contains(request.marketTitle!!, ignoreCase = true) == true
+                }
+            }
+            // 5. 按市场ID分组
             val groups = mutableMapOf<String, MutableList<CopyOrderTracking>>()
             orders.forEach { order ->
                 val marketId = order.marketId
@@ -562,7 +611,6 @@ class CopyTradingStatisticsService(
             
             // 4. 转换为分组数据并计算统计信息
             val marketIds = groups.keys.toList()
-            val markets = marketService.getMarkets(marketIds)
             
             val list = marketIds.map { marketId ->
                 val marketOrders = groups[marketId] ?: mutableListOf()
@@ -659,9 +707,25 @@ class CopyTradingStatisticsService(
                 ?: return Result.failure(IllegalArgumentException("跟单关系不存在: ${request.copyTradingId}"))
             
             // 2. 获取所有卖出记录
-            val sellRecords = sellMatchRecordRepository.findByCopyTradingId(request.copyTradingId)
+            var sellRecords = sellMatchRecordRepository.findByCopyTradingId(request.copyTradingId)
             
-            // 3. 按市场ID分组
+            // 3. 批量获取市场信息（用于筛选）
+            val allMarketIds = sellRecords.map { it.marketId }.distinct()
+            val markets = marketService.getMarkets(allMarketIds)
+            
+            // 4. 筛选
+            if (!request.marketId.isNullOrBlank()) {
+                // marketId 支持模糊匹配
+                sellRecords = sellRecords.filter { it.marketId.contains(request.marketId!!, ignoreCase = true) }
+            }
+            if (!request.marketTitle.isNullOrBlank()) {
+                // marketTitle 关键字筛选
+                sellRecords = sellRecords.filter { record ->
+                    val market = markets[record.marketId]
+                    market?.title?.contains(request.marketTitle!!, ignoreCase = true) == true
+                }
+            }
+            // 5. 按市场ID分组
             val groups = mutableMapOf<String, MutableList<SellMatchRecord>>()
             sellRecords.forEach { record ->
                 val marketId = record.marketId
@@ -673,7 +737,6 @@ class CopyTradingStatisticsService(
             
             // 4. 转换为分组数据并计算统计信息
             val marketIds = groups.keys.toList()
-            val markets = marketService.getMarkets(marketIds)
             
             val list = marketIds.map { marketId ->
                 val marketRecords = groups[marketId] ?: mutableListOf()

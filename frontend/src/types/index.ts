@@ -670,6 +670,7 @@ export interface SellOrderInfo {
   price: string
   amount: string
   realizedPnl: string
+  status?: string  // 卖出状态（filled, partially_matched, fully_matched）
   createdAt: number
 }
 
@@ -710,7 +711,7 @@ export interface OrderTrackingRequest {
   page?: number
   limit?: number
   marketId?: string
-  side?: string
+  marketTitle?: string
   status?: string
   sellOrderId?: string
   buyOrderId?: string
@@ -724,6 +725,8 @@ export interface MarketGroupedOrdersRequest {
   type: 'buy' | 'sell'
   page?: number
   limit?: number
+  marketId?: string
+  marketTitle?: string
 }
 
 /**

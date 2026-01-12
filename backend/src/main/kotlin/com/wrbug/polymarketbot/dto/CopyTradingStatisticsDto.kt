@@ -110,7 +110,7 @@ data class OrderTrackingRequest(
     val page: Int? = 1,
     val limit: Int? = 20,
     val marketId: String? = null,
-    val side: String? = null,
+    val marketTitle: String? = null,  // 市场标题关键字筛选
     val status: String? = null,
     val sellOrderId: String? = null,
     val buyOrderId: String? = null
@@ -123,7 +123,9 @@ data class MarketGroupedOrdersRequest(
     val copyTradingId: Long,
     val type: String,  // buy, sell, matched
     val page: Int? = 1,
-    val limit: Int? = 20
+    val limit: Int? = 20,
+    val marketId: String? = null,
+    val marketTitle: String? = null
 )
 
 /**

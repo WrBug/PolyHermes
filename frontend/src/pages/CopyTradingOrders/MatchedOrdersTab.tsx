@@ -24,13 +24,29 @@ const MatchedOrdersTab: React.FC<MatchedOrdersTabProps> = ({ copyTradingId, acti
   const [filters, setFilters] = useState<{
     sellOrderId?: string
     buyOrderId?: string
+    marketTitle?: string
   }>({})
+
+  const handleMarketTitleChange = (value: string) => {
+    setFilters({ ...filters, marketTitle: value || undefined })
+  }
 
   useEffect(() => {
     if (copyTradingId && active) {
       fetchOrders()
     }
-  }, [copyTradingId, active, page, limit, filters])
+  }, [copyTradingId, active, page, limit])
+
+  // 防抖搜索 - marketTitle 和 orderId 变化时延迟0.5秒再搜索
+  useEffect(() => {
+    if (!copyTradingId || !active) return
+
+    const timer = setTimeout(() => {
+      fetchOrders()
+    }, 500) // 0.5秒延迟
+
+    return () => clearTimeout(timer)
+  }, [filters.marketTitle, filters.buyOrderId, filters.sellOrderId])
 
   const fetchOrders = async () => {
     if (!copyTradingId) return
@@ -193,6 +209,14 @@ const MatchedOrdersTab: React.FC<MatchedOrdersTabProps> = ({ copyTradingId, acti
   return (
     <div>
       <div style={{ marginBottom: 16, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+        <Input
+          placeholder={t('copyTradingOrders.filterMarketTitle') || '筛选市场标题'}
+          allowClear
+          style={{ width: isMobile ? '100%' : 200 }}
+          value={filters.marketTitle}
+          onChange={(e) => handleMarketTitleChange(e.target.value)}
+        />
+
         <Input
           placeholder={t('copyTradingOrders.filterSellOrderId') || '筛选卖出订单ID'}
           allowClear

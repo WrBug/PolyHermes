@@ -1089,6 +1089,7 @@
     "price": "价格",
     "amount": "金额",
     "filterMarketId": "筛选市场ID",
+    "filterMarketTitle": "筛选市场标题",
     "filterSide": "筛选方向",
     "filterStatus": "筛选状态",
     "filterSellOrderId": "筛选卖出订单ID",
