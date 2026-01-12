@@ -10,6 +10,7 @@ import com.wrbug.polymarketbot.repository.CopyTradingTemplateRepository
 import com.wrbug.polymarketbot.repository.LeaderRepository
 import com.wrbug.polymarketbot.service.copytrading.monitor.CopyTradingMonitorService
 import com.google.gson.Gson
+import com.wrbug.polymarketbot.util.IllegalBigDecimal
 import com.wrbug.polymarketbot.util.JsonUtils
 import com.wrbug.polymarketbot.util.toSafeBigDecimal
 import org.slf4j.LoggerFactory
@@ -211,12 +212,67 @@ class CopyTradingService(
                 websocketReconnectInterval = request.websocketReconnectInterval ?: copyTrading.websocketReconnectInterval,
                 websocketMaxRetries = request.websocketMaxRetries ?: copyTrading.websocketMaxRetries,
                 supportSell = request.supportSell ?: copyTrading.supportSell,
-                minOrderDepth = request.minOrderDepth?.toSafeBigDecimal() ?: copyTrading.minOrderDepth,
-                maxSpread = request.maxSpread?.toSafeBigDecimal() ?: copyTrading.maxSpread,
-                minPrice = request.minPrice?.toSafeBigDecimal() ?: copyTrading.minPrice,
-                maxPrice = request.maxPrice?.toSafeBigDecimal() ?: copyTrading.maxPrice,
-                maxPositionValue = request.maxPositionValue?.toSafeBigDecimal() ?: copyTrading.maxPositionValue,
-                maxPositionCount = request.maxPositionCount ?: copyTrading.maxPositionCount,
+                // 处理可选字段：空字符串表示要清空（设置为 null），null 表示不更新，转换失败保留旧值
+                minOrderDepth = if (request.minOrderDepth != null) {
+                    if (request.minOrderDepth.isBlank()) {
+                        null
+                    } else {
+                        val converted = request.minOrderDepth.toSafeBigDecimal()
+                        if (converted == IllegalBigDecimal) copyTrading.minOrderDepth else converted
+                    }
+                } else {
+                    copyTrading.minOrderDepth
+                },
+                maxSpread = if (request.maxSpread != null) {
+                    if (request.maxSpread.isBlank()) {
+                        null
+                    } else {
+                        val converted = request.maxSpread.toSafeBigDecimal()
+                        if (converted == IllegalBigDecimal) copyTrading.maxSpread else converted
+                    }
+                } else {
+                    copyTrading.maxSpread
+                },
+                minPrice = if (request.minPrice != null) {
+                    if (request.minPrice.isBlank()) {
+                        null
+                    } else {
+                        val converted = request.minPrice.toSafeBigDecimal()
+                        if (converted == IllegalBigDecimal) copyTrading.minPrice else converted
+                    }
+                } else {
+                    copyTrading.minPrice
+                },
+                maxPrice = if (request.maxPrice != null) {
+                    if (request.maxPrice.isBlank()) {
+                        null
+                    } else {
+                        val converted = request.maxPrice.toSafeBigDecimal()
+                        if (converted == IllegalBigDecimal) copyTrading.maxPrice else converted
+                    }
+                } else {
+                    copyTrading.maxPrice
+                },
+                maxPositionValue = if (request.maxPositionValue != null) {
+                    if (request.maxPositionValue.isBlank()) {
+                        null
+                    } else {
+                        val converted = request.maxPositionValue.toSafeBigDecimal()
+                        if (converted == IllegalBigDecimal) copyTrading.maxPositionValue else converted
+                    }
+                } else {
+                    copyTrading.maxPositionValue
+                },
+                // 处理 maxPositionCount：-1 表示要清空（设置为 null），null 表示不更新
+                maxPositionCount = if (request.maxPositionCount != null) {
+                    if (request.maxPositionCount == -1) {
+                        null
+                    } else {
+                        request.maxPositionCount
+                    }
+                } else {
+                    copyTrading.maxPositionCount
+                },
                 keywordFilterMode = request.keywordFilterMode ?: copyTrading.keywordFilterMode,
                 keywords = if (request.keywords != null) {
                     convertKeywordsToJson(request.keywords)
@@ -227,7 +283,16 @@ class CopyTradingService(
                 },
                 configName = configName,
                 pushFailedOrders = request.pushFailedOrders ?: copyTrading.pushFailedOrders,
-                maxMarketEndDate = request.maxMarketEndDate ?: copyTrading.maxMarketEndDate,
+                // 处理 maxMarketEndDate：-1 表示要清空（设置为 null），null 表示不更新
+                maxMarketEndDate = if (request.maxMarketEndDate != null) {
+                    if (request.maxMarketEndDate == -1L) {
+                        null
+                    } else {
+                        request.maxMarketEndDate
+                    }
+                } else {
+                    copyTrading.maxMarketEndDate
+                },
                 updatedAt = System.currentTimeMillis()
             )
             
