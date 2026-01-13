@@ -18,6 +18,7 @@ import com.wrbug.polymarketbot.util.CryptoUtils
 import com.wrbug.polymarketbot.repository.CopyOrderTrackingRepository
 import com.wrbug.polymarketbot.repository.CopyTradingRepository
 import com.wrbug.polymarketbot.repository.LeaderRepository
+import com.wrbug.polymarketbot.constants.PolymarketConstants
 import com.wrbug.polymarketbot.service.common.MarketService
 import org.springframework.stereotype.Service
 import java.util.concurrent.ConcurrentHashMap
@@ -41,8 +42,7 @@ class OrderPushService(
 
     private val logger = LoggerFactory.getLogger(OrderPushService::class.java)
 
-    @Value("\${polymarket.rtds.ws-url}")
-    private lateinit var polymarketWsUrl: String
+    private val polymarketWsUrl: String = PolymarketConstants.RTDS_WS_URL
 
     // 存储账户 ID 和对应的 WebSocket 连接
     private val accountConnections = ConcurrentHashMap<Long, PolymarketWebSocketClient>()

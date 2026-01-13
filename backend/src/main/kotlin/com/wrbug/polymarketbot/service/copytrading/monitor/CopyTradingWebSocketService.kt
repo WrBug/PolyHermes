@@ -9,8 +9,8 @@ import com.wrbug.polymarketbot.repository.CopyTradingTemplateRepository
 import com.wrbug.polymarketbot.websocket.PolymarketWebSocketClient
 import jakarta.annotation.PreDestroy
 import kotlinx.coroutines.*
+import com.wrbug.polymarketbot.constants.PolymarketConstants
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Value
 import com.wrbug.polymarketbot.service.copytrading.statistics.CopyOrderTrackingService
 import org.springframework.stereotype.Service
 import java.util.concurrent.ConcurrentHashMap
@@ -28,8 +28,7 @@ class CopyTradingWebSocketService(
     
     private val logger = LoggerFactory.getLogger(CopyTradingWebSocketService::class.java)
     
-    @Value("\${polymarket.websocket.url:wss://ws-live-data.polymarket.com}")
-    private var websocketUrl: String = "wss://ws-live-data.polymarket.com"
+    private val websocketUrl: String = PolymarketConstants.USER_WS_URL
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     
     // 存储每个Leader的WebSocket客户端：leaderId -> WebSocketClient

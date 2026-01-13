@@ -1,5 +1,6 @@
 package com.wrbug.polymarketbot.service.system
 
+import com.wrbug.polymarketbot.constants.PolymarketConstants
 import com.wrbug.polymarketbot.dto.ApiHealthCheckDto
 import com.wrbug.polymarketbot.dto.ApiHealthCheckResponse
 import com.wrbug.polymarketbot.util.createClient
@@ -11,9 +12,9 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.BeansException
 import org.springframework.context.ApplicationContext
 import org.springframework.context.ApplicationContextAware
-import org.springframework.beans.factory.annotation.Value
 import com.wrbug.polymarketbot.service.copytrading.orders.OrderPushService
-import com.wrbug.polymarketbot.service.copytrading.monitor.CopyTradingWebSocketService
+import com.wrbug.polymarketbot.service.copytrading.monitor.PolymarketActivityWsService
+import com.wrbug.polymarketbot.service.copytrading.monitor.UnifiedOnChainWsService
 import org.springframework.stereotype.Service
 import java.util.concurrent.TimeUnit
 
@@ -22,16 +23,6 @@ import java.util.concurrent.TimeUnit
  */
 @Service
 class ApiHealthCheckService(
-    @Value("\${polymarket.clob.base-url}")
-    private val clobBaseUrl: String,
-    @Value("\${polymarket.data-api.base-url}")
-    private val dataApiBaseUrl: String,
-    @Value("\${polymarket.gamma.base-url}")
-    private val gammaBaseUrl: String,
-    @Value("\${polymarket.rtds.ws-url}")
-    private val polymarketWsUrl: String,
-    @Value("\${polymarket.builder.relayer-url:}")
-    private val builderRelayerUrl: String,
     private val rpcNodeService: RpcNodeService
 ) : ApplicationContextAware {
 
@@ -53,22 +44,33 @@ class ApiHealthCheckService(
     }
 
     /**
-     * 获取跟单 WebSocket 服务（通过 ApplicationContext 避免循环依赖）
-     */
-    private fun getCopyTradingWebSocketService(): CopyTradingWebSocketService? {
-        return try {
-            applicationContext?.getBean(CopyTradingWebSocketService::class.java)
-        } catch (e: BeansException) {
-            null
-        }
-    }
-    
-    /**
      * 获取 RelayClientService（通过 ApplicationContext 避免循环依赖）
      */
     private fun getRelayClientService(): RelayClientService? {
         return try {
             applicationContext?.getBean(RelayClientService::class.java)
+        } catch (e: BeansException) {
+            null
+        }
+    }
+
+    /**
+     * 获取 PolymarketActivityWsService（通过 ApplicationContext 避免循环依赖）
+     */
+    private fun getPolymarketActivityWsService(): PolymarketActivityWsService? {
+        return try {
+            applicationContext?.getBean(PolymarketActivityWsService::class.java)
+        } catch (e: BeansException) {
+            null
+        }
+    }
+
+    /**
+     * 获取 UnifiedOnChainWsService（通过 ApplicationContext 避免循环依赖）
+     */
+    private fun getUnifiedOnChainWsService(): UnifiedOnChainWsService? {
+        return try {
+            applicationContext?.getBean(UnifiedOnChainWsService::class.java)
         } catch (e: BeansException) {
             null
         }
@@ -89,7 +91,9 @@ class ApiHealthCheckService(
                 async { checkDataApi() },
                 async { checkGammaApi() },
                 async { checkPolygonRpc() },
-                async { checkPolymarketWebSocket() },
+                async { checkPolymarketRtdsWebSocket() },
+                async { checkPolymarketActivityWebSocket() },
+                async { checkUnifiedOnChainWebSocket() },
                 async { checkBuilderRelayerApi() },
                 async { checkGitHubApi() }
             )
@@ -106,7 +110,7 @@ class ApiHealthCheckService(
      * 检查 Polymarket CLOB API
      */
     private suspend fun checkClobApi(): ApiHealthCheckDto = withContext(Dispatchers.IO) {
-        val url = "$clobBaseUrl/"
+        val url = "${PolymarketConstants.CLOB_BASE_URL}/"
         checkApi("Polymarket CLOB API", url)
     }
 
@@ -114,7 +118,7 @@ class ApiHealthCheckService(
      * 检查 Polymarket Data API
      */
     private suspend fun checkDataApi(): ApiHealthCheckDto = withContext(Dispatchers.IO) {
-        val url = "$dataApiBaseUrl/"
+        val url = "${PolymarketConstants.DATA_API_BASE_URL}/"
         checkApi("Polymarket Data API", url)
     }
 
@@ -131,7 +135,7 @@ class ApiHealthCheckService(
                 .build()
 
             // 使用 /markets 接口检查（不传参数，返回空列表或少量市场数据）
-            val url = "$gammaBaseUrl/markets"
+            val url = "${PolymarketConstants.GAMMA_BASE_URL}/markets"
             val request = Request.Builder()
                 .url(url)
                 .get()
@@ -176,7 +180,7 @@ class ApiHealthCheckService(
             logger.warn("检查 Polymarket Gamma API 失败", e)
             ApiHealthCheckDto(
                 name = "Polymarket Gamma API",
-                url = "$gammaBaseUrl/markets",
+                url = "${PolymarketConstants.GAMMA_BASE_URL}/markets",
                 status = "error",
                 message = e.message ?: "连接失败"
             )
@@ -194,69 +198,143 @@ class ApiHealthCheckService(
     }
 
     /**
-     * 检查 Polymarket WebSocket 连接状态
-     * 不显示延时，只显示连接状态
+     * 检查 Polymarket RTDS WebSocket 连接状态
+     * 用于订单推送服务
      */
-    private suspend fun checkPolymarketWebSocket(): ApiHealthCheckDto = withContext(Dispatchers.Default) {
+    private suspend fun checkPolymarketRtdsWebSocket(): ApiHealthCheckDto = withContext(Dispatchers.Default) {
         try {
-            // 检查订单推送服务的连接状态
             val orderPushService = getOrderPushService()
-            val orderPushStatuses = orderPushService?.getConnectionStatuses() ?: emptyMap()
-            val orderPushConnected = orderPushStatuses.values.any { it }
-            val orderPushTotal = orderPushStatuses.size
-            val orderPushConnectedCount = orderPushStatuses.values.count { it }
+            val statuses = orderPushService?.getConnectionStatuses() ?: emptyMap()
+            val total = statuses.size
+            val connected = statuses.values.count { it }
 
-            // 检查跟单 WebSocket 服务的连接状态
-            val copyTradingWebSocketService = getCopyTradingWebSocketService()
-            val copyTradingStatuses = copyTradingWebSocketService?.getConnectionStatuses() ?: emptyMap()
-            val copyTradingConnected = copyTradingStatuses.values.any { it }
-            val copyTradingTotal = copyTradingStatuses.size
-            val copyTradingConnectedCount = copyTradingStatuses.values.count { it }
-
-            // 计算总体状态
-            val totalConnections = orderPushTotal + copyTradingTotal
-            val connectedConnections = orderPushConnectedCount + copyTradingConnectedCount
-
-            val url = polymarketWsUrl
-            val hasAnyConnection = orderPushConnected || copyTradingConnected
-
-            if (totalConnections == 0) {
-                // 没有配置任何 WebSocket 连接
+            if (total == 0) {
                 ApiHealthCheckDto(
-                    name = "Polymarket WebSocket",
-                    url = url,
+                    name = "Polymarket RTDS WebSocket",
+                    url = PolymarketConstants.RTDS_WS_URL,
                     status = "skipped",
-                    message = "未配置 WebSocket 连接"
+                    message = "未配置账户连接"
                 )
-            } else if (hasAnyConnection) {
-                // 至少有一个连接是活跃的
-                val message = if (connectedConnections == totalConnections) {
-                    "所有连接正常 ($connectedConnections/$totalConnections)"
+            } else if (connected > 0) {
+                val message = if (connected == total) {
+                    "所有账户连接正常 ($connected/$total)"
                 } else {
-                    "部分连接正常 ($connectedConnections/$totalConnections)"
+                    "部分账户连接正常 ($connected/$total)"
                 }
                 ApiHealthCheckDto(
-                    name = "Polymarket WebSocket",
-                    url = url,
+                    name = "Polymarket RTDS WebSocket",
+                    url = PolymarketConstants.RTDS_WS_URL,
                     status = "success",
                     message = message
-                    // 不设置 responseTime，WebSocket 不显示延时
                 )
             } else {
-                // 所有连接都断开
                 ApiHealthCheckDto(
-                    name = "Polymarket WebSocket",
-                    url = url,
+                    name = "Polymarket RTDS WebSocket",
+                    url = PolymarketConstants.RTDS_WS_URL,
                     status = "error",
-                    message = "所有连接断开 ($connectedConnections/$totalConnections)"
-                    // 不设置 responseTime，WebSocket 不显示延时
+                    message = "所有账户连接断开 (0/$total)"
                 )
             }
         } catch (e: Exception) {
-            logger.warn("检查 Polymarket WebSocket 状态失败", e)
+            logger.warn("检查 Polymarket RTDS WebSocket 状态失败", e)
             ApiHealthCheckDto(
-                name = "Polymarket WebSocket",
-                url = polymarketWsUrl,
+                name = "Polymarket RTDS WebSocket",
+                url = PolymarketConstants.RTDS_WS_URL,
+                status = "error",
+                message = "检查失败：${e.message}"
+            )
+        }
+    }
+
+    /**
+     * 检查 Polymarket Activity WebSocket 连接状态
+     * 用于 Activity 全局交易流监听
+     */
+    private suspend fun checkPolymarketActivityWebSocket(): ApiHealthCheckDto = withContext(Dispatchers.Default) {
+        try {
+            val activityWsService = getPolymarketActivityWsService()
+            val isConnected = activityWsService?.isConnected() ?: false
+
+            if (isConnected) {
+                ApiHealthCheckDto(
+                    name = "Polymarket Activity WebSocket",
+                    url = PolymarketConstants.ACTIVITY_WS_URL,
+                    status = "success",
+                    message = "连接正常"
+                )
+            } else {
+                ApiHealthCheckDto(
+                    name = "Polymarket Activity WebSocket",
+                    url = PolymarketConstants.ACTIVITY_WS_URL,
+                    status = "error",
+                    message = "连接断开"
+                )
+            }
+        } catch (e: Exception) {
+            logger.warn("检查 Polymarket Activity WebSocket 状态失败", e)
+            ApiHealthCheckDto(
+                name = "Polymarket Activity WebSocket",
+                url = PolymarketConstants.ACTIVITY_WS_URL,
+                status = "error",
+                message = "检查失败：${e.message}"
+            )
+        }
+    }
+
+    /**
+     * 检查统一链上 WebSocket 连接状态
+     * 用于监听链上事件
+     */
+    private suspend fun checkUnifiedOnChainWebSocket(): ApiHealthCheckDto = withContext(Dispatchers.Default) {
+        try {
+            val unifiedOnChainWsService = getUnifiedOnChainWsService()
+
+            if (unifiedOnChainWsService == null) {
+                return@withContext ApiHealthCheckDto(
+                    name = "链上 WebSocket",
+                    url = rpcNodeService.getWsUrl(),
+                    status = "error",
+                    message = "服务未初始化"
+                )
+            }
+
+            // 检查连接状态
+            val statuses = unifiedOnChainWsService.getConnectionStatuses()
+            val total = statuses.size
+            val connected = statuses.values.count { it }
+
+            if (total == 0) {
+                ApiHealthCheckDto(
+                    name = "链上 WebSocket",
+                    url = rpcNodeService.getWsUrl(),
+                    status = "skipped",
+                    message = "未配置地址监听"
+                )
+            } else if (connected > 0) {
+                val message = if (connected == total) {
+                    "所有地址连接正常 ($connected/$total)"
+                } else {
+                    "部分地址连接正常 ($connected/$total)"
+                }
+                ApiHealthCheckDto(
+                    name = "链上 WebSocket",
+                    url = rpcNodeService.getWsUrl(),
+                    status = "success",
+                    message = message
+                )
+            } else {
+                ApiHealthCheckDto(
+                    name = "链上 WebSocket",
+                    url = rpcNodeService.getWsUrl(),
+                    status = "error",
+                    message = "所有地址连接断开 (0/$total)"
+                )
+            }
+        } catch (e: Exception) {
+            logger.warn("检查链上 WebSocket 状态失败", e)
+            ApiHealthCheckDto(
+                name = "链上 WebSocket",
+                url = rpcNodeService.getWsUrl(),
                 status = "error",
                 message = "检查失败：${e.message}"
             )
@@ -390,19 +468,10 @@ class ApiHealthCheckService(
     private suspend fun checkBuilderRelayerApi(): ApiHealthCheckDto = withContext(Dispatchers.IO) {
         val relayClientService = getRelayClientService()
         
-        if (builderRelayerUrl.isBlank()) {
-            return@withContext ApiHealthCheckDto(
-                name = "Builder Relayer API",
-                url = "未配置",
-                status = "skipped",
-                message = "未配置 Builder Relayer URL"
-            )
-        }
-        
         if (relayClientService == null) {
             return@withContext ApiHealthCheckDto(
                 name = "Builder Relayer API",
-                url = builderRelayerUrl,
+                url = PolymarketConstants.BUILDER_RELAYER_URL,
                 status = "error",
                 message = "服务未初始化"
             )
@@ -411,7 +480,7 @@ class ApiHealthCheckService(
         if (!relayClientService.isBuilderApiKeyConfigured()) {
             return@withContext ApiHealthCheckDto(
                 name = "Builder Relayer API",
-                url = builderRelayerUrl,
+                url = PolymarketConstants.BUILDER_RELAYER_URL,
                 status = "skipped",
                 message = "Builder API Key 未配置"
             )
@@ -423,7 +492,7 @@ class ApiHealthCheckService(
                 onSuccess = { responseTime ->
                     ApiHealthCheckDto(
                         name = "Builder Relayer API",
-                        url = builderRelayerUrl,
+                        url = PolymarketConstants.BUILDER_RELAYER_URL,
                         status = "success",
                         message = "连接成功",
                         responseTime = responseTime
@@ -432,7 +501,7 @@ class ApiHealthCheckService(
                 onFailure = { e ->
                     ApiHealthCheckDto(
                         name = "Builder Relayer API",
-                        url = builderRelayerUrl,
+                        url = PolymarketConstants.BUILDER_RELAYER_URL,
                         status = "error",
                         message = e.message ?: "连接失败"
                     )
@@ -442,7 +511,7 @@ class ApiHealthCheckService(
             logger.warn("检查 Builder Relayer API 失败", e)
             ApiHealthCheckDto(
                 name = "Builder Relayer API",
-                url = builderRelayerUrl,
+                url = PolymarketConstants.BUILDER_RELAYER_URL,
                 status = "error",
                 message = e.message ?: "连接失败"
             )

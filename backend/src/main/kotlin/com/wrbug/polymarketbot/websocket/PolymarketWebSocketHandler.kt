@@ -1,7 +1,7 @@
 package com.wrbug.polymarketbot.websocket
 
+import com.wrbug.polymarketbot.constants.PolymarketConstants
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import org.springframework.web.socket.*
 import java.util.concurrent.ConcurrentHashMap
@@ -15,8 +15,7 @@ class PolymarketWebSocketHandler : WebSocketHandler {
     
     private val logger = LoggerFactory.getLogger(PolymarketWebSocketHandler::class.java)
     
-    @Value("\${polymarket.rtds.ws-url}")
-    private lateinit var polymarketWsUrl: String
+    private val polymarketWsUrl: String = PolymarketConstants.RTDS_WS_URL
     
     // 存储客户端会话和对应的 Polymarket 连接的映射
     private val clientSessions = ConcurrentHashMap<String, WebSocketSession>()

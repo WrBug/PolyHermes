@@ -130,7 +130,7 @@ export PROXY_PORT=8888
 - 代理配置错误
 
 **排查步骤**:
-1. 检查 `polymarket.rtds.ws-url` 配置是否正确
+1. 检查 Polymarket RTDS WebSocket URL（现在使用代码常量 `PolymarketConstants.RTDS_WS_URL`）
 2. 检查网络连接
 3. 查看详细错误日志
 

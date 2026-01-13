@@ -7,11 +7,11 @@ import com.wrbug.polymarketbot.api.JsonRpcResponse
 import com.wrbug.polymarketbot.api.PolymarketDataApi
 import com.wrbug.polymarketbot.api.PositionResponse
 import com.wrbug.polymarketbot.api.ValueResponse
+import com.wrbug.polymarketbot.constants.PolymarketConstants
 import com.wrbug.polymarketbot.util.EthereumUtils
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.createClient
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Value
 import com.wrbug.polymarketbot.service.system.RelayClientService
 import com.wrbug.polymarketbot.service.system.RpcNodeService
 import org.springframework.stereotype.Service
@@ -26,8 +26,6 @@ import java.math.BigInteger
  */
 @Service
 class BlockchainService(
-    @Value("\${polymarket.data-api.base-url:https://data-api.polymarket.com}")
-    private val dataApiBaseUrl: String,
     private val retrofitFactory: RetrofitFactory,
     private val relayClientService: RelayClientService,
     private val rpcNodeService: RpcNodeService,
@@ -61,10 +59,10 @@ class BlockchainService(
     private val computeProxyAddressFunctionSignature = "computeProxyAddress(address)"
     
     private val dataApi: PolymarketDataApi by lazy {
-        val baseUrl = if (dataApiBaseUrl.endsWith("/")) {
-            dataApiBaseUrl.dropLast(1)
+        val baseUrl = if (PolymarketConstants.DATA_API_BASE_URL.endsWith("/")) {
+            PolymarketConstants.DATA_API_BASE_URL.dropLast(1)
         } else {
-            dataApiBaseUrl
+            PolymarketConstants.DATA_API_BASE_URL
         }
         val okHttpClient = createClient()
             .followRedirects(true)

@@ -7,6 +7,7 @@ import com.wrbug.polymarketbot.api.GitHubApi
 import com.wrbug.polymarketbot.api.PolymarketClobApi
 import com.wrbug.polymarketbot.api.PolymarketDataApi
 import com.wrbug.polymarketbot.api.PolymarketGammaApi
+import com.wrbug.polymarketbot.constants.PolymarketConstants
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Interceptor
@@ -18,7 +19,6 @@ import okhttp3.Response
 import okio.Buffer
 import java.util.concurrent.TimeUnit
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -34,10 +34,6 @@ import jakarta.annotation.PreDestroy
  */
 @Component
 class RetrofitFactory(
-    @Value("\${polymarket.clob.base-url}")
-    private val clobBaseUrl: String,
-    @Value("\${polymarket.gamma.base-url}")
-    private val gammaBaseUrl: String,
     private val gson: Gson
 ) {
     
@@ -58,10 +54,10 @@ class RetrofitFactory(
     
     // 缓存 Gamma API 客户端（单例）
     private val gammaApi: PolymarketGammaApi by lazy {
-        val baseUrl = if (gammaBaseUrl.endsWith("/")) {
-            gammaBaseUrl.dropLast(1)
+        val baseUrl = if (PolymarketConstants.GAMMA_BASE_URL.endsWith("/")) {
+            PolymarketConstants.GAMMA_BASE_URL.dropLast(1)
         } else {
-            gammaBaseUrl
+            PolymarketConstants.GAMMA_BASE_URL
         }
         
         Retrofit.Builder()
@@ -74,7 +70,7 @@ class RetrofitFactory(
     
     // 缓存 Data API 客户端（单例）
     private val dataApi: PolymarketDataApi by lazy {
-        val baseUrl = "https://data-api.polymarket.com"
+        val baseUrl = PolymarketConstants.DATA_API_BASE_URL
         
         Retrofit.Builder()
             .baseUrl("$baseUrl/")
@@ -113,7 +109,7 @@ class RetrofitFactory(
     // 缓存不带认证的 CLOB API 客户端（单例）
     private val clobApiWithoutAuth: PolymarketClobApi by lazy {
         Retrofit.Builder()
-            .baseUrl(clobBaseUrl)
+            .baseUrl(PolymarketConstants.CLOB_BASE_URL)
             .client(sharedOkHttpClient)
             .addConverterFactory(GsonConverterFactory.create(gson))
             .build()
@@ -158,7 +154,7 @@ class RetrofitFactory(
                 .build()
             
             Retrofit.Builder()
-                .baseUrl(clobBaseUrl)
+                .baseUrl(PolymarketConstants.CLOB_BASE_URL)
                 .client(okHttpClient)
                 .addConverterFactory(GsonConverterFactory.create(gson))
                 .build()

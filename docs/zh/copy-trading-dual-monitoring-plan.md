@@ -399,8 +399,8 @@ CopyOrderTrackingService.processTrade(
 ### 5.1 application.properties
 
 ```properties
-# Polymarket WebSocket
-polymarket.websocket.url=wss://ws-live-data.polymarket.com
+# 注意：Polymarket API URL 现在使用代码常量（PolymarketConstants），不再从配置文件读取
+# 如需修改，请修改 com.wrbug.polymarketbot.constants.PolymarketConstants 类
 
 # 监听策略
 copy.trading.monitor.strategy=dual

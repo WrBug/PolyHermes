@@ -2,8 +2,8 @@ package com.wrbug.polymarketbot.config
 
 import com.google.gson.Gson
 import com.wrbug.polymarketbot.api.PolymarketClobApi
+import com.wrbug.polymarketbot.constants.PolymarketConstants
 import com.wrbug.polymarketbot.util.createClient
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import retrofit2.Retrofit
@@ -23,9 +23,6 @@ class RetrofitConfig(
     private val gson: Gson
 ) {
     
-    @Value("\${polymarket.clob.base-url}")
-    private lateinit var clobBaseUrl: String
-    
     /**
      * 创建 CLOB API 客户端
      * 用于跟单系统的订单操作和交易查询
@@ -38,7 +35,7 @@ class RetrofitConfig(
         val okHttpClient = createClient().build()
         
         return Retrofit.Builder()
-            .baseUrl(clobBaseUrl)
+            .baseUrl(PolymarketConstants.CLOB_BASE_URL)
             .client(okHttpClient)
             .addConverterFactory(GsonConverterFactory.create(gson))
             .build()

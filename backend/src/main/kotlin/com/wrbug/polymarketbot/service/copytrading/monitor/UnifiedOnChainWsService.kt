@@ -129,12 +129,20 @@ class UnifiedOnChainWsService(
         }
         addressConnections.clear()
     }
-    
+
+    /**
+     * 获取连接状态
+     * @return Map<address, isConnected>
+     */
+    fun getConnectionStatuses(): Map<String, Boolean> {
+        return addressConnections.mapValues { (_, connection) -> connection.isConnected() }
+    }
+
     @PostConstruct
     fun init() {
         logger.info("统一链上 WebSocket 服务已初始化 (独立连接模式)")
     }
-    
+
     @PreDestroy
     fun destroy() {
         stop()
@@ -209,6 +217,10 @@ class UnifiedOnChainWsService(
 
         fun isSubscriptionsEmpty(): Boolean {
             return subscriptions.isEmpty()
+        }
+
+        fun isConnected(): Boolean {
+            return isConnected
         }
 
         private suspend fun startConnectionLoop() {

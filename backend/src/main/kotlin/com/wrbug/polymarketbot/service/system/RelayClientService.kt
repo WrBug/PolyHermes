@@ -3,11 +3,11 @@ package com.wrbug.polymarketbot.service.system
 import com.wrbug.polymarketbot.api.BuilderRelayerApi
 import com.wrbug.polymarketbot.api.EthereumRpcApi
 import com.wrbug.polymarketbot.api.JsonRpcRequest
+import com.wrbug.polymarketbot.constants.PolymarketConstants
 import com.wrbug.polymarketbot.util.EthereumUtils
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.createClient
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.math.BigInteger
 
@@ -24,8 +24,6 @@ import java.math.BigInteger
  */
 @Service
 class RelayClientService(
-    @Value("\${polymarket.builder.relayer-url:}")
-    private val builderRelayerUrl: String,
     private val retrofitFactory: RetrofitFactory,
     private val systemConfigService: SystemConfigService,
     private val rpcNodeService: RpcNodeService
@@ -54,10 +52,10 @@ class RelayClientService(
         val builderApiKey = systemConfigService.getBuilderApiKey()
         val builderSecret = systemConfigService.getBuilderSecret()
         val builderPassphrase = systemConfigService.getBuilderPassphrase()
-        
+
         if (isBuilderRelayerEnabled(builderApiKey, builderSecret, builderPassphrase)) {
             return retrofitFactory.createBuilderRelayerApi(
-                relayerUrl = builderRelayerUrl,
+                relayerUrl = PolymarketConstants.BUILDER_RELAYER_URL,
                 apiKey = builderApiKey!!,
                 secret = builderSecret!!,
                 passphrase = builderPassphrase!!
@@ -74,19 +72,19 @@ class RelayClientService(
         builderSecret: String?,
         builderPassphrase: String?
     ): Boolean {
-        return builderRelayerUrl.isNotBlank() &&
+        return PolymarketConstants.BUILDER_RELAYER_URL.isNotBlank() &&
                 builderApiKey != null && builderApiKey.isNotBlank() &&
                 builderSecret != null && builderSecret.isNotBlank() &&
                 builderPassphrase != null && builderPassphrase.isNotBlank()
     }
-    
+
     /**
      * 检查 Builder API Key 是否已配置
      */
     fun isBuilderApiKeyConfigured(): Boolean {
         return systemConfigService.isBuilderApiKeyConfigured()
     }
-    
+
     /**
      * 检查 Builder Relayer API 健康状态（用于 API 健康检查）
      */
@@ -95,24 +93,24 @@ class RelayClientService(
             val builderApiKey = systemConfigService.getBuilderApiKey()
             val builderSecret = systemConfigService.getBuilderSecret()
             val builderPassphrase = systemConfigService.getBuilderPassphrase()
-            
+
             if (builderApiKey == null || builderSecret == null || builderPassphrase == null) {
                 return Result.failure(IllegalStateException("Builder API Key 未配置"))
             }
-            
+
             val relayerApi = retrofitFactory.createBuilderRelayerApi(
-                relayerUrl = builderRelayerUrl,
+                relayerUrl = PolymarketConstants.BUILDER_RELAYER_URL,
                 apiKey = builderApiKey,
                 secret = builderSecret,
                 passphrase = builderPassphrase
             )
-            
+
             // 使用一个测试地址来检查 API 是否可用（使用一个已知的地址，如零地址）
             val testAddress = "0x0000000000000000000000000000000000000000"
             val startTime = System.currentTimeMillis()
             val response = relayerApi.getDeployed(testAddress)
             val responseTime = System.currentTimeMillis() - startTime
-            
+
             if (response.isSuccessful) {
                 Result.success(responseTime)
             } else {
@@ -228,11 +226,18 @@ class RelayClientService(
             val builderApiKey = systemConfigService.getBuilderApiKey()
             val builderSecret = systemConfigService.getBuilderSecret()
             val builderPassphrase = systemConfigService.getBuilderPassphrase()
-            
+
             // 优先使用 Builder Relayer（Gasless）
             if (isBuilderRelayerEnabled(builderApiKey, builderSecret, builderPassphrase)) {
                 logger.info("使用 Builder Relayer 执行 Gasless 交易")
-                return executeViaBuilderRelayer(privateKey, proxyAddress, safeTx, builderApiKey!!, builderSecret!!, builderPassphrase!!)
+                return executeViaBuilderRelayer(
+                    privateKey,
+                    proxyAddress,
+                    safeTx,
+                    builderApiKey!!,
+                    builderSecret!!,
+                    builderPassphrase!!
+                )
             }
 
             // 回退到手动发送交易（需要用户支付 gas）
@@ -256,9 +261,8 @@ class RelayClientService(
         builderSecret: String,
         builderPassphrase: String
     ): Result<String> {
-        val rpcApi = polygonRpcApi
         val relayerApi = retrofitFactory.createBuilderRelayerApi(
-            relayerUrl = builderRelayerUrl,
+            relayerUrl = PolymarketConstants.BUILDER_RELAYER_URL,
             apiKey = builderApiKey,
             secret = builderSecret,
             passphrase = builderPassphrase
@@ -320,19 +324,19 @@ class RelayClientService(
         val messageWithPrefix = ByteArray(prefix.size + safeTxStructuredHash.size)
         System.arraycopy(prefix, 0, messageWithPrefix, 0, prefix.size)
         System.arraycopy(safeTxStructuredHash, 0, messageWithPrefix, prefix.size, safeTxStructuredHash.size)
-        
+
         // 对带前缀的消息进行 keccak256 哈希
         val keccak256 = org.bouncycastle.crypto.digests.KeccakDigest(256)
         keccak256.update(messageWithPrefix, 0, messageWithPrefix.size)
         val hashWithPrefix = ByteArray(keccak256.digestSize)
         keccak256.doFinal(hashWithPrefix, 0)
-        
+
         val ecKeyPair = org.web3j.crypto.ECKeyPair.create(privateKeyBigInt)
         val safeSignature = org.web3j.crypto.Sign.signMessage(hashWithPrefix, ecKeyPair, false)
 
         // 打包签名（参考 builder-relayer-client/src/utils/index.ts 的 splitAndPackSig）
         val packedSignature = splitAndPackSig(safeSignature)
-        
+
         // 调试日志（地址已遮蔽）
         logger.debug("=== Builder Relayer 签名调试 ===")
         logger.debug("Safe: ${proxyAddress.take(10)}..., From: ${fromAddress.take(10)}..., Nonce: $proxyNonce")
@@ -358,7 +362,7 @@ class RelayClientService(
             ),
             metadata = "Redeem positions via Builder Relayer"
         )
-        
+
         logger.debug("Request: type=${request.type}, dataLen=${request.data.length}, sigLen=${request.signature.length}, nonce=${request.nonce}")
 
         // 调用 Builder Relayer API（认证头通过拦截器添加）
@@ -372,7 +376,7 @@ class RelayClientService(
 
         val relayerResponse = response.body()!!
         val txHash = relayerResponse.transactionHash ?: relayerResponse.hash
-            ?: return Result.failure(Exception("Builder Relayer 返回的交易哈希为空"))
+        ?: return Result.failure(Exception("Builder Relayer 返回的交易哈希为空"))
 
         logger.info("Builder Relayer 执行成功: transactionID=${relayerResponse.transactionID}, txHash=$txHash")
         return Result.success(txHash)
@@ -381,14 +385,14 @@ class RelayClientService(
     /**
      * 打包签名（参考 builder-relayer-client/src/utils/index.ts 的 splitAndPackSig）
      * 将签名打包成 Gnosis Safe 接受的格式：encodePacked(["uint256", "uint256", "uint8"], [r, s, v])
-     * 
+     *
      * TypeScript 实现流程：
      * 1. 从签名字符串中提取 v（最后 2 个字符）
      * 2. 调整 v 值（0,1 -> +31; 27,28 -> +4）
      * 3. 修改签名字符串（替换最后 2 个字符）
      * 4. 从修改后的签名字符串中提取 r, s, v（作为十进制字符串）
      * 5. 使用 encodePacked 打包：uint256(BigInt(r)) + uint256(BigInt(s)) + uint8(parseInt(v))
-     * 
+     *
      * 关键：encodePacked 会将 BigInt 编码为 32 字节（64 个十六进制字符），uint8 编码为 1 字节（2 个十六进制字符）
      */
     private fun splitAndPackSig(signature: org.web3j.crypto.Sign.SignatureData): String {
@@ -403,37 +407,37 @@ class RelayClientService(
         }
         val originalVHex = String.format("%02x", originalV)
         val sigString = "0x$rHex$sHex$originalVHex"  // 130 个十六进制字符（65 字节）
-        
+
         // 2. 从签名字符串中提取 v（最后 2 个字符，作为十六进制）
         val sigV = sigString.substring(sigString.length - 2).toInt(16)
-        
+
         // 3. 调整 v 值（参考 TypeScript 实现）
         val adjustedV = when (sigV) {
             0, 1 -> sigV + 31
             27, 28 -> sigV + 4
             else -> throw IllegalArgumentException("Invalid signature v value: $sigV")
         }
-        
+
         // 4. 修改签名字符串（替换最后 2 个字符）
         val modifiedSigString = sigString.substring(0, sigString.length - 2) + String.format("%02x", adjustedV)
-        
+
         // 5. 从修改后的签名字符串中提取 r, s, v（作为十六进制字符串）
         // modifiedSigString 格式：0x + r(64) + s(64) + v(2) = 132 个字符
         val rHexStr = modifiedSigString.substring(2, 66)  // 64 个字符（十六进制）
         val sHexStr = modifiedSigString.substring(66, 130)  // 64 个字符（十六进制）
         val vHexStr = modifiedSigString.substring(130, 132)  // 2 个字符（十六进制）
-        
+
         // 6. 转换为 BigInteger 和 Int（模拟 TypeScript 的 BigInt 和 parseInt）
         val rBigInt = BigInteger(rHexStr, 16)
         val sBigInt = BigInteger(sHexStr, 16)
         val vInt = vHexStr.toInt(16)
-        
+
         // 7. 使用 encodePacked 打包：uint256(r) + uint256(s) + uint8(v)
         // encodePacked 会将 BigInt 编码为 32 字节（64 个十六进制字符），uint8 编码为 1 字节（2 个十六进制字符）
         val rEncoded = EthereumUtils.encodeUint256(rBigInt)  // 64 个十六进制字符
         val sEncoded = EthereumUtils.encodeUint256(sBigInt)  // 64 个十六进制字符
         val vEncoded = String.format("%02x", vInt)  // 2 个十六进制字符
-        
+
         return "0x$rEncoded$sEncoded$vEncoded"
     }
 
@@ -504,13 +508,13 @@ class RelayClientService(
             val messageWithPrefix = ByteArray(prefix.size + safeTxStructuredHash.size)
             System.arraycopy(prefix, 0, messageWithPrefix, 0, prefix.size)
             System.arraycopy(safeTxStructuredHash, 0, messageWithPrefix, prefix.size, safeTxStructuredHash.size)
-            
+
             // 对带前缀的消息进行 keccak256 哈希
             val keccak256 = org.bouncycastle.crypto.digests.KeccakDigest(256)
             keccak256.update(messageWithPrefix, 0, messageWithPrefix.size)
             val hashWithPrefix = ByteArray(keccak256.digestSize)
             keccak256.doFinal(hashWithPrefix, 0)
-            
+
             val ecKeyPair = org.web3j.crypto.ECKeyPair.create(privateKeyBigInt)
             val safeSignature = org.web3j.crypto.Sign.signMessage(hashWithPrefix, ecKeyPair, false)
 
@@ -572,7 +576,8 @@ class RelayClientService(
         redeemCallData: String,
         safeSignatureHex: String
     ): String {
-        val execFunctionSelector = EthereumUtils.getFunctionSelector("execTransaction(address,uint256,bytes,uint8,uint256,uint256,uint256,address,address,bytes)")
+        val execFunctionSelector =
+            EthereumUtils.getFunctionSelector("execTransaction(address,uint256,bytes,uint8,uint256,uint256,uint256,address,address,bytes)")
 
         val encodedTo = EthereumUtils.encodeAddress(safeTx.to)
         val encodedValue = EthereumUtils.encodeUint256(BigInteger.ZERO)
@@ -600,20 +605,20 @@ class RelayClientService(
         val encodedSignatures = safeSignatureHex
 
         return "0x" + execFunctionSelector.removePrefix("0x") +
-            encodedTo +
-            encodedValue +
-            encodedDataOffset +
-            encodedDataLength +
-            encodedData +
-            encodedOperation +
-            encodedSafeTxGas +
-            encodedBaseGas +
-            encodedGasPrice +
-            encodedGasToken +
-            encodedRefundReceiver +
-            encodedSignaturesOffset +
-            encodedSignaturesLength +
-            encodedSignatures
+                encodedTo +
+                encodedValue +
+                encodedDataOffset +
+                encodedDataLength +
+                encodedData +
+                encodedOperation +
+                encodedSafeTxGas +
+                encodedBaseGas +
+                encodedGasPrice +
+                encodedGasToken +
+                encodedRefundReceiver +
+                encodedSignaturesOffset +
+                encodedSignaturesLength +
+                encodedSignatures
     }
 
     /**
