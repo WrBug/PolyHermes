@@ -114,10 +114,10 @@ class AccountOnChainMonitorService(
             }
             
             val receiptRpcResponse = receiptResponse.body()!!
-            if (receiptRpcResponse.error != null || receiptRpcResponse.result == null) {
+            if (receiptRpcResponse.error != null || receiptRpcResponse.result == null || receiptRpcResponse.result.isJsonNull) {
                 return
             }
-            
+
             // 使用 Gson 解析 receipt JSON
             val receiptJson = receiptRpcResponse.result.asJsonObject
             
