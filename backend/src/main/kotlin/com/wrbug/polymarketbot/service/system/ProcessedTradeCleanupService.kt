@@ -4,6 +4,7 @@ import com.wrbug.polymarketbot.repository.ProcessedTradeRepository
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 
 /**
  * 已处理交易清理服务
@@ -30,6 +31,7 @@ class ProcessedTradeCleanupService(
      * 每10分钟执行一次
      */
     @Scheduled(fixedDelay = CLEANUP_INTERVAL_MS)
+    @Transactional
     fun cleanupExpiredProcessedTrades() {
         try {
             val expireTime = System.currentTimeMillis() - RETENTION_MS
