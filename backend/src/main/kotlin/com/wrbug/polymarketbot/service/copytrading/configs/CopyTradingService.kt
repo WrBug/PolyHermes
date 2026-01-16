@@ -14,6 +14,8 @@ import com.wrbug.polymarketbot.util.IllegalBigDecimal
 import com.wrbug.polymarketbot.util.JsonUtils
 import com.wrbug.polymarketbot.util.toSafeBigDecimal
 import org.slf4j.LoggerFactory
+import org.springframework.context.ApplicationContext
+import org.springframework.context.ApplicationContextAware
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -30,9 +32,23 @@ class CopyTradingService(
     private val monitorService: CopyTradingMonitorService,
     private val jsonUtils: JsonUtils,
     private val gson: Gson
-) {
-    
+) : ApplicationContextAware {
+
     private val logger = LoggerFactory.getLogger(CopyTradingService::class.java)
+    
+    private var applicationContext: ApplicationContext? = null
+    
+    override fun setApplicationContext(applicationContext: ApplicationContext) {
+        this.applicationContext = applicationContext
+    }
+    
+    /**
+     * 获取代理对象，用于解决 @Transactional 自调用问题
+     */
+    private fun getSelf(): CopyTradingService {
+        return applicationContext?.getBean(CopyTradingService::class.java)
+            ?: throw IllegalStateException("ApplicationContext not initialized")
+    }
     
     /**
      * 创建跟单配置
@@ -331,7 +347,7 @@ class CopyTradingService(
      */
     @Transactional
     fun updateCopyTradingStatus(request: CopyTradingUpdateStatusRequest): Result<CopyTradingDto> {
-        return updateCopyTrading(
+        return getSelf().updateCopyTrading(
             CopyTradingUpdateRequest(
                 copyTradingId = request.copyTradingId,
                 enabled = request.enabled

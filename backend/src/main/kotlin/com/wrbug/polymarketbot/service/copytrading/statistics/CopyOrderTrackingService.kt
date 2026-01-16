@@ -23,6 +23,8 @@ import com.wrbug.polymarketbot.service.common.MarketService
 import com.wrbug.polymarketbot.service.common.PolymarketClobService
 import com.wrbug.polymarketbot.service.system.TelegramNotificationService
 import com.wrbug.polymarketbot.util.CryptoUtils
+import org.springframework.context.ApplicationContext
+import org.springframework.context.ApplicationContextAware
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -51,12 +53,26 @@ open class CopyOrderTrackingService(
     private val cryptoUtils: CryptoUtils,
     private val marketService: MarketService,  // 市场信息服务
     private val telegramNotificationService: TelegramNotificationService? = null  // 可选，避免循环依赖
-) {
+) : ApplicationContextAware {
 
     private val logger = LoggerFactory.getLogger(CopyOrderTrackingService::class.java)
 
     // 协程作用域（用于异步发送通知）
     private val notificationScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    
+    private var applicationContext: ApplicationContext? = null
+    
+    override fun setApplicationContext(applicationContext: ApplicationContext) {
+        this.applicationContext = applicationContext
+    }
+    
+    /**
+     * 获取代理对象，用于解决 @Transactional 自调用问题
+     */
+    private fun getSelf(): CopyOrderTrackingService {
+        return applicationContext?.getBean(CopyOrderTrackingService::class.java)
+            ?: throw IllegalStateException("ApplicationContext not initialized")
+    }
 
     // 使用 Mutex 保证线程安全（按交易ID锁定）
     private val tradeMutexMap = ConcurrentHashMap<String, Mutex>()
@@ -138,10 +154,11 @@ open class CopyOrderTrackingService(
                     return@withLock Result.success(Unit)
                 }
 
-                // 2. 处理交易逻辑
+                // 2. 处理交易逻辑（通过代理对象调用，确保 @Transactional 生效）
+                val self = getSelf()
                 val result = when (trade.side.uppercase()) {
-                    "BUY" -> processBuyTrade(leaderId, trade, source)
-                    "SELL" -> processSellTrade(leaderId, trade)
+                    "BUY" -> self.processBuyTrade(leaderId, trade, source)
+                    "SELL" -> self.processSellTrade(leaderId, trade)
                     else -> {
                         logger.warn("未知的交易方向: ${trade.side}")
                         Result.failure(IllegalArgumentException("未知的交易方向: ${trade.side}"))
