@@ -799,7 +799,15 @@ class CopyTradingStatisticsService(
                     stats = stats,
                     orders = orderDtos as List<Any>
                 )
-            }.sortedByDescending { it.stats.count }
+            }.sortedByDescending { group ->
+                // 找出该市场最近的卖出订单时间（与买入订单分组排序规则一致）
+                group.orders.mapNotNull { order ->
+                    when (order) {
+                        is SellOrderInfo -> order.createdAt
+                        else -> null
+                    }
+                }.maxOrNull() ?: 0L
+            }
             
             // 5. 分页
             val page = (request.page ?: 1)
