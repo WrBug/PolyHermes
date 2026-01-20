@@ -2,6 +2,7 @@ package com.wrbug.polymarketbot.controller.auth
 
 import com.wrbug.polymarketbot.dto.*
 import com.wrbug.polymarketbot.enums.ErrorCode
+import com.wrbug.polymarketbot.repository.UserRepository
 import com.wrbug.polymarketbot.service.auth.AuthService
 import com.wrbug.polymarketbot.service.auth.WebSocketTicketService
 import jakarta.servlet.http.HttpServletRequest
@@ -18,7 +19,8 @@ import org.springframework.web.bind.annotation.*
 class AuthController(
     private val authService: AuthService,
     private val messageSource: MessageSource,
-    private val webSocketTicketService: WebSocketTicketService
+    private val webSocketTicketService: WebSocketTicketService,
+    private val userRepository: UserRepository
 ) {
     
     private val logger = LoggerFactory.getLogger(AuthController::class.java)
@@ -182,6 +184,33 @@ class AuthController(
         } catch (e: Exception) {
             logger.error("获取 WebSocket 票据异常: ${e.message}", e)
             ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, "获取票据失败", messageSource))
+        }
+    }
+    
+    /**
+     * 验证当前用户权限
+     * 用于动态更新服务验证管理员权限
+     * 管理员权限判断：是否为默认账户（isDefault == true）
+     */
+    @GetMapping("/verify")
+    fun verify(httpRequest: HttpServletRequest): ResponseEntity<ApiResponse<Unit>> {
+        return try {
+            // 从请求属性中获取用户名（由 JWT 拦截器设置）
+            val username = httpRequest.getAttribute("username") as? String
+            if (username == null) {
+                return ResponseEntity.status(401).body(ApiResponse.error(ErrorCode.AUTH_ERROR, "未认证", messageSource))
+            }
+            
+            // 检查是否为默认账户（管理员）
+            val user = userRepository.findByUsername(username)
+            if (user == null || !user.isDefault) {
+                return ResponseEntity.status(403).body(ApiResponse.error(ErrorCode.AUTH_ERROR, "需要管理员权限", messageSource))
+            }
+            
+            ResponseEntity.ok(ApiResponse.success(Unit))
+        } catch (e: Exception) {
+            logger.error("验证权限异常: ${e.message}", e)
+            ResponseEntity.status(500).body(ApiResponse.error(ErrorCode.SERVER_ERROR, "验证失败", messageSource))
         }
     }
 }

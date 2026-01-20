@@ -9,13 +9,16 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     
+    permissions:
+      contents: write  # 需要写权限以上传 Assets
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.release.tag_name }}  # 使用 release 对应的 tag
       
-      - name: Extract version from release
+      - name: Extract version and check if pre-release
         id: extract_version
         run: |
           # 从 release tag 中提取版本号（例如 v1.0.0 -> 1.0.0）
@@ -31,12 +34,20 @@ jobs:
           fi
           
           VERSION=${TAG_NAME#v}  # 移除 v 前缀
+          IS_PRERELEASE="${{ github.event.release.prerelease }}"
+          
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "TAG=$TAG_NAME" >> $GITHUB_OUTPUT
-          echo "Extracted version: $VERSION"
-          echo "Full tag: $TAG_NAME"
+          echo "IS_PRERELEASE=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+          
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            echo "📋 这是 Pre-release: $TAG_NAME"
+          else
+            echo "📦 这是正式版本: $TAG_NAME"
+          fi
       
       - name: Send Telegram notification (build started)
+        if: steps.extract_version.outputs.IS_PRERELEASE == 'false'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -79,6 +90,98 @@ jobs:
             exit 0
           fi
       
+      # ============ 编译前后端产物 ============
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      
+      - name: Build Backend JAR
+        run: |
+          cd backend
+          gradle bootJar --no-daemon
+          echo "✅ 后端构建完成"
+          ls -lh build/libs/*.jar
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      
+      - name: Build Frontend
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+          echo "✅ 前端构建完成"
+          du -sh dist/
+      
+      # ============ 打包更新包 ============
+      - name: Create Update Package
+        run: |
+          echo "📦 开始打包更新包..."
+          
+          # 创建目录结构
+          mkdir -p update-package/backend
+          mkdir -p update-package/frontend
+          
+          # 复制后端 JAR
+          cp backend/build/libs/*.jar update-package/backend/polyhermes.jar
+          echo "✅ 后端 JAR 已复制"
+          
+          # 复制前端产物
+          cp -r frontend/dist/* update-package/frontend/
+          echo "✅ 前端文件已复制"
+          
+          # 创建版本信息文件
+          cat > update-package/version.json <<EOF
+          {
+            "version": "${{ steps.extract_version.outputs.VERSION }}",
+            "tag": "${{ steps.extract_version.outputs.TAG }}",
+            "buildTime": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "releaseNotes": $(echo '${{ github.event.release.body }}' | jq -Rs .)
+          }
+          EOF
+          echo "✅ 版本信息已创建"
+          
+          # 打包成 tar.gz
+          cd update-package
+          tar -czf ../polyhermes-${{ steps.extract_version.outputs.TAG }}-update.tar.gz .
+          cd ..
+          
+          echo "✅ 打包完成: polyhermes-${{ steps.extract_version.outputs.TAG }}-update.tar.gz"
+          ls -lh polyhermes-*.tar.gz
+      
+      - name: Calculate Checksum
+        id: checksum
+        run: |
+          FILE="polyhermes-${{ steps.extract_version.outputs.TAG }}-update.tar.gz"
+          CHECKSUM=$(sha256sum "$FILE" | awk '{print $1}')
+          echo "CHECKSUM=$CHECKSUM" >> $GITHUB_OUTPUT
+          echo "✅ SHA256: $CHECKSUM"
+          echo "$CHECKSUM  $FILE" > checksums.txt
+      
+      - name: Upload Update Package to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./polyhermes-${{ steps.extract_version.outputs.TAG }}-update.tar.gz
+          asset_name: polyhermes-${{ steps.extract_version.outputs.TAG }}-update.tar.gz
+          asset_content_type: application/gzip
+      
+      - name: Upload Checksums
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./checksums.txt
+          asset_name: checksums.txt
+          asset_content_type: text/plain
+      
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
@@ -101,8 +204,9 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: |
             wrbug/polyhermes:${{ steps.extract_version.outputs.TAG }}
-            wrbug/polyhermes:latest
+            ${{ steps.extract_version.outputs.IS_PRERELEASE == 'false' && 'wrbug/polyhermes:latest' || '' }}
           build-args: |
+            BUILD_IN_DOCKER=false
             VERSION=${{ steps.extract_version.outputs.VERSION }}
             GIT_TAG=${{ steps.extract_version.outputs.TAG }}
             GITHUB_REPO_URL=https://github.com/WrBug/PolyHermes
@@ -110,6 +214,7 @@ jobs:
           cache-to: type=inline
 
       - name: Send Telegram notification
+        if: steps.extract_version.outputs.IS_PRERELEASE == 'false'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}

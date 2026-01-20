@@ -32,6 +32,9 @@ services:
       # 可选值：TRACE, DEBUG, INFO, WARN, ERROR, OFF
       - LOG_LEVEL_ROOT=${LOG_LEVEL_ROOT:-WARN}
       - LOG_LEVEL_APP=${LOG_LEVEL_APP:-INFO}
+      # 动态更新配置
+      - ALLOW_PRERELEASE=${ALLOW_PRERELEASE:-false}
+      - GITHUB_REPO=${GITHUB_REPO:-WrBug/PolyHermes}
     volumes:
       - /etc/localtime:/etc/localtime:ro
     depends_on:

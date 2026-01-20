@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  app:
+    # 使用测试镜像（pre-release）
+    image: wrbug/polyhermes:test
+    container_name: polyhermes-test
+    ports:
+      - "${SERVER_PORT:-8080}:80"  # 使用不同端口避免冲突
+    environment:
+      - TZ=${TZ:-Asia/Shanghai}
+      - SPRING_PROFILES_ACTIVE=test  # 使用测试 profile
+      - DB_URL=${DB_URL:-jdbc:mysql://mysql-test:3306/polyhermes_test?useSSL=false&serverTimezone=UTC&characterEncoding=utf8&allowPublicKeyRetrieval=true}
+      - DB_USERNAME=${DB_USERNAME:-root}
+      - DB_PASSWORD=${DB_PASSWORD:-}
+      - SERVER_PORT=8000
+      - JWT_SECRET=${JWT_SECRET:-test-jwt-secret-key-for-testing-only}
+      - ADMIN_RESET_PASSWORD_KEY=${ADMIN_RESET_PASSWORD_KEY:-test-reset-key-for-testing-only}
+      - LOG_LEVEL_ROOT=DEBUG
+      - LOG_LEVEL_APP=DEBUG
+      # 【测试环境】允许检测 pre-release 版本
+      - ALLOW_PRERELEASE=true
+      - GITHUB_REPO=${GITHUB_REPO:-WrBug/PolyHermes}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      mysql-test:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - polyhermes-test-network
+
+  mysql-test:
+    image: mysql:8.2
+    container_name: polyhermes-mysql-test
+    ports:
+      - "${MYSQL_PORT:-3308}:3306"  # 使用不同端口
+    environment:
+      - TZ=${TZ:-Asia/Shanghai}
+      - MYSQL_ROOT_PASSWORD=${DB_PASSWORD:-testpassword}
+      - MYSQL_DATABASE=polyhermes_test
+      - MYSQL_CHARACTER_SET_SERVER=utf8mb4
+      - MYSQL_COLLATION_SERVER=utf8mb4_unicode_ci
+    volumes:
+      - mysql-test-data:/var/lib/mysql
+      - /etc/localtime:/etc/localtime:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD:-testpassword}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - polyhermes-test-network
+
+volumes:
+  mysql-test-data:
+
+networks:
+  polyhermes-test-network:
+    driver: bridge

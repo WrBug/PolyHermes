@@ -1,8 +1,12 @@
 #!/bin/bash
 
-# 启动脚本：同时启动 Nginx 和后端服务
+# 启动脚本：启动更新服务、后端服务和 Nginx
 
 set -e
+
+echo "========================================="
+echo "  PolyHermes 容器启动"
+echo "========================================="
 
 # 默认值常量
 DEFAULT_JWT_SECRET="change-me-in-production"
@@ -42,6 +46,9 @@ check_security_config
 # 函数：清理进程
 cleanup() {
     echo "收到退出信号，清理进程..."
+    if [ -n "$UPDATE_SERVICE_PID" ]; then
+        kill $UPDATE_SERVICE_PID 2>/dev/null || true
+    fi
     if [ -n "$BACKEND_PID" ]; then
         kill $BACKEND_PID 2>/dev/null || true
     fi
@@ -52,27 +59,42 @@ cleanup() {
 # 注册信号处理
 trap cleanup SIGTERM SIGINT
 
-# 启动后端服务（以 appuser 用户运行，后台运行）
-echo "启动后端服务..."
-# 自动使用系统时区
+# 1. 启动更新服务（后台运行，端口 9090）
+echo "🚀 启动更新服务..."
+python3 /app/update-service.py &
+UPDATE_SERVICE_PID=$!
+echo "✅ 更新服务已启动 (PID: $UPDATE_SERVICE_PID, Port: 9090)"
+
+# 等待更新服务就绪
+sleep 2
+
+# 2. 启动后端服务（后台运行，端口 8000）
+echo "🚀 启动后端服务..."
 java -jar /app/app.jar --spring.profiles.active=${SPRING_PROFILES_ACTIVE:-prod} &
 BACKEND_PID=$!
+echo "✅ 后端服务已启动 (PID: $BACKEND_PID, Port: 8000)"
 
-# 等待后端服务启动
-echo "等待后端服务启动..."
+# 3. 等待后端服务启动
+echo "⏳ 等待后端服务就绪..."
 for i in {1..60}; do
     if curl -f http://localhost:8000/api/system/health > /dev/null 2>&1; then
-        echo "后端服务已启动"
+        echo "✅ 后端服务健康检查通过"
         break
     fi
     if [ $i -eq 60 ]; then
-        echo "后端服务启动超时"
+        echo "❌ 后端服务启动超时"
         exit 1
     fi
     sleep 1
 done
 
-# 启动 Nginx（前台运行，作为主进程）
-echo "启动 Nginx..."
-exec nginx -g "daemon off;"
+# 4. 启动 Nginx（前台运行，保持容器存活）
+echo "🚀 启动 Nginx..."
+echo "========================================="
+echo "  容器启动完成"
+echo "  - 更新服务: http://localhost:9090"
+echo "  - 后端服务: http://localhost:8000"
+echo "  - 前端服务: http://localhost:80"
+echo "========================================="
 
+exec nginx -g "daemon off;"

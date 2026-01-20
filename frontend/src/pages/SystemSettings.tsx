@@ -6,6 +6,7 @@ import { useMediaQuery } from 'react-responsive'
 import { useTranslation } from 'react-i18next'
 import type { SystemConfig, BuilderApiKeyUpdateRequest, NotificationConfig, NotificationConfigRequest, NotificationConfigUpdateRequest } from '../types'
 import { TelegramConfigForm } from '../components/notifications'
+import SystemUpdate from './SystemUpdate'
 
 const { Title, Text, Paragraph } = Typography
 
@@ -32,11 +33,11 @@ interface ProxyCheckResponse {
 const SystemSettings: React.FC = () => {
   const { t, i18n: i18nInstance } = useTranslation()
   const isMobile = useMediaQuery({ maxWidth: 768 })
-  
+
   // 第一部分：多语言
   const [languageForm] = Form.useForm()
   const [currentLang, setCurrentLang] = useState<string>('auto')
-  
+
   // 第二部分：消息推送设置
   const [notificationConfigs, setNotificationConfigs] = useState<NotificationConfig[]>([])
   const [notificationLoading, setNotificationLoading] = useState(false)
@@ -44,33 +45,43 @@ const SystemSettings: React.FC = () => {
   const [editingNotificationConfig, setEditingNotificationConfig] = useState<NotificationConfig | null>(null)
   const [notificationForm] = Form.useForm()
   const [testLoading, setTestLoading] = useState(false)
-  
+
   // 第三部分：Relayer配置
   const [relayerForm] = Form.useForm()
   const [autoRedeemForm] = Form.useForm()
   const [systemConfig, setSystemConfig] = useState<SystemConfig | null>(null)
   const [relayerLoading, setRelayerLoading] = useState(false)
   const [autoRedeemLoading, setAutoRedeemLoading] = useState(false)
-  
+
   // 第四部分：代理设置
   const [proxyForm] = Form.useForm()
   const [proxyLoading, setProxyLoading] = useState(false)
   const [proxyChecking, setProxyChecking] = useState(false)
   const [proxyCheckResult, setProxyCheckResult] = useState<ProxyCheckResponse | null>(null)
   const [currentProxyConfig, setCurrentProxyConfig] = useState<ProxyConfig | null>(null)
-  
+
+  // 第五部分：系统更新
+  const [updateChecking, setUpdateChecking] = useState(false)
+  const [updateInfo, setUpdateInfo] = useState<any>(null)
+  const [updateProgress, setUpdateProgress] = useState(0)
+  const [updateMessage, setUpdateMessage] = useState('')
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [currentVersion, setCurrentVersion] = useState('')
+
   useEffect(() => {
     // 初始化多语言设置
     const savedLanguage = localStorage.getItem('i18n_language') || 'auto'
     setCurrentLang(savedLanguage)
     languageForm.setFieldsValue({ language: savedLanguage })
-    
+
     // 加载其他配置
     fetchNotificationConfigs()
     fetchSystemConfig()
     fetchProxyConfig()
+    fetchCurrentVersion()
+    fetchUpdateStatus()
   }, [])
-  
+
   // ==================== 第一部分：多语言 ====================
   const detectSystemLanguage = (): string => {
     const systemLanguage = navigator.language || navigator.languages?.[0] || 'en'
@@ -83,7 +94,7 @@ const SystemSettings: React.FC = () => {
     }
     return 'en'
   }
-  
+
   const handleLanguageSubmit = async (values: { language: string }) => {
     try {
       let actualLang = values.language
@@ -93,7 +104,7 @@ const SystemSettings: React.FC = () => {
       } else {
         localStorage.setItem('i18n_language', values.language)
       }
-      
+
       setCurrentLang(values.language)
       await i18nInstance.changeLanguage(actualLang)
       message.success(t('languageSettings.changeSuccess') || '语言设置已保存')
@@ -101,7 +112,7 @@ const SystemSettings: React.FC = () => {
       message.error(t('languageSettings.changeFailed') || '语言设置保存失败')
     }
   }
-  
+
   // ==================== 第二部分：消息推送设置 ====================
   const fetchNotificationConfigs = async () => {
     setNotificationLoading(true)
@@ -118,7 +129,7 @@ const SystemSettings: React.FC = () => {
       setNotificationLoading(false)
     }
   }
-  
+
   const handleNotificationCreate = () => {
     setEditingNotificationConfig(null)
     notificationForm.resetFields()
@@ -132,13 +143,13 @@ const SystemSettings: React.FC = () => {
     })
     setNotificationModalVisible(true)
   }
-  
+
   const handleNotificationEdit = (config: NotificationConfig) => {
     setEditingNotificationConfig(config)
-    
+
     let botToken = ''
     let chatIds = ''
-    
+
     if (config.config) {
       if ('data' in config.config && config.config.data) {
         const data = config.config.data as any
@@ -164,7 +175,7 @@ const SystemSettings: React.FC = () => {
         }
       }
     }
-    
+
     notificationForm.setFieldsValue({
       type: config.type,
       name: config.name,
@@ -176,7 +187,7 @@ const SystemSettings: React.FC = () => {
     })
     setNotificationModalVisible(true)
   }
-  
+
   const handleNotificationDelete = async (id: number) => {
     try {
       const response = await apiService.notifications.delete({ id })
@@ -190,7 +201,7 @@ const SystemSettings: React.FC = () => {
       message.error(error.message || t('notificationSettings.deleteFailed'))
     }
   }
-  
+
   const handleNotificationUpdateEnabled = async (id: number, enabled: boolean) => {
     try {
       const response = await apiService.notifications.updateEnabled({ id, enabled })
@@ -204,7 +215,7 @@ const SystemSettings: React.FC = () => {
       message.error(error.message || t('notificationSettings.updateStatusFailed'))
     }
   }
-  
+
   const handleNotificationTest = async () => {
     setTestLoading(true)
     try {
@@ -220,15 +231,15 @@ const SystemSettings: React.FC = () => {
       setTestLoading(false)
     }
   }
-  
+
   const handleNotificationSubmit = async () => {
     try {
       const values = await notificationForm.validateFields()
-      
-      const chatIds = typeof values.config.chatIds === 'string' 
+
+      const chatIds = typeof values.config.chatIds === 'string'
         ? values.config.chatIds.split(',').map((id: string) => id.trim()).filter((id: string) => id)
         : values.config.chatIds || []
-      
+
       const configData: NotificationConfigRequest | NotificationConfigUpdateRequest = {
         type: values.type,
         name: values.name,
@@ -238,13 +249,13 @@ const SystemSettings: React.FC = () => {
           chatIds: chatIds
         }
       }
-      
+
       if (editingNotificationConfig?.id) {
         const updateData = {
           ...configData,
           id: editingNotificationConfig.id
         } as NotificationConfigUpdateRequest
-        
+
         const response = await apiService.notifications.update(updateData)
         if (response.data.code === 0) {
           message.success(t('notificationSettings.updateSuccess'))
@@ -270,7 +281,7 @@ const SystemSettings: React.FC = () => {
       message.error(error.message || t('message.error'))
     }
   }
-  
+
   const notificationColumns = [
     {
       title: t('notificationSettings.configName'),
@@ -340,7 +351,7 @@ const SystemSettings: React.FC = () => {
       )
     }
   ]
-  
+
   // ==================== 第三部分：Relayer配置 ====================
   const fetchSystemConfig = async () => {
     try {
@@ -362,7 +373,7 @@ const SystemSettings: React.FC = () => {
       console.error('获取系统配置失败:', error)
     }
   }
-  
+
   const handleRelayerSubmit = async (values: BuilderApiKeyUpdateRequest) => {
     setRelayerLoading(true)
     try {
@@ -376,13 +387,13 @@ const SystemSettings: React.FC = () => {
       if (values.builderPassphrase && values.builderPassphrase.trim()) {
         updateData.builderPassphrase = values.builderPassphrase.trim()
       }
-      
+
       if (!updateData.builderApiKey && !updateData.builderSecret && !updateData.builderPassphrase) {
         message.warning(t('builderApiKey.noChanges') || '没有需要更新的字段')
         setRelayerLoading(false)
         return
       }
-      
+
       const response = await apiService.systemConfig.updateBuilderApiKey(updateData)
       if (response.data.code === 0) {
         message.success(t('builderApiKey.saveSuccess'))
@@ -397,7 +408,7 @@ const SystemSettings: React.FC = () => {
       setRelayerLoading(false)
     }
   }
-  
+
   const handleAutoRedeemSubmit = async (values: { autoRedeemEnabled: boolean }) => {
     setAutoRedeemLoading(true)
     try {
@@ -414,7 +425,7 @@ const SystemSettings: React.FC = () => {
       setAutoRedeemLoading(false)
     }
   }
-  
+
   // ==================== 第四部分：代理设置 ====================
   const fetchProxyConfig = async () => {
     try {
@@ -440,7 +451,7 @@ const SystemSettings: React.FC = () => {
       message.error(error.message || '获取代理配置失败')
     }
   }
-  
+
   const handleProxySubmit = async (values: any) => {
     setProxyLoading(true)
     try {
@@ -464,7 +475,7 @@ const SystemSettings: React.FC = () => {
       setProxyLoading(false)
     }
   }
-  
+
   const handleProxyCheck = async () => {
     setProxyChecking(true)
     setProxyCheckResult(null)
@@ -487,15 +498,15 @@ const SystemSettings: React.FC = () => {
       setProxyChecking(false)
     }
   }
-  
+
   return (
     <div>
       <div style={{ marginBottom: '16px' }}>
         <Title level={2} style={{ margin: 0 }}>{t('systemSettings.title') || '通用设置'}</Title>
       </div>
-      
+
       {/* 第一部分：多语言 */}
-      <Card 
+      <Card
         title={
           <Space>
             <GlobalOutlined />
@@ -530,7 +541,7 @@ const SystemSettings: React.FC = () => {
               <Text type="secondary" style={{ fontSize: '12px' }}>
                 {t('languageSettings.currentSystemLanguage') || '当前系统语言'}: {
                   detectSystemLanguage() === 'zh-CN' ? '简体中文' :
-                  detectSystemLanguage() === 'zh-TW' ? '繁體中文' : 'English'
+                    detectSystemLanguage() === 'zh-TW' ? '繁體中文' : 'English'
                 }
               </Text>
             </Form.Item>
@@ -546,9 +557,9 @@ const SystemSettings: React.FC = () => {
           </Form.Item>
         </Form>
       </Card>
-      
+
       {/* 第二部分：消息推送设置 */}
-      <Card 
+      <Card
         title={
           <Space>
             <NotificationOutlined />
@@ -574,7 +585,7 @@ const SystemSettings: React.FC = () => {
           pagination={false}
           scroll={{ x: isMobile ? 600 : 'auto' }}
         />
-        
+
         <Modal
           title={editingNotificationConfig ? t('notificationSettings.editConfig') : t('notificationSettings.addConfig')}
           open={notificationModalVisible}
@@ -595,7 +606,7 @@ const SystemSettings: React.FC = () => {
             >
               <Input disabled value="telegram" />
             </Form.Item>
-            
+
             <Form.Item
               name="name"
               label={t('notificationSettings.configName')}
@@ -603,7 +614,7 @@ const SystemSettings: React.FC = () => {
             >
               <Input placeholder={t('notificationSettings.configNamePlaceholder')} />
             </Form.Item>
-            
+
             <Form.Item
               name="enabled"
               label={t('notificationSettings.enabled')}
@@ -611,10 +622,10 @@ const SystemSettings: React.FC = () => {
             >
               <Switch />
             </Form.Item>
-            
+
             <Form.Item shouldUpdate={(prevValues, currentValues) => {
-              return prevValues.type !== currentValues.type || 
-                     prevValues.config !== currentValues.config
+              return prevValues.type !== currentValues.type ||
+                prevValues.config !== currentValues.config
             }}>
               {() => {
                 const currentType = notificationForm.getFieldValue('type') || 'telegram'
@@ -627,9 +638,9 @@ const SystemSettings: React.FC = () => {
           </Form>
         </Modal>
       </Card>
-      
+
       {/* 第三部分：Relayer配置 */}
-                  <Card
+      <Card
         title={
           <Space>
             <KeyOutlined />
@@ -661,22 +672,22 @@ const SystemSettings: React.FC = () => {
                 <Paragraph style={{ marginBottom: 0 }}>
                   <Text strong>{t('builderApiKey.getApiKey')}</Text>
                   <Space style={{ marginLeft: '8px' }}>
-                    <a 
-                      href="https://polymarket.com/settings?tab=builder" 
-                      target="_blank" 
+                    <a
+                      href="https://polymarket.com/settings?tab=builder"
+                      target="_blank"
                       rel="noopener noreferrer"
                     >
                       <LinkOutlined /> {t('builderApiKey.openSettings')}
                     </a>
-                      </Space>
+                  </Space>
                 </Paragraph>
-                    </div>
+              </div>
             }
             type="info"
             showIcon
             style={{ marginBottom: '16px' }}
           />
-          
+
           <Form
             form={relayerForm}
             layout="vertical"
@@ -687,34 +698,34 @@ const SystemSettings: React.FC = () => {
               label={t('builderApiKey.apiKey')}
               name="builderApiKey"
             >
-              <Input 
+              <Input
                 placeholder={t('builderApiKey.apiKeyPlaceholder')}
                 style={{ fontFamily: 'monospace' }}
               />
             </Form.Item>
-            
+
             <Form.Item
               label={t('builderApiKey.secret')}
               name="builderSecret"
             >
-              <Input.Password 
+              <Input.Password
                 placeholder={t('builderApiKey.secretPlaceholder')}
                 style={{ fontFamily: 'monospace' }}
                 iconRender={(visible) => (visible ? <span>👁️</span> : <span>👁️‍🗨️</span>)}
               />
             </Form.Item>
-            
+
             <Form.Item
               label={t('builderApiKey.passphrase')}
               name="builderPassphrase"
             >
-              <Input.Password 
+              <Input.Password
                 placeholder={t('builderApiKey.passphrasePlaceholder')}
                 style={{ fontFamily: 'monospace' }}
                 iconRender={(visible) => (visible ? <span>👁️</span> : <span>👁️‍🗨️</span>)}
               />
             </Form.Item>
-            
+
             <Form.Item>
               <Button
                 type="primary"
@@ -726,8 +737,8 @@ const SystemSettings: React.FC = () => {
               </Button>
             </Form.Item>
           </Form>
-                      </div>
-                      
+        </div>
+
         {/* 自动赎回配置 */}
         <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '24px' }}>
           <Title level={4} style={{ marginBottom: '16px' }}>
@@ -747,7 +758,7 @@ const SystemSettings: React.FC = () => {
             >
               <Switch loading={autoRedeemLoading} />
             </Form.Item>
-            
+
             {!systemConfig?.builderApiKeyConfigured && (
               <Alert
                 message={t('systemSettings.autoRedeem.builderApiKeyNotConfigured') || 'Builder API Key 未配置'}
@@ -757,7 +768,7 @@ const SystemSettings: React.FC = () => {
                 style={{ marginBottom: '16px' }}
               />
             )}
-            
+
             <Form.Item>
               <Button
                 type="primary"
@@ -769,11 +780,11 @@ const SystemSettings: React.FC = () => {
               </Button>
             </Form.Item>
           </Form>
-            </div>
+        </div>
       </Card>
-      
+
       {/* 第四部分：代理设置 */}
-      <Card 
+      <Card
         title={
           <Space>
             <LinkOutlined />
@@ -795,7 +806,7 @@ const SystemSettings: React.FC = () => {
           >
             <Switch />
           </Form.Item>
-          
+
           <Form.Item
             label={t('proxySettings.host') || '代理主机'}
             name="host"
@@ -806,7 +817,7 @@ const SystemSettings: React.FC = () => {
           >
             <Input placeholder={t('proxySettings.hostPlaceholder') || '例如：127.0.0.1 或 proxy.example.com'} />
           </Form.Item>
-          
+
           <Form.Item
             label={t('proxySettings.port') || '代理端口'}
             name="port"
@@ -822,14 +833,14 @@ const SystemSettings: React.FC = () => {
               placeholder={t('proxySettings.portPlaceholder') || '例如：8888'}
             />
           </Form.Item>
-          
+
           <Form.Item
             label={t('proxySettings.username') || '代理用户名（可选）'}
             name="username"
           >
             <Input placeholder={t('proxySettings.usernamePlaceholder') || '如果代理需要认证，请输入用户名'} />
           </Form.Item>
-          
+
           <Form.Item
             label={t('proxySettings.password') || '代理密码（可选）'}
             name="password"
@@ -837,7 +848,7 @@ const SystemSettings: React.FC = () => {
           >
             <Input.Password placeholder={currentProxyConfig ? (t('proxySettings.passwordPlaceholderUpdate') || '留空则不更新密码') : (t('proxySettings.passwordPlaceholder') || '如果代理需要认证，请输入密码')} />
           </Form.Item>
-          
+
           <Form.Item>
             <Space>
               <Button
@@ -866,7 +877,7 @@ const SystemSettings: React.FC = () => {
             </Space>
           </Form.Item>
         </Form>
-        
+
         {proxyCheckResult && (
           <Alert
             type={proxyCheckResult.success ? 'success' : 'error'}
@@ -887,8 +898,11 @@ const SystemSettings: React.FC = () => {
             showIcon
           />
         )}
-      
+
       </Card>
+
+      {/* 第五部分：系统更新 */}
+      <SystemUpdate />
     </div>
   )
 }

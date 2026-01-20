@@ -116,6 +116,7 @@
 - **API 健康检查**：实时监控 Polymarket API 的健康状态
 - **用户管理**：管理系统用户，支持添加、编辑、删除用户
 - **公告管理**：查看系统公告和更新信息
+- **动态更新**：支持在线更新系统版本，无需重新部署容器
 
 ### 🚀 技术特性
 
@@ -397,6 +398,7 @@ cd frontend
 - [开发文档](docs/zh/DEVELOPMENT.md) - 开发指南
 - [跟单系统需求文档](docs/zh/copy-trading-requirements.md) - 后端 API 接口文档
 - [前端需求文档](docs/zh/copy-trading-frontend-requirements.md) - 前端功能文档
+- [动态更新文档](docs/zh/DYNAMIC_UPDATE.md) - 动态更新功能说明
 
 ### 🤝 贡献指南
 
