@@ -17,7 +17,8 @@ backend/out/
 backend/*.log
 backend/gradle-app.setting
 backend/.gradle
-backend/gradle-wrapper.jar
+# 注意：gradle-wrapper.jar 应该被提交，不要忽略
+# backend/gradle/wrapper/gradle-wrapper.jar
 
 # Kotlin
 *.kt.bak
