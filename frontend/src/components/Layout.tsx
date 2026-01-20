@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Layout as AntLayout, Menu, Drawer, Button, Modal } from 'antd'
+import { Layout as AntLayout, Menu, Drawer, Button, Modal, Tag } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useMediaQuery } from 'react-responsive'
 import {
@@ -19,15 +19,36 @@ import {
   TwitterOutlined,
   CheckCircleOutlined,
   SendOutlined,
-  ApiOutlined,  NotificationOutlined
+  ApiOutlined,
+  NotificationOutlined
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 import type { ReactNode } from 'react'
-import { removeToken, getVersionText, getGitHubTagUrl } from '../utils'
+import { removeToken, getVersionText, getGitHubTagUrl, getVersionInfo } from '../utils'
 import { wsManager } from '../services/websocket'
+import { apiClient } from '../services/api'
 import Logo from './Logo'
 
 const { Header, Content, Sider } = AntLayout
+
+// 添加动画样式
+const style = document.createElement('style')
+style.textContent = `
+  @keyframes versionUpdatePulse {
+    0%, 100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.7;
+      transform: scale(1.1);
+    }
+  }
+`
+if (!document.head.querySelector('style[data-version-update-animation]')) {
+  style.setAttribute('data-version-update-animation', 'true')
+  document.head.appendChild(style)
+}
 
 interface LayoutProps {
   children: ReactNode
@@ -39,6 +60,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation()
   const isMobile = useMediaQuery({ maxWidth: 768 })
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [hasUpdate, setHasUpdate] = useState(false)
   
   // 获取当前选中的菜单项
   const getSelectedKeys = (): string[] => {
@@ -72,6 +94,29 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     }
     setOpenKeys(keys)
   }, [location.pathname])
+
+  // 检查是否有新版本
+  useEffect(() => {
+    const checkUpdate = async () => {
+      try {
+        const response = await apiClient.get('/update/check')
+        if (response.data.code === 0 && response.data.data) {
+          setHasUpdate(response.data.data.hasUpdate || false)
+        }
+      } catch (error) {
+        // 静默失败，不影响页面使用
+        console.debug('检查更新失败:', error)
+      }
+    }
+    
+    // 页面加载时检查一次
+    checkUpdate()
+    
+    // 每5分钟检查一次
+    const interval = setInterval(checkUpdate, 5 * 60 * 1000)
+    
+    return () => clearInterval(interval)
+  }, [])
   
   const menuItems: MenuProps['items'] = [
     {
@@ -210,27 +255,32 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               size="normal" 
               darkMode={true}
             />
-            <a
-              href={getGitHubTagUrl()}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => {
-                const version = getVersionText()
-                if (version === 'dev') {
-                  e.preventDefault()
+            <Tag
+              color={hasUpdate ? 'warning' : 'success'}
+              onClick={() => {
+                if (hasUpdate) {
+                  navigate('/system-settings')
                 }
               }}
+              bordered={false}
               style={{
-                color: 'rgba(255, 255, 255, 0.7)',
-                fontSize: '12px',
-                fontWeight: 'normal',
-                textDecoration: 'none',
-                cursor: getVersionText() === 'dev' ? 'default' : 'pointer'
+                cursor: hasUpdate ? 'pointer' : 'default',
+                fontSize: '8px',
+                padding: '1px 6px',
+                margin: 0,
+                background: 'transparent',
+                border: `1px solid ${hasUpdate ? '#faad14' : '#52c41a'}`,
+                borderRadius: '4px',
+                color: hasUpdate ? '#faad14' : '#52c41a',
+                lineHeight: '1.4',
+                display: 'inline-flex',
+                alignItems: 'center',
+                verticalAlign: 'middle'
               }}
-              title={getVersionText() === 'dev' ? '' : '查看版本发布'}
+              title={hasUpdate ? '有新版本可用，点击前往系统更新' : '当前已是最新版本'}
             >
-              v{getVersionText()}
-            </a>
+              {getVersionInfo().gitTag || `v${getVersionText()}`}
+            </Tag>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <a
@@ -322,34 +372,37 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             marginBottom: '12px',
             textAlign: 'center',
             display: 'flex',
-            alignItems: 'flex-end',
+            alignItems: 'center',
             justifyContent: 'center',
             gap: '6px'
           }}>
             <span>PolyHermes</span>
-            <a
-              href={getGitHubTagUrl()}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => {
-                const version = getVersionText()
-                if (version === 'dev') {
-                  e.preventDefault()
+            <Tag
+              color={hasUpdate ? 'warning' : 'success'}
+              onClick={() => {
+                if (hasUpdate) {
+                  navigate('/system-settings')
                 }
               }}
+              bordered={false}
               style={{
-                color: 'rgba(255, 255, 255, 0.7)',
-                fontSize: '12px',
-                fontWeight: 'normal',
-                textDecoration: 'none',
-                cursor: getVersionText() === 'dev' ? 'default' : 'pointer',
-                lineHeight: '1',
-                paddingBottom: '2px'
+                cursor: hasUpdate ? 'pointer' : 'default',
+                fontSize: '8px',
+                padding: '1px 6px',
+                margin: 0,
+                background: 'transparent',
+                border: `1px solid ${hasUpdate ? '#faad14' : '#52c41a'}`,
+                borderRadius: '4px',
+                color: hasUpdate ? '#faad14' : '#52c41a',
+                lineHeight: '1.4',
+                display: 'inline-flex',
+                alignItems: 'center',
+                verticalAlign: 'middle'
               }}
-              title={getVersionText() === 'dev' ? '' : '查看版本发布'}
+              title={hasUpdate ? '有新版本可用，点击前往系统更新' : '当前已是最新版本'}
             >
-              v{getVersionText()}
-            </a>
+              {getVersionInfo().gitTag || `v${getVersionText()}`}
+            </Tag>
           </div>
           <div style={{ 
             display: 'flex', 

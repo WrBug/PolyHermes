@@ -495,6 +495,9 @@ const SystemSettings: React.FC = () => {
         <Title level={2} style={{ margin: 0 }}>{t('systemSettings.title') || '通用设置'}</Title>
       </div>
 
+      {/* 系统更新 */}
+      <SystemUpdate />
+
       {/* 第一部分：多语言 */}
       <Card
         title={
@@ -890,9 +893,6 @@ const SystemSettings: React.FC = () => {
         )}
 
       </Card>
-
-      {/* 第五部分：系统更新 */}
-      <SystemUpdate />
     </div>
   )
 }
