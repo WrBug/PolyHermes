@@ -111,11 +111,16 @@ jobs:
           node-version: '18'
       
       - name: Build Frontend
+        env:
+          VERSION: ${{ steps.extract_version.outputs.VERSION }}
+          GIT_TAG: ${{ steps.extract_version.outputs.TAG }}
+          GITHUB_REPO_URL: https://github.com/WrBug/PolyHermes
         run: |
           cd frontend
           npm ci
           npm run build
           echo "✅ 前端构建完成"
+          echo "📦 版本信息: VERSION=${{ steps.extract_version.outputs.VERSION }}, GIT_TAG=${{ steps.extract_version.outputs.TAG }}"
           du -sh dist/
       
       # ============ 打包更新包 ============
