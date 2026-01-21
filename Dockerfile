@@ -40,10 +40,9 @@ RUN if [ "$BUILD_IN_DOCKER" = "true" ]; then \
       mkdir -p dist; \
     fi
 
-# 如果使用外部产物，从构建上下文复制外部编译的 dist
-# 注意：这个 COPY 在 BUILD_IN_DOCKER=false 时必需
-# 在 BUILD_IN_DOCKER=true 时，如果前端已编译，这个 COPY 会尝试覆盖，但结果相同
-# 如果本地没有 dist（BUILD_IN_DOCKER=true 且未编译），这个 COPY 会失败，但上面的 RUN 已经编译了
+# 仅在使用外部产物时复制 dist 目录到构建上下文
+# 在 BUILD_IN_DOCKER=true 时，上面的 npm run build 已经创建了 dist
+# 在 BUILD_IN_DOCKER=false 时，需要从构建上下文复制外部编译的 dist
 COPY frontend/dist ./dist
 
 # ==================== 阶段2：构建后端 ====================
