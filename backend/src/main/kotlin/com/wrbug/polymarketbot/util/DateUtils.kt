@@ -84,5 +84,38 @@ object DateUtils {
         }
         return displayFormatter.format(instant)
     }
+    
+    /**
+     * 将时间间隔（毫秒）格式化为可读的字符串
+     * 格式：X天X小时X分钟 或 X小时X分钟 或 X分钟
+     * 只显示有意义的单位，不显示0值单位
+     * 
+     * @param milliseconds 时间间隔（毫秒）
+     * @return 格式化的时间间隔字符串，如 "2天3小时15分钟"、"5小时30分钟"、"45分钟"
+     */
+    fun formatDuration(milliseconds: Long): String {
+        if (milliseconds < 0) {
+            return "0分钟"
+        }
+        
+        val totalSeconds = milliseconds / 1000
+        val days = totalSeconds / (24 * 60 * 60)
+        val hours = (totalSeconds % (24 * 60 * 60)) / (60 * 60)
+        val minutes = (totalSeconds % (60 * 60)) / 60
+        
+        val parts = mutableListOf<String>()
+        
+        if (days > 0) {
+            parts.add("${days}天")
+        }
+        if (hours > 0) {
+            parts.add("${hours}小时")
+        }
+        if (minutes > 0 || parts.isEmpty()) {
+            parts.add("${minutes}分钟")
+        }
+        
+        return parts.joinToString("")
+    }
 }
 

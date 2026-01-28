@@ -7,6 +7,7 @@ import com.wrbug.polymarketbot.util.lt
 import com.wrbug.polymarketbot.util.multi
 import com.wrbug.polymarketbot.util.toSafeBigDecimal
 import com.wrbug.polymarketbot.util.JsonUtils
+import com.wrbug.polymarketbot.util.DateUtils
 import org.slf4j.LoggerFactory
 import com.wrbug.polymarketbot.service.common.PolymarketClobService
 import com.wrbug.polymarketbot.service.accounts.AccountService
@@ -202,12 +203,16 @@ class CopyTradingFilterService(
         
         // 检查最低价格
         if (copyTrading.minPrice != null && tradePrice.lt(copyTrading.minPrice)) {
-            return FilterResult.priceRangeFailed("价格低于最低限制: $tradePrice < ${copyTrading.minPrice}")
+            val priceStr = tradePrice.stripTrailingZeros().toPlainString()
+            val minPriceStr = copyTrading.minPrice.stripTrailingZeros().toPlainString()
+            return FilterResult.priceRangeFailed("价格低于最低限制: $priceStr < $minPriceStr")
         }
         
         // 检查最高价格
         if (copyTrading.maxPrice != null && tradePrice.gt(copyTrading.maxPrice)) {
-            return FilterResult.priceRangeFailed("价格高于最高限制: $tradePrice > ${copyTrading.maxPrice}")
+            val priceStr = tradePrice.stripTrailingZeros().toPlainString()
+            val maxPriceStr = copyTrading.maxPrice.stripTrailingZeros().toPlainString()
+            return FilterResult.priceRangeFailed("价格高于最高限制: $priceStr > $maxPriceStr")
         }
         
         return FilterResult.passed()
@@ -245,7 +250,9 @@ class CopyTradingFilterService(
         val spread = bestAsk.subtract(bestBid)
         
         if (spread.gt(copyTrading.maxSpread)) {
-            return FilterResult.spreadFailed("价差过大: $spread > ${copyTrading.maxSpread}", orderbook)
+            val spreadStr = spread.stripTrailingZeros().toPlainString()
+            val maxSpreadStr = copyTrading.maxSpread.stripTrailingZeros().toPlainString()
+            return FilterResult.spreadFailed("价差过大: $spreadStr > $maxSpreadStr", orderbook)
         }
         
         return FilterResult.passed()
@@ -285,7 +292,9 @@ class CopyTradingFilterService(
         val totalDepth = bidsDepth.add(asksDepth)
         
         if (totalDepth.lt(copyTrading.minOrderDepth)) {
-            return FilterResult.orderDepthFailed("订单深度不足: $totalDepth < ${copyTrading.minOrderDepth}", orderbook)
+            val totalDepthStr = totalDepth.stripTrailingZeros().toPlainString()
+            val minDepthStr = copyTrading.minOrderDepth.stripTrailingZeros().toPlainString()
+            return FilterResult.orderDepthFailed("订单深度不足: $totalDepthStr < $minDepthStr", orderbook)
         }
         
         return FilterResult.passed()
@@ -348,8 +357,14 @@ class CopyTradingFilterService(
                 val totalValueAfterOrder = currentPositionValue.add(copyOrderAmount)
 
                 if (totalValueAfterOrder.gt(copyTrading.maxPositionValue)) {
+                    val currentValueStr = currentPositionValue.stripTrailingZeros().toPlainString()
+                    val dbValueStr = dbValue.stripTrailingZeros().toPlainString()
+                    val extValueStr = extValue.stripTrailingZeros().toPlainString()
+                    val orderAmountStr = copyOrderAmount.stripTrailingZeros().toPlainString()
+                    val totalValueStr = totalValueAfterOrder.stripTrailingZeros().toPlainString()
+                    val maxValueStr = copyTrading.maxPositionValue.stripTrailingZeros().toPlainString()
                     return FilterResult.maxPositionValueFailed(
-                        "超过最大仓位金额限制: 市场=$marketId, 方向=$outcomeIndex, 当前仓位(取最大值)=${currentPositionValue} USDC (DB=${dbValue}, Ext=${extValue}), 跟单金额=${copyOrderAmount} USDC, 总计=${totalValueAfterOrder} USDC > 最大限制=${copyTrading.maxPositionValue} USDC"
+                        "超过最大仓位金额限制: 市场=$marketId, 方向=$outcomeIndex, 当前仓位(取最大值)=${currentValueStr} USDC (DB=${dbValueStr}, Ext=${extValueStr}), 跟单金额=${orderAmountStr} USDC, 总计=${totalValueStr} USDC > 最大限制=${maxValueStr} USDC"
                     )
                 }
             }
@@ -420,8 +435,10 @@ class CopyTradingFilterService(
         val remainingTime = marketEndDate - currentTime
         
         if (remainingTime > copyTrading.maxMarketEndDate) {
+            val remainingTimeFormatted = DateUtils.formatDuration(remainingTime)
+            val maxLimitFormatted = DateUtils.formatDuration(copyTrading.maxMarketEndDate)
             return FilterResult.marketEndDateFailed(
-                "市场截止时间超出限制: 剩余时间=${remainingTime}ms (${remainingTime / (1000 * 60 * 60)}小时) > 最大限制=${copyTrading.maxMarketEndDate}ms (${copyTrading.maxMarketEndDate / (1000 * 60 * 60)}小时)"
+                "市场截止时间超出限制: 剩余时间=${remainingTimeFormatted} > 最大限制=${maxLimitFormatted}"
             )
         }
         
