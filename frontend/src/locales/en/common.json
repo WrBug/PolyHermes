@@ -938,7 +938,8 @@
       "marketEndDate": "Market End Date Exceeds Limit",
       "unknown": "Unknown Reason"
     },
-    "noData": "No filtered orders"
+    "noData": "No filtered orders",
+    "noFilteredOrders": "No filtered orders"
   },
   "copyTradingList": {
     "title": "Copy Trading Config Management",

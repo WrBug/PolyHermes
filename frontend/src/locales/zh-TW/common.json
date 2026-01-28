@@ -938,7 +938,8 @@
       "marketEndDate": "市場截止時間超出限制",
       "unknown": "未知原因"
     },
-    "noData": "暫無已過濾訂單"
+    "noData": "暫無已過濾訂單",
+    "noFilteredOrders": "暫無已過濾訂單"
   },
   "copyTradingList": {
     "title": "跟單配置管理",
@@ -1115,8 +1116,10 @@
     "partiallySold": "部分賣出",
     "orderCount": "訂單數",
     "totalAmount": "總金額",
-    "totalPnl": "總盈虧",
     "statusBreakdown": "狀態",
+    "allFullyMatched": "全部賣出",
+    "partiallyMatched": "部分賣出",
+    "totalPnl": "總盈虧",
     "markets": "個市場",
     "fetchBuyOrdersFailed": "獲取買入訂單列表失敗",
     "fetchSellOrdersFailed": "獲取賣出訂單列表失敗",

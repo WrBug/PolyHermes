@@ -36,13 +36,11 @@ class OrderSigningService {
         size = 2,
         amount = 4
     )
-    
-    // 金额精度限制（根据 Polymarket API 要求）
-    // makerAmount (USDC) 最多 2 位小数
-    // takerAmount (shares) 最多 4 位小数
-    private val MAKER_AMOUNT_DECIMALS = 2  // USDC 金额精度
-    private val TAKER_AMOUNT_DECIMALS = 4  // shares 数量精度
-    
+
+    // 价格有效范围（Polymarket API 要求）
+    private val MIN_PRICE = BigDecimal("0.01")
+    private val MAX_PRICE = BigDecimal("0.99")
+
     /**
      * 订单金额计算结果
      */
@@ -62,7 +60,9 @@ class OrderSigningService {
     
     /**
      * 计算订单金额（makerAmount 和 takerAmount）
-     * 
+     *
+     * 参考 clob-client/src/order-builder/helpers.ts 的 getOrderRawAmounts 函数
+     *
      * @param side BUY 或 SELL
      * @param size 数量（shares）
      * @param price 价格（0-1 之间）
@@ -77,49 +77,59 @@ class OrderSigningService {
     ): OrderAmounts {
         val sizeDecimal = size.toSafeBigDecimal()
         val priceDecimal = price.toSafeBigDecimal()
+
+        // 对价格进行 roundNormal 处理（与 clob-client 保持一致）
+        var rawPrice = roundNormal(priceDecimal, roundConfig.price)
+
+        // 验证价格范围，如果超出则调整到最接近的有效值
+        // Polymarket API 要求: 0.01 <= price <= 0.99
+        if (rawPrice > MAX_PRICE) {
+            logger.warn("价格超出最大限制，已调整: $priceDecimal -> $MAX_PRICE")
+            rawPrice = MAX_PRICE
+        } else if (rawPrice < MIN_PRICE) {
+            logger.warn("价格低于最小限制，已调整: $priceDecimal -> $MIN_PRICE")
+            rawPrice = MIN_PRICE
+        }
+
         if (side.uppercase() == "BUY") {
             // BUY: makerAmount = price * size (USDC), takerAmount = size (shares)
-            // makerAmount 是 USDC 金额，最多 2 位小数
-            // takerAmount 是 shares 数量，最多 4 位小数
-            val rawTakerAmt = roundDown(sizeDecimal, roundConfig.size)
-            
-            // makerAmount = price * size，使用原始价格计算（与SDK保持一致）
-            // 先使用原始价格计算，然后再进行舍入，确保精度一致
-            var rawMakerAmt = rawTakerAmt.multiply(priceDecimal)
-            
-            // 确保 makerAmount 精度（USDC，最多 2 位小数）
-            rawMakerAmt = roundDown(rawMakerAmt, MAKER_AMOUNT_DECIMALS)
-            
-            // 确保 takerAmount 精度（shares，最多 4 位小数）
-            val finalTakerAmt = roundDown(rawTakerAmt, TAKER_AMOUNT_DECIMALS)
-            
+            // 参考 clob-client/src/order-builder/helpers.ts 第 73-89 行
+            // 注意：Polymarket API 要求市场买入订单的 makerAmount 最多 2 位小数，takerAmount 最多 4 位小数
+            // takerAmount (shares) 使用 4 位小数
+            val rawTakerAmt = roundDown(sizeDecimal, 4)
+
+            var rawMakerAmt = rawTakerAmt.multiply(rawPrice)
+            // makerAmount (USDC) 使用 2 位小数
+            if (decimalPlaces(rawMakerAmt) > 2) {
+                rawMakerAmt = roundUp(rawMakerAmt, 2 + 4)
+                if (decimalPlaces(rawMakerAmt) > 2) {
+                    rawMakerAmt = roundDown(rawMakerAmt, 2)
+                }
+            }
+
             // 转换为 wei（6 位小数）
             val makerAmount = parseUnits(rawMakerAmt, COLLATERAL_TOKEN_DECIMALS)
-            val takerAmount = parseUnits(finalTakerAmt, COLLATERAL_TOKEN_DECIMALS)
-            
+            val takerAmount = parseUnits(rawTakerAmt, COLLATERAL_TOKEN_DECIMALS)
+
             return OrderAmounts(makerAmount.toString(), takerAmount.toString())
         } else {
             // SELL: makerAmount = size (shares), takerAmount = price * size (USDC)
-            // 根据 Polymarket API 要求：
-            // - makerAmount (shares) 最多 2 位小数
-            // - takerAmount (USDC) 最多 4 位小数
+            // 参考 clob-client/src/order-builder/helpers.ts 第 90-105 行
             val rawMakerAmt = roundDown(sizeDecimal, roundConfig.size)
-            
-            // takerAmount = price * size，使用原始价格计算（不使用舍入后的价格）
-            // SDK期望使用原始价格进行计算，以保留足够的精度
-            // 例如：0.9596 * 16.09 = 15.439964，而不是 0.96 * 16.09 = 15.4464
-            val rawTakerAmt = rawMakerAmt.multiply(priceDecimal)
-            
-            // 确保 makerAmount 精度（shares，最多 2 位小数，符合 API 要求）
-            val finalMakerAmt = roundDown(rawMakerAmt, MAKER_AMOUNT_DECIMALS)
-            
-            // 确保 takerAmount 精度（USDC，最多 4 位小数，符合 API 要求）
-            val finalTakerAmt = roundDown(rawTakerAmt, TAKER_AMOUNT_DECIMALS)
-            
+
+            var rawTakerAmt = rawMakerAmt.multiply(rawPrice)
+            // 如果 takerAmount 的小数位数超过 roundConfig.amount，进行特殊舍入处理
+            if (decimalPlaces(rawTakerAmt) > roundConfig.amount) {
+                rawTakerAmt = roundUp(rawTakerAmt, roundConfig.amount + 4)
+                if (decimalPlaces(rawTakerAmt) > roundConfig.amount) {
+                    rawTakerAmt = roundDown(rawTakerAmt, roundConfig.amount)
+                }
+            }
+
             // 转换为 wei（6 位小数）
-            val makerAmount = parseUnits(finalMakerAmt, COLLATERAL_TOKEN_DECIMALS)
-            val takerAmount = parseUnits(finalTakerAmt, COLLATERAL_TOKEN_DECIMALS)
-            
+            val makerAmount = parseUnits(rawMakerAmt, COLLATERAL_TOKEN_DECIMALS)
+            val takerAmount = parseUnits(rawTakerAmt, COLLATERAL_TOKEN_DECIMALS)
+
             return OrderAmounts(makerAmount.toString(), takerAmount.toString())
         }
     }
@@ -324,23 +334,65 @@ class OrderSigningService {
     
     /**
      * 正常舍入（四舍五入）
+     * 参考 clob-client/src/utilities.ts 的 roundNormal 函数
+     * 只有当小数位数超过 decimals 时才进行舍入
+     *
+     * @param value 要舍入的数值
+     * @param decimals 目标小数位数
+     * @return 舍入后的数值
      */
     private fun roundNormal(value: BigDecimal, decimals: Int): BigDecimal {
+        if (decimalPlaces(value) <= decimals) {
+            return value
+        }
         return value.setScale(decimals, RoundingMode.HALF_UP)
     }
     
     /**
      * 向下舍入
+     * 参考 clob-client/src/utilities.ts 的 roundDown 函数
+     * 只有当小数位数超过 decimals 时才进行舍入
+     *
+     * @param value 要舍入的数值
+     * @param decimals 目标小数位数
+     * @return 舍入后的数值
      */
     private fun roundDown(value: BigDecimal, decimals: Int): BigDecimal {
+        if (decimalPlaces(value) <= decimals) {
+            return value
+        }
         return value.setScale(decimals, RoundingMode.DOWN)
     }
-    
+
     /**
      * 向上舍入
+     * 参考 clob-client/src/utilities.ts 的 roundUp 函数
+     * 只有当小数位数超过 decimals 时才进行舍入
+     *
+     * @param value 要舍入的数值
+     * @param decimals 目标小数位数
+     * @return 舍入后的数值
      */
     private fun roundUp(value: BigDecimal, decimals: Int): BigDecimal {
+        if (decimalPlaces(value) <= decimals) {
+            return value
+        }
         return value.setScale(decimals, RoundingMode.UP)
+    }
+
+    /**
+     * 计算 BigDecimal 的小数位数
+     * 参考 clob-client/src/utilities.ts 的 decimalPlaces 函数
+     *
+     * @param value 要计算的数值
+     * @return 小数位数
+     */
+    private fun decimalPlaces(value: BigDecimal): Int {
+        if (value.scale() <= 0) {
+            return 0
+        }
+        // 去除尾部的零，获取真实的小数位数
+        return value.stripTrailingZeros().scale()
     }
 }
 

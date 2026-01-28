@@ -168,6 +168,10 @@ deploy() {
         
         info "构建 Docker 镜像（本地构建，版本号: ${DOCKER_VERSION}）..."
         
+        # 创建占位符目录（如果不存在），避免 Dockerfile COPY 失败
+        # 当 BUILD_IN_DOCKER=true 时，backend/build 可能不存在
+        mkdir -p backend/build/libs
+        
         # 设置构建参数（通过环境变量传递给 docker-compose.yml）
         export VERSION=${DOCKER_VERSION}
         export GIT_TAG=${DOCKER_VERSION}

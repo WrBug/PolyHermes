@@ -938,7 +938,8 @@
       "marketEndDate": "市场截止时间超出限制",
       "unknown": "未知原因"
     },
-    "noData": "暂无已过滤订单"
+    "noData": "暂无已过滤订单",
+    "noFilteredOrders": "暂无已过滤订单"
   },
   "copyTradingList": {
     "title": "跟单配置管理",
@@ -1116,6 +1117,8 @@
     "orderCount": "订单数",
     "totalAmount": "总金额",
     "statusBreakdown": "状态",
+    "allFullyMatched": "全部卖出",
+    "partiallyMatched": "部分卖出",
     "markets": "个市场",
     "fetchBuyOrdersFailed": "获取买入订单列表失败",
     "fetchSellOrdersFailed": "获取卖出订单列表失败",

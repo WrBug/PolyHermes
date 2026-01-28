@@ -31,20 +31,21 @@ RUN if [ "$BUILD_IN_DOCKER" = "true" ]; then \
 COPY frontend/ ./
 
 # 条件：仅在 Docker 内部编译时执行构建
-# 如果 BUILD_IN_DOCKER=false，需要从构建上下文复制外部编译的 dist
+# 如果 BUILD_IN_DOCKER=false，需要确保构建上下文中存在 frontend/dist
+# 注意：COPY frontend/ ./ 已经复制了整个 frontend 目录（包括 dist，如果存在）
 RUN if [ "$BUILD_IN_DOCKER" = "true" ]; then \
       echo "🔨 Docker 内部编译前端..."; \
       npm run build; \
     else \
-      echo "⏭️  使用外部产物，将在下一步复制"; \
-      mkdir -p dist; \
+      echo "⏭️  使用外部产物..."; \
+      if [ ! -d "dist" ] || [ -z "$(ls -A dist 2>/dev/null)" ]; then \
+        echo "❌ 错误：BUILD_IN_DOCKER=false 但找不到外部产物 frontend/dist"; \
+        echo "   请先执行: cd frontend && npm install && npm run build"; \
+        exit 1; \
+      else \
+        echo "✅ 找到外部构建的前端产物"; \
+      fi; \
     fi
-
-# 如果使用外部产物，从构建上下文复制外部编译的 dist
-# 注意：这个 COPY 在 BUILD_IN_DOCKER=false 时必需
-# 在 BUILD_IN_DOCKER=true 时，如果前端已编译，这个 COPY 会尝试覆盖，但结果相同
-# 如果本地没有 dist（BUILD_IN_DOCKER=true 且未编译），这个 COPY 会失败，但上面的 RUN 已经编译了
-COPY frontend/dist ./dist
 
 # ==================== 阶段2：构建后端 ====================
 FROM gradle:8.5-jdk17 AS backend-build
@@ -64,9 +65,25 @@ RUN if [ "$BUILD_IN_DOCKER" = "true" ]; then \
 # 复制源代码
 COPY backend/src ./src
 
-# 如果使用外部产物，先从构建上下文复制外部编译的 JAR
-# 注意：如果 BUILD_IN_DOCKER=true 且本地没有 JAR，这个 COPY 会失败，但会在下面编译生成
-COPY backend/build/libs/*.jar build/libs/
+# 尝试复制外部构建的 JAR（如果存在）
+# 注意：COPY 指令如果源不存在会失败
+# GitHub Actions 使用 BUILD_IN_DOCKER=false，会先构建产物，所以 backend/build 应该存在
+# 本地开发使用 BUILD_IN_DOCKER=true，会在 Docker 内编译，所以 backend/build 可能不存在
+# 解决方案：先复制整个 backend 目录（包括 build，如果存在），然后只使用需要的部分
+# 使用 .dockerignore 确保不会复制不需要的文件（如 .gradle、out、bin 等）
+COPY backend/build ./build-external
+
+# 处理外部构建的 JAR（如果存在）
+RUN if [ -d "build-external/libs" ] && [ -n "$(ls -A build-external/libs/*.jar 2>/dev/null)" ]; then \
+      echo "📦 找到外部构建的后端产物，复制到 build/libs..."; \
+      mkdir -p build/libs; \
+      cp build-external/libs/*.jar build/libs/; \
+      rm -rf build-external; \
+    else \
+      echo "⏭️  未找到外部构建的 JAR，将在 Docker 内编译"; \
+      rm -rf build-external; \
+      mkdir -p build/libs; \
+    fi
 
 # 条件：仅在 Docker 内部编译时执行构建（会覆盖外部产物）
 RUN if [ "$BUILD_IN_DOCKER" = "true" ]; then \
@@ -74,10 +91,12 @@ RUN if [ "$BUILD_IN_DOCKER" = "true" ]; then \
       gradle bootJar --no-daemon; \
     else \
       echo "⏭️  使用外部产物"; \
-      mkdir -p build/libs; \
       if [ -z "$(ls -A build/libs/*.jar 2>/dev/null)" ]; then \
         echo "❌ 错误：BUILD_IN_DOCKER=false 但找不到外部产物 backend/build/libs/*.jar"; \
+        echo "   请先执行: cd backend && ./gradlew bootJar"; \
         exit 1; \
+      else \
+        echo "✅ 使用外部构建的后端产物"; \
       fi; \
     fi
 

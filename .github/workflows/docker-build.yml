@@ -4,6 +4,24 @@ on:
   release:
     types:
       - published  # 当通过 GitHub Releases 页面创建 release 时触发
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: '构建类型'
+        required: true
+        type: choice
+        options:
+          - package-only        # 只打包产物
+          - package-and-docker # 打包产物 + Docker 镜像
+        default: 'package-and-docker'
+      version:
+        description: '版本号（例如: v1.0.0）'
+        required: false
+        type: string
+      tag_name:
+        description: 'Git Tag 名称（留空则使用 version）'
+        required: false
+        type: string
 
 jobs:
   build-and-push:
@@ -16,25 +34,61 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name }}  # 使用 release 对应的 tag
+          ref: ${{ github.event.release.tag_name || github.event.inputs.tag_name || github.event.inputs.version || github.ref }}
+      
+      - name: Determine build type
+        id: build_config
+        run: |
+          # 确定构建类型
+          if [ "${{ github.event_name }}" = "release" ]; then
+            # Release 事件：默认只打包产物（不构建 Docker）
+            BUILD_TYPE="package-only"
+            echo "📦 Release 事件：将只打包产物（不构建 Docker）"
+          else
+            # workflow_dispatch 事件：使用用户输入
+            BUILD_TYPE="${{ github.event.inputs.build_type }}"
+            echo "🔧 手动触发：构建类型 = ${BUILD_TYPE}"
+          fi
+          
+          echo "BUILD_TYPE=${BUILD_TYPE}" >> $GITHUB_OUTPUT
       
       - name: Extract version and check if pre-release
         id: extract_version
         run: |
-          # 从 release tag 中提取版本号（例如 v1.0.0 -> 1.0.0）
-          TAG_NAME="${{ github.event.release.tag_name }}"
-          if [ -z "$TAG_NAME" ]; then
-            TAG_NAME=${GITHUB_REF#refs/tags/}
+          # 从不同事件源提取版本号
+          if [ "${{ github.event_name }}" = "release" ]; then
+            # Release 事件：从 release tag 中提取
+            TAG_NAME="${{ github.event.release.tag_name }}"
+            IS_PRERELEASE="${{ github.event.release.prerelease }}"
+          else
+            # workflow_dispatch 事件：从输入参数中提取
+            TAG_NAME="${{ github.event.inputs.tag_name }}"
+            if [ -z "$TAG_NAME" ]; then
+              TAG_NAME="${{ github.event.inputs.version }}"
+            fi
+            # 如果仍然为空，尝试从 git ref 中提取
+            if [ -z "$TAG_NAME" ]; then
+              TAG_NAME=${GITHUB_REF#refs/tags/}
+              if [ "$TAG_NAME" = "$GITHUB_REF" ]; then
+                # 不是 tag，尝试从分支名或 commit SHA 获取
+                TAG_NAME=${GITHUB_REF#refs/heads/}
+                if [ "$TAG_NAME" = "$GITHUB_REF" ]; then
+                  TAG_NAME="dev-$(date +%Y%m%d-%H%M%S)"
+                  echo "⚠️  未指定版本号，使用临时版本: $TAG_NAME"
+                fi
+              fi
+            fi
+            IS_PRERELEASE="false"
           fi
           
           # 验证版本号格式：v数字.数字.数字[-后缀]（例如 v1.0.0, v2.10.102, v1.0.0-beta）
-          if [[ ! "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]; then
-            echo "错误: 版本号格式不正确，应为 v数字.数字.数字 或 v数字.数字.数字-后缀 (例如: v1.0.0, v1.0.0-beta)"
-            exit 1
+          if [[ ! "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]] && [[ ! "$TAG_NAME" =~ ^dev- ]]; then
+            echo "⚠️  警告: 版本号格式不符合标准，但仍将继续构建"
+            echo "   当前版本号: $TAG_NAME"
+            echo "   标准格式应为: v数字.数字.数字 或 v数字.数字.数字-后缀 (例如: v1.0.0, v1.0.0-beta)"
           fi
           
-          VERSION=${TAG_NAME#v}  # 移除 v 前缀
-          IS_PRERELEASE="${{ github.event.release.prerelease }}"
+          VERSION=${TAG_NAME#v}  # 移除 v 前缀（如果存在）
           
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "TAG=$TAG_NAME" >> $GITHUB_OUTPUT
@@ -47,7 +101,7 @@ jobs:
           fi
       
       - name: Send Telegram notification (build started)
-        if: steps.extract_version.outputs.IS_PRERELEASE == 'false'
+        if: steps.extract_version.outputs.IS_PRERELEASE == 'false' && steps.build_config.outputs.BUILD_TYPE == 'package-and-docker'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -59,12 +113,15 @@ jobs:
           fi
           
           # 获取构建信息
-          VERSION="${{ steps.extract_version.outputs.VERSION }}"
           TAG="${{ steps.extract_version.outputs.TAG }}"
-          RELEASE_URL="${{ github.event.release.html_url }}"
           
-          # 构建消息内容（仅包含关键信息）
-          MESSAGE="🔨 <b>Docker 镜像构建中</b>"$'\n'$'\n'"📦 <b>版本:</b> ${VERSION}"$'\n'"🏷️ <b>Tag:</b> <code>${TAG}</code>"$'\n'"🔗 <a href=\"${RELEASE_URL}\">查看 Release</a>"
+          if [ "${{ github.event_name }}" = "release" ]; then
+            RELEASE_URL="${{ github.event.release.html_url }}"
+            MESSAGE="🔨 <b>Release 构建中</b>"$'\n'$'\n'"🏷️ <b>Tag:</b> <code>${TAG}</code>"$'\n'"🔧 <b>构建类型:</b> Docker 升级"$'\n'"🔗 <a href=\"${RELEASE_URL}\">查看 Release</a>"
+          else
+            WORKFLOW_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            MESSAGE="🔨 <b>构建中</b>"$'\n'$'\n'"🏷️ <b>Tag:</b> <code>${TAG}</code>"$'\n'"🔧 <b>构建类型:</b> Docker 升级"$'\n'"🔗 <a href=\"${WORKFLOW_URL}\">查看 Workflow</a>"
+          fi
           
           # 发送 Telegram 消息（使用 jq 转义 JSON）
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
@@ -141,12 +198,18 @@ jobs:
           echo "✅ 前端文件已复制"
           
           # 创建版本信息文件
+          if [ "${{ github.event_name }}" = "release" ]; then
+            RELEASE_NOTES=$(echo '${{ github.event.release.body }}' | jq -Rs .)
+          else
+            RELEASE_NOTES="\"手动构建 - workflow_dispatch\""
+          fi
+          
           cat > update-package/version.json <<EOF
           {
             "version": "${{ steps.extract_version.outputs.VERSION }}",
             "tag": "${{ steps.extract_version.outputs.TAG }}",
             "buildTime": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "releaseNotes": $(echo '${{ github.event.release.body }}' | jq -Rs .)
+            "releaseNotes": ${RELEASE_NOTES}
           }
           EOF
           echo "✅ 版本信息已创建"
@@ -169,6 +232,7 @@ jobs:
           echo "$CHECKSUM  $FILE" > checksums.txt
       
       - name: Upload Update Package to Release
+        if: github.event_name == 'release'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -178,7 +242,8 @@ jobs:
           asset_name: polyhermes-${{ steps.extract_version.outputs.TAG }}-update.tar.gz
           asset_content_type: application/gzip
       
-      - name: Upload Checksums
+      - name: Upload Checksums to Release
+        if: github.event_name == 'release'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -188,19 +253,32 @@ jobs:
           asset_name: checksums.txt
           asset_content_type: text/plain
       
+      - name: Upload Update Package as Artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: polyhermes-${{ steps.extract_version.outputs.TAG }}-update
+          path: |
+            polyhermes-${{ steps.extract_version.outputs.TAG }}-update.tar.gz
+            checksums.txt
+          retention-days: 30
+      
       - name: Set up Docker Buildx
+        if: steps.build_config.outputs.BUILD_TYPE == 'package-and-docker'
         uses: docker/setup-buildx-action@v3
         with:
           # 启用多架构构建支持
           platforms: linux/amd64,linux/arm64
       
       - name: Log in to Docker Hub
+        if: steps.build_config.outputs.BUILD_TYPE == 'package-and-docker'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
       
       - name: Prepare Docker build context
+        if: steps.build_config.outputs.BUILD_TYPE == 'package-and-docker'
         run: |
           echo "📦 准备 Docker 构建上下文..."
           # 确保构建产物存在且可访问
@@ -217,6 +295,7 @@ jobs:
           ls -lh backend/build/libs/*.jar
       
       - name: Build and push Docker image
+        if: steps.build_config.outputs.BUILD_TYPE == 'package-and-docker'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -234,6 +313,12 @@ jobs:
             GITHUB_REPO_URL=https://github.com/WrBug/PolyHermes
           cache-from: type=registry,ref=wrbug/polyhermes:latest
           cache-to: type=inline
+      
+      - name: Skip Docker build notice
+        if: steps.build_config.outputs.BUILD_TYPE == 'package-only'
+        run: |
+          echo "⏭️  跳过 Docker 镜像构建（构建类型：package-only）"
+          echo "✅ 仅打包产物已完成"
 
       - name: Send Telegram notification
         if: steps.extract_version.outputs.IS_PRERELEASE == 'false'
@@ -250,13 +335,26 @@ jobs:
           # 获取构建信息
           VERSION="${{ steps.extract_version.outputs.VERSION }}"
           TAG="${{ steps.extract_version.outputs.TAG }}"
-          RELEASE_NAME="${{ github.event.release.name }}"
-          RELEASE_URL="${{ github.event.release.html_url }}"
-          REPO_NAME="${{ github.repository }}"
+          BUILD_TYPE="${{ steps.build_config.outputs.BUILD_TYPE }}"
           
           # 构建消息内容（仅包含关键信息）
           DEPLOY_DOC_URL="https://github.com/WrBug/PolyHermes/blob/main/docs/zh/DEPLOYMENT.md"
-          MESSAGE="✅ <b>Docker 镜像构建成功</b>"$'\n'$'\n'"📦 <b>版本:</b> ${VERSION}"$'\n'"🏷️ <b>Tag:</b> <code>${TAG}</code>"$'\n'"🔗 <a href=\"${RELEASE_URL}\">查看 Release</a>"$'\n'"📚 <a href=\"${DEPLOY_DOC_URL}\">Docker 部署文档</a>"
+          
+          if [ "${{ github.event_name }}" = "release" ]; then
+            RELEASE_URL="${{ github.event.release.html_url }}"
+            if [ "$BUILD_TYPE" = "package-and-docker" ]; then
+              MESSAGE="✅ <b>Release 构建成功</b>"$'\n'$'\n'"🏷️ <b>Tag:</b> <code>${TAG}</code>"$'\n'"🔧 <b>构建类型:</b> Docker 升级"$'\n'"🔗 <a href=\"${RELEASE_URL}\">查看 Release</a>"$'\n'"📚 <a href=\"${DEPLOY_DOC_URL}\">Docker 部署文档</a>"
+            else
+              MESSAGE="✅ <b>Release 打包成功</b>"$'\n'$'\n'"🏷️ <b>Tag:</b> <code>${TAG}</code>"$'\n'"🔧 <b>构建类型:</b> 在线升级"$'\n'"🔗 <a href=\"${RELEASE_URL}\">查看 Release</a>"$'\n'"📍 <b>升级路径:</b> 系统管理 → 概览 → 检查更新"
+            fi
+          else
+            WORKFLOW_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            if [ "$BUILD_TYPE" = "package-and-docker" ]; then
+              MESSAGE="✅ <b>构建成功</b>"$'\n'$'\n'"🏷️ <b>Tag:</b> <code>${TAG}</code>"$'\n'"🔧 <b>构建类型:</b> Docker 升级"$'\n'"🔗 <a href=\"${WORKFLOW_URL}\">查看 Workflow</a>"$'\n'"📚 <a href=\"${DEPLOY_DOC_URL}\">Docker 部署文档</a>"
+            else
+              MESSAGE="✅ <b>打包成功</b>"$'\n'$'\n'"🏷️ <b>Tag:</b> <code>${TAG}</code>"$'\n'"🔧 <b>构建类型:</b> 在线升级"$'\n'"🔗 <a href=\"${WORKFLOW_URL}\">查看 Workflow</a>"$'\n'"📍 <b>升级路径:</b> 系统管理 → 概览 → 检查更新"
+            fi
+          fi
           
           # 发送 Telegram 消息（使用 jq 转义 JSON）
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \

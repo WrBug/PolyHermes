@@ -98,8 +98,8 @@ class RpcNodeService(
                 .filterNot { isDefaultNode(it) }  // 排除默认节点
             
             if (nodes.isEmpty()) {
-                logger.warn("没有配置任何 RPC 节点,使用默认节点: $DEFAULT_RPC_URL")
-                return Result.failure(IllegalStateException("没有配置任何 RPC 节点"))
+                logger.warn("没有配置任何启用的 RPC 节点，将使用默认节点")
+                return Result.success(createDefaultNodeConfig())
             }
             
             // 优先使用最近检查状态为 HEALTHY 的节点
@@ -136,39 +136,53 @@ class RpcNodeService(
                 }
             }
             
-            // 所有节点都不可用，返回失败
-            logger.warn("所有 RPC 节点都不可用，将使用默认节点: $DEFAULT_RPC_URL")
-            Result.failure(IllegalStateException("所有 RPC 节点都不可用"))
+            // 所有节点都不可用，返回默认节点
+            logger.warn("所有启用的 RPC 节点都不可用，将使用默认节点: $DEFAULT_RPC_URL")
+            Result.success(createDefaultNodeConfig())
         } catch (e: Exception) {
             logger.error("获取可用节点失败: ${e.message}", e)
-            Result.failure(e)
+            // 即使失败也返回默认节点，确保系统可用
+            logger.warn("获取可用节点出现异常，使用默认节点作为兜底")
+            Result.success(createDefaultNodeConfig())
         }
+    }
+    
+    /**
+     * 创建默认节点配置
+     * 用于兜底，确保系统始终有可用的 RPC 节点
+     */
+    private fun createDefaultNodeConfig(): RpcNodeConfig {
+        return RpcNodeConfig(
+            id = 0L,
+            providerType = RpcProviderType.PUBLIC.name,
+            name = "默认节点",
+            httpUrl = DEFAULT_RPC_URL,
+            wsUrl = DEFAULT_WS_URL,
+            apiKey = null,
+            enabled = true,
+            priority = 9999,
+            lastCheckTime = System.currentTimeMillis(),
+            lastCheckStatus = NodeHealthStatus.HEALTHY.name,
+            responseTimeMs = null,
+            createdAt = System.currentTimeMillis(),
+            updatedAt = System.currentTimeMillis()
+        )
     }
     
     /**
      * 获取节点的 HTTP URL (如果没有配置,使用默认节点)
      */
     fun getHttpUrl(): String {
-        val nodeResult = getAvailableNode()
-        return if (nodeResult.isSuccess) {
-            nodeResult.getOrNull()?.httpUrl ?: DEFAULT_RPC_URL
-        } else {
-            logger.warn("没有可用的用户配置节点,使用默认节点")
-            DEFAULT_RPC_URL
-        }
+        val node = getAvailableNode().getOrNull()
+        return node?.httpUrl ?: DEFAULT_RPC_URL
     }
     
     /**
      * 获取节点的 WebSocket URL (如果没有配置,使用默认节点)
      */
     fun getWsUrl(): String {
-        val nodeResult = getAvailableNode()
-        return if (nodeResult.isSuccess) {
-            nodeResult.getOrNull()?.wsUrl ?: DEFAULT_WS_URL
-        } else {
-            logger.warn("没有可用的用户配置节点,使用默认 WS 节点")
-            DEFAULT_WS_URL
-        }
+        val node = getAvailableNode().getOrNull()
+        return node?.wsUrl ?: DEFAULT_WS_URL
     }
     
     /**
@@ -263,6 +277,13 @@ class RpcNodeService(
                 return Result.failure(IllegalArgumentException("默认节点不允许更新"))
             }
             
+            // 检查是否禁用节点，如果是则清理缓存
+            val isDisabling = request.enabled == false && node.enabled == true
+            if (isDisabling) {
+                logger.info("节点被禁用，清理 RPC 缓存: ${node.httpUrl}")
+                retrofitFactory.clearRpcApiCache(node.httpUrl)
+            }
+            
             // 更新字段
             val updatedNode = node.copy(
                 name = request.name ?: node.name,
@@ -272,7 +293,7 @@ class RpcNodeService(
             )
             
             val savedNode = rpcNodeConfigRepository.save(updatedNode)
-            logger.info("成功更新 RPC 节点: ${savedNode.name}")
+            logger.info("成功更新 RPC 节点: ${savedNode.name}, enabled=${savedNode.enabled}")
             Result.success(savedNode)
         } catch (e: Exception) {
             logger.error("更新节点失败: ${e.message}", e)
@@ -294,6 +315,10 @@ class RpcNodeService(
             if (isDefaultNode(node)) {
                 return Result.failure(IllegalArgumentException("默认节点不允许删除"))
             }
+            
+            // 清理 RPC 缓存
+            logger.info("删除节点，清理 RPC 缓存: ${node.httpUrl}")
+            retrofitFactory.clearRpcApiCache(node.httpUrl)
             
             rpcNodeConfigRepository.delete(node)
             logger.info("成功删除 RPC 节点: ${node.name}")
