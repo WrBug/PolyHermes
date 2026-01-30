@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react'
-import { Modal, Form, Button, Switch, message, Space, Radio, InputNumber, Table, Select, Divider, Input, Tag, InputRef, Card, Row, Col, Statistic } from 'antd'
+import { Modal, Form, Button, Switch, message, Space, Radio, InputNumber, Table, Select, Divider, Input, Tag, InputRef, Card, Row, Col, Statistic, Spin } from 'antd'
 import { SaveOutlined, FileTextOutlined, PlusOutlined } from '@ant-design/icons'
 import { apiService } from '../../services/api'
 import { useAccountStore } from '../../store/accountStore'
@@ -122,7 +122,6 @@ const AddModal: React.FC<AddModalProps> = ({
       minPrice: template.minPrice ? parseFloat(template.minPrice) : undefined,
       maxPrice: template.maxPrice ? parseFloat(template.maxPrice) : undefined,
       maxPositionValue: (template as any).maxPositionValue ? parseFloat((template as any).maxPositionValue) : undefined,
-      maxPositionCount: (template as any).maxPositionCount,
       pushFilteredOrders: template.pushFilteredOrders ?? false
     })
     setCopyMode(template.copyMode)
@@ -277,7 +276,6 @@ const AddModal: React.FC<AddModalProps> = ({
         minPrice: values.minPrice?.toString(),
         maxPrice: values.maxPrice?.toString(),
         maxPositionValue: values.maxPositionValue?.toString(),
-        maxPositionCount: values.maxPositionCount,
         keywordFilterMode: values.keywordFilterMode || 'DISABLED',
         keywords: (values.keywordFilterMode === 'WHITELIST' || values.keywordFilterMode === 'BLACKLIST') 
           ? keywords 
@@ -797,19 +795,6 @@ const AddModal: React.FC<AddModalProps> = ({
                 if (isNaN(num)) return ''
                 return num.toString().replace(/\.0+$/, '')
               }}
-            />
-          </Form.Item>
-          
-          <Form.Item
-            label={t('copyTradingAdd.maxPositionCount') || '最大仓位数量'}
-            name="maxPositionCount"
-            tooltip={t('copyTradingAdd.maxPositionCountTooltip') || '限制单个市场的最大仓位数量。如果该市场的当前仓位数量达到或超过此限制，则不会下单。不填写则不启用此限制'}
-          >
-            <InputNumber
-              min={1}
-              step={1}
-              style={{ width: '100%' }}
-              placeholder={t('copyTradingAdd.maxPositionCountPlaceholder') || '例如：10（可选，不填写表示不启用）'}
             />
           </Form.Item>
           

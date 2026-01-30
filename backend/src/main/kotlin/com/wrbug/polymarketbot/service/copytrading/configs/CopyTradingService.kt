@@ -100,7 +100,6 @@ class CopyTradingService(
                     minPrice = request.minPrice?.toSafeBigDecimal() ?: template.minPrice,
                     maxPrice = request.maxPrice?.toSafeBigDecimal() ?: template.maxPrice,
                     maxPositionValue = request.maxPositionValue?.toSafeBigDecimal(),
-                    maxPositionCount = request.maxPositionCount,
                     keywordFilterMode = request.keywordFilterMode ?: "DISABLED",
                     keywords = convertKeywordsToJson(request.keywords),
                     maxMarketEndDate = request.maxMarketEndDate,
@@ -132,7 +131,6 @@ class CopyTradingService(
                     minPrice = request.minPrice?.toSafeBigDecimal(),
                     maxPrice = request.maxPrice?.toSafeBigDecimal(),
                     maxPositionValue = request.maxPositionValue?.toSafeBigDecimal(),
-                    maxPositionCount = request.maxPositionCount,
                     keywordFilterMode = request.keywordFilterMode ?: "DISABLED",
                     keywords = convertKeywordsToJson(request.keywords),
                     maxMarketEndDate = request.maxMarketEndDate,
@@ -164,7 +162,6 @@ class CopyTradingService(
                 minPrice = config.minPrice,
                 maxPrice = config.maxPrice,
                 maxPositionValue = config.maxPositionValue,
-                maxPositionCount = config.maxPositionCount,
                 keywordFilterMode = config.keywordFilterMode,
                 keywords = config.keywords,
                 configName = configName,
@@ -281,16 +278,6 @@ class CopyTradingService(
                     }
                 } else {
                     copyTrading.maxPositionValue
-                },
-                // 处理 maxPositionCount：-1 表示要清空（设置为 null），null 表示不更新
-                maxPositionCount = if (request.maxPositionCount != null) {
-                    if (request.maxPositionCount == -1) {
-                        null
-                    } else {
-                        request.maxPositionCount
-                    }
-                } else {
-                    copyTrading.maxPositionCount
                 },
                 keywordFilterMode = request.keywordFilterMode ?: copyTrading.keywordFilterMode,
                 keywords = if (request.keywords != null) {
@@ -520,7 +507,6 @@ class CopyTradingService(
             minPrice = copyTrading.minPrice?.toPlainString(),
             maxPrice = copyTrading.maxPrice?.toPlainString(),
             maxPositionValue = copyTrading.maxPositionValue?.toPlainString(),
-            maxPositionCount = copyTrading.maxPositionCount,
             keywordFilterMode = copyTrading.keywordFilterMode,
             keywords = convertJsonToKeywords(copyTrading.keywords),
             configName = copyTrading.configName,
@@ -585,7 +571,6 @@ class CopyTradingService(
         val minPrice: BigDecimal?,
         val maxPrice: BigDecimal?,
         val maxPositionValue: BigDecimal?,
-        val maxPositionCount: Int?,
         val keywordFilterMode: String,
         val keywords: String?,  // JSON 字符串
         val maxMarketEndDate: Long?,  // 市场截止时间限制（毫秒时间戳）

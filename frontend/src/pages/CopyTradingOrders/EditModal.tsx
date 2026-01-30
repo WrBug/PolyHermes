@@ -91,7 +91,6 @@ const EditModal: React.FC<EditModalProps> = ({
             minPrice: found.minPrice ? parseFloat(found.minPrice) : undefined,
             maxPrice: found.maxPrice ? parseFloat(found.maxPrice) : undefined,
             maxPositionValue: found.maxPositionValue ? parseFloat(found.maxPositionValue) : undefined,
-            maxPositionCount: found.maxPositionCount,
             keywordFilterMode: found.keywordFilterMode || 'DISABLED',
             configName: found.configName || '',
             pushFailedOrders: found.pushFailedOrders ?? false,
@@ -237,8 +236,6 @@ const EditModal: React.FC<EditModalProps> = ({
         minPrice: values.minPrice != null ? values.minPrice.toString() : '',
         maxPrice: values.maxPrice != null ? values.maxPrice.toString() : '',
         maxPositionValue: values.maxPositionValue != null ? values.maxPositionValue.toString() : '',
-        // 对于 maxPositionCount，如果值为 null/undefined，传 -1 表示要清空（后端会识别并设置为 null）
-        maxPositionCount: values.maxPositionCount != null ? values.maxPositionCount : -1,
         keywordFilterMode: values.keywordFilterMode || 'DISABLED',
         keywords: (values.keywordFilterMode === 'WHITELIST' || values.keywordFilterMode === 'BLACKLIST') 
           ? keywords 
@@ -719,19 +716,6 @@ const EditModal: React.FC<EditModalProps> = ({
                 if (isNaN(num)) return ''
                 return num.toString().replace(/\.0+$/, '')
               }}
-            />
-          </Form.Item>
-          
-          <Form.Item
-            label={t('copyTradingEdit.maxPositionCount') || '最大仓位数量'}
-            name="maxPositionCount"
-            tooltip={t('copyTradingEdit.maxPositionCountTooltip') || '限制单个市场的最大仓位数量。如果该市场的当前仓位数量达到或超过此限制，则不会下单。不填写则不启用此限制'}
-          >
-            <InputNumber
-              min={1}
-              step={1}
-              style={{ width: '100%' }}
-              placeholder={t('copyTradingEdit.maxPositionCountPlaceholder') || '例如：10（可选，不填写表示不启用）'}
             />
           </Form.Item>
           

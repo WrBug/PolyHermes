@@ -1430,7 +1430,6 @@ open class CopyOrderTrackingService(
             FilterStatus.FAILED_SPREAD -> "SPREAD"
             FilterStatus.FAILED_ORDER_DEPTH -> "ORDER_DEPTH"
             FilterStatus.FAILED_MAX_POSITION_VALUE -> "MAX_POSITION_VALUE"
-            FilterStatus.FAILED_MAX_POSITION_COUNT -> "MAX_POSITION_COUNT"
             FilterStatus.FAILED_KEYWORD_FILTER -> "KEYWORD_FILTER"
             FilterStatus.FAILED_MARKET_END_DATE -> "MARKET_END_DATE"
         }

@@ -66,7 +66,6 @@ const FilteredOrdersList: React.FC = () => {
       'ORDERBOOK_EMPTY': { color: 'default', label: t('filteredOrdersList.filterTypes.orderbookEmpty') || '订单簿为空' },
       'PRICE_RANGE': { color: 'purple', label: t('filteredOrdersList.filterTypes.priceRange') || '价格区间不符' },
       'MAX_POSITION_VALUE': { color: 'volcano', label: t('filteredOrdersList.filterTypes.maxPositionValue') || '超过最大仓位金额' },
-      'MAX_POSITION_COUNT': { color: 'volcano', label: t('filteredOrdersList.filterTypes.maxPositionCount') || '超过最大仓位数量' },
       'MARKET_END_DATE': { color: 'cyan', label: t('filteredOrdersList.filterTypes.marketEndDate') || '市场截止时间超出限制' },
       'KEYWORD_FILTER': { color: 'geekblue', label: t('filteredOrdersList.filterTypes.keywordFilter') || '关键字过滤' },
       'UNKNOWN': { color: 'default', label: t('filteredOrdersList.filterTypes.unknown') || '未知原因' }

@@ -83,9 +83,6 @@ data class CopyTrading(
     @Column(name = "max_position_value", precision = 20, scale = 8)
     val maxPositionValue: BigDecimal? = null,  // 最大仓位金额（USDC），NULL表示不启用
     
-    @Column(name = "max_position_count")
-    val maxPositionCount: Int? = null,  // 最大仓位数量，NULL表示不启用
-    
     // 关键字过滤配置
     @Column(name = "keyword_filter_mode", nullable = false, length = 20)
     val keywordFilterMode: String = "DISABLED",  // 关键字过滤模式：DISABLED（不启用）、WHITELIST（白名单）、BLACKLIST（黑名单）

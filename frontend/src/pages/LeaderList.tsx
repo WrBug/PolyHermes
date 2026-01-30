@@ -266,7 +266,7 @@ const LeaderList: React.FC = () => {
       title: t('common.actions'),
       key: 'action',
       width: isMobile ? 180 : 250,
-      fixed: 'right',
+      fixed: 'right' as const,
       render: (_: any, record: Leader) => (
         <Space size="small" wrap>
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleShowDetail(record)}>
@@ -530,7 +530,7 @@ const LeaderList: React.FC = () => {
                     rowKey={(record, index) => `${record.title}-${record.side}-${index}`}
                     pagination={{ pageSize: 10, showSizeChanger: !isMobile }}
                     scroll={{ x: isMobile ? 800 : 'auto' }}
-                    size={isMobile ? 'small' : 'default'}
+                    size={isMobile ? 'small' : 'middle'}
                   />
                 ) : (
                   <Empty description={t('leaderDetail.noPositions')} />

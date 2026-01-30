@@ -315,7 +315,7 @@ class CopyTradingFilterService(
         outcomeIndex: Int?
     ): FilterResult {
         // 如果未配置仓位限制，直接通过
-        if (copyTrading.maxPositionValue == null && copyTrading.maxPositionCount == null) {
+        if (copyTrading.maxPositionValue == null) {
             return FilterResult.passed()
         }
 
@@ -365,39 +365,6 @@ class CopyTradingFilterService(
                     val maxValueStr = copyTrading.maxPositionValue.stripTrailingZeros().toPlainString()
                     return FilterResult.maxPositionValueFailed(
                         "超过最大仓位金额限制: 市场=$marketId, 方向=$outcomeIndex, 当前仓位(取最大值)=${currentValueStr} USDC (DB=${dbValueStr}, Ext=${extValueStr}), 跟单金额=${orderAmountStr} USDC, 总计=${totalValueStr} USDC > 最大限制=${maxValueStr} USDC"
-                    )
-                }
-            }
-
-            // 检查最大仓位数量（如果配置了）
-            if (copyTrading.maxPositionCount != null) {
-                // 使用数据库中的订单记录计算活跃仓位数量（解决延迟问题）
-                val dbCount = copyOrderTrackingRepository.countActivePositions(copyTrading.id!!)
-
-                // 计算外部持仓中的唯一市场数量（防止遗漏非本项目创建的仓位）
-                val extCount = positions.currentPositions
-                    .filter { it.accountId == copyTrading.accountId }
-                    .map { it.marketId }
-                    .distinct()
-                    .size
-
-                val currentPositionCount = maxOf(dbCount, extCount)
-
-                // 检查：如果当前没有该市场该方向的活跃仓位，且总仓位数量已达到限制，则不允许开新仓
-                // 判断当前市场该方向是否已有活跃仓位（数据库）
-                val hasDbPosition = if (outcomeIndex != null) {
-                    copyOrderTrackingRepository.findUnmatchedBuyOrdersByOutcomeIndex(
-                        copyTrading.id, marketId, outcomeIndex
-                    ).isNotEmpty()
-                } else {
-                    false
-                }
-                val hasExtPosition = marketPositions.isNotEmpty()
-                val hasCurrentMarketPosition = hasDbPosition || hasExtPosition
-
-                if (!hasCurrentMarketPosition && currentPositionCount >= copyTrading.maxPositionCount) {
-                    return FilterResult.maxPositionCountFailed(
-                        "超过最大仓位数量限制: 当前活跃仓位总数(取最大值)=${currentPositionCount} (DB=${dbCount}, Ext=${extCount}) >= 最大限制=${copyTrading.maxPositionCount}"
                     )
                 }
             }
