@@ -837,10 +837,16 @@
     "fetchLeaderFailed": "獲取 Leader 列表失敗",
     "fetchTemplateFailed": "獲取模板列表失敗",
     "templateName": "模板名稱",
-    "noAccounts": "暫無賬戶",
-    "importAccount": "導入賬戶",
+    "noAccounts": "暫無帳戶",
+    "importAccount": "導入帳戶",
     "noLeaders": "暫無 Leader",
-    "addLeader": "添加 Leader"
+    "addLeader": "添加 Leader",
+    "leaderAssetInfo": "Leader 資產資訊",
+    "loadingAssetInfo": "加載資產資訊中...",
+    "totalAsset": "總資產",
+    "availableBalance": "可用餘額",
+    "positionAsset": "倉位資產",
+    "fetchAssetInfoFailed": "獲取資產資訊失敗"
   },
   "copyTradingEdit": {
     "title": "編輯跟單配置",

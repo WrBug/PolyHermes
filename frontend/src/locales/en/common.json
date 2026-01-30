@@ -840,7 +840,13 @@
     "noAccounts": "No accounts",
     "importAccount": "Import Account",
     "noLeaders": "No Leaders",
-    "addLeader": "Add Leader"
+    "addLeader": "Add Leader",
+    "leaderAssetInfo": "Leader Asset Info",
+    "loadingAssetInfo": "Loading asset info...",
+    "totalAsset": "Total Assets",
+    "availableBalance": "Available Balance",
+    "positionAsset": "Position Assets",
+    "fetchAssetInfoFailed": "Failed to fetch asset info"
   },
   "copyTradingEdit": {
     "title": "Edit Copy Trading Config",

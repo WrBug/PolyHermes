@@ -840,7 +840,13 @@
     "noAccounts": "暂无账户",
     "importAccount": "导入账户",
     "noLeaders": "暂无 Leader",
-    "addLeader": "添加 Leader"
+    "addLeader": "添加 Leader",
+    "leaderAssetInfo": "Leader 资产信息",
+    "loadingAssetInfo": "加载资产信息中...",
+    "totalAsset": "总资产",
+    "availableBalance": "可用余额",
+    "positionAsset": "仓位资产",
+    "fetchAssetInfoFailed": "获取资产信息失败"
   },
   "copyTradingEdit": {
     "title": "编辑跟单配置",

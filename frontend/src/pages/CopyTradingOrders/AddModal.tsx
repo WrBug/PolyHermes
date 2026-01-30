@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react'
-import { Modal, Form, Button, Switch, message, Space, Radio, InputNumber, Table, Select, Divider, Input, Tag, InputRef } from 'antd'
+import { Modal, Form, Button, Switch, message, Space, Radio, InputNumber, Table, Select, Divider, Input, Tag, InputRef, Card, Row, Col, Statistic } from 'antd'
 import { SaveOutlined, FileTextOutlined, PlusOutlined } from '@ant-design/icons'
 import { apiService } from '../../services/api'
 import { useAccountStore } from '../../store/accountStore'
@@ -36,6 +36,8 @@ const AddModal: React.FC<AddModalProps> = ({
   const keywordInputRef = useRef<InputRef>(null)
   const [maxMarketEndDateValue, setMaxMarketEndDateValue] = useState<number | undefined>()
   const [maxMarketEndDateUnit, setMaxMarketEndDateUnit] = useState<'HOUR' | 'DAY'>('HOUR')
+  const [leaderAssetInfo, setLeaderAssetInfo] = useState<{ total: string; available: string; position: string } | null>(null)
+  const [loadingAssetInfo, setLoadingAssetInfo] = useState(false)
   
   // 导入账户modal相关状态
   const [accountImportModalVisible, setAccountImportModalVisible] = useState(false)
@@ -130,6 +132,32 @@ const AddModal: React.FC<AddModalProps> = ({
   
   const handleCopyModeChange = (mode: 'RATIO' | 'FIXED') => {
     setCopyMode(mode)
+  }
+  
+  // 获取 Leader 资产信息
+  const fetchLeaderAssetInfo = async (leaderId: number) => {
+    if (!leaderId) return
+    
+    setLoadingAssetInfo(true)
+    setLeaderAssetInfo(null)
+    try {
+      const response = await apiService.leaders.balance({ leaderId })
+      if (response.data.code === 0 && response.data.data) {
+        const balance = response.data.data
+        setLeaderAssetInfo({
+          total: balance.totalBalance || '0',
+          available: balance.availableBalance || '0',
+          position: balance.positionBalance || '0'
+        })
+      } else {
+        message.error(response.data.msg || t('copyTradingAdd.fetchAssetInfoFailed') || '获取资产信息失败')
+      }
+    } catch (error: any) {
+      console.error('获取 Leader 资产失败:', error)
+      message.error(error.message || t('copyTradingAdd.fetchAssetInfoFailed') || '获取资产信息失败')
+    } finally {
+      setLoadingAssetInfo(false)
+    }
   }
   
   // 处理导入账户成功
@@ -382,6 +410,7 @@ const AddModal: React.FC<AddModalProps> = ({
                   </div>
                 ) : null
               }
+              onChange={(value) => fetchLeaderAssetInfo(value)}
             >
               {leaders.map(leader => (
                 <Option key={leader.id} value={leader.id}>
@@ -390,6 +419,61 @@ const AddModal: React.FC<AddModalProps> = ({
               ))}
             </Select>
           </Form.Item>
+          
+          {/* Leader 资产信息 */}
+          {leaderAssetInfo && (
+            <Card
+              title={
+                <Space>
+                  <span>{t('copyTradingAdd.leaderAssetInfo') || 'Leader 资产信息'}</span>
+                </Space>
+              }
+              size="small"
+              style={{ marginBottom: '16px', backgroundColor: '#f5f5f5', border: '1px solid #d9d9d9' }}
+            >
+              {loadingAssetInfo ? (
+                <div style={{ textAlign: 'center', padding: '24px' }}>
+                  <Spin />
+                  <div style={{ marginTop: '8px', color: '#999' }}>
+                    {t('copyTradingAdd.loadingAssetInfo') || '加载资产信息中...'}
+                  </div>
+                </div>
+              ) : (
+                <Row gutter={16}>
+                  <Col span={8}>
+                    <Statistic
+                      title={t('copyTradingAdd.totalAsset') || '总资产'}
+                      value={parseFloat(leaderAssetInfo.total)}
+                      precision={4}
+                      valueStyle={{ color: '#52c41a', fontWeight: 'bold', fontSize: '16px' }}
+                      suffix="USDC"
+                      formatter={(value) => formatUSDC(value?.toString() || '0')}
+                    />
+                  </Col>
+                  <Col span={8}>
+                    <Statistic
+                      title={t('copyTradingAdd.availableBalance') || '可用余额'}
+                      value={parseFloat(leaderAssetInfo.available)}
+                      precision={4}
+                      valueStyle={{ color: '#1890ff', fontSize: '14px' }}
+                      suffix="USDC"
+                      formatter={(value) => formatUSDC(value?.toString() || '0')}
+                    />
+                  </Col>
+                  <Col span={8}>
+                    <Statistic
+                      title={t('copyTradingAdd.positionAsset') || '仓位资产'}
+                      value={parseFloat(leaderAssetInfo.position)}
+                      precision={4}
+                      valueStyle={{ color: '#722ed1', fontSize: '14px' }}
+                      suffix="USDC"
+                      formatter={(value) => formatUSDC(value?.toString() || '0')}
+                    />
+                  </Col>
+                </Row>
+              )}
+            </Card>
+          )}
           
           {/* 模板填充按钮 */}
           <Form.Item>
