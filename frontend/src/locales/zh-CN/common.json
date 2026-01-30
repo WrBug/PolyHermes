@@ -502,7 +502,7 @@
     "balanceInfo": "余额信息",
     "refresh": "刷新",
     "availableBalance": "可用余额",
-    "positionBalance": "仓位余额",
+    "positionBalance": "仓位资产",
     "totalBalance": "总余额",
     "positions": "持仓列表",
     "noPositions": "暂无持仓",

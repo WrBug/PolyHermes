@@ -502,7 +502,7 @@
     "balanceInfo": "Balance Information",
     "refresh": "Refresh",
     "availableBalance": "Available Balance",
-    "positionBalance": "Position Balance",
+    "positionBalance": "Position Asset",
     "totalBalance": "Total Balance",
     "positions": "Positions",
     "noPositions": "No positions",

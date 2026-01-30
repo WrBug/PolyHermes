@@ -248,6 +248,28 @@ const LeaderList: React.FC = () => {
       }
     },
     {
+      title: t('leaderDetail.positionBalance'),
+      key: 'positionAsset',
+      width: 150,
+      render: (_: any, record: Leader) => {
+        const balance = balanceMap[record.id]
+        if (!balance) return <Spin size="small" />
+        const displayText = balance.position === '-' ? '-' : `${formatUSDC(balance.position)} USDC`
+        return <Text style={{ color: '#722ed1', fontSize: '14px' }}>{displayText}</Text>
+      }
+    },
+    {
+      title: t('leaderDetail.positionBalance'),
+      key: 'positionAsset',
+      width: 150,
+      render: (_: any, record: Leader) => {
+        const balance = balanceMap[record.id]
+        if (!balance) return <Spin size="small" />
+        const displayText = balance.position === '-' ? '-' : `${formatUSDC(balance.position)} USDC`
+        return <Text style={{ color: '#722ed1', fontSize: '14px' }}>{displayText}</Text>
+      }
+    },
+    {
       title: t('leaderDetail.totalBalance'),
       key: 'balance',
       width: 150,
@@ -349,6 +371,9 @@ const LeaderList: React.FC = () => {
 
                       <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
                         <Tag color="cyan">{leader.copyTradingCount} {t('leaderList.copyTradingCount')}</Tag>
+                        {balance && balance.position !== '-' && balance.position !== '0' && (
+                          <Tag color="purple">{t('leaderDetail.positionBalance')}: {formatUSDC(balance.position)}</Tag>
+                        )}
                       </div>
 
                       {leader.remark && (
