@@ -231,7 +231,23 @@ enum class ErrorCode(
     SERVER_ORDER_TRACKING_PROCESS_FAILED(5901, "处理订单跟踪失败", "error.server.order_tracking_process_failed"),
     SERVER_ORDER_TRACKING_BUY_FAILED(5902, "处理买入订单失败", "error.server.order_tracking_buy_failed"),
     SERVER_ORDER_TRACKING_SELL_FAILED(5903, "处理卖出订单失败", "error.server.order_tracking_sell_failed"),
-    SERVER_ORDER_TRACKING_MATCH_FAILED(5904, "订单匹配失败", "error.server.order_tracking_match_failed");
+    SERVER_ORDER_TRACKING_MATCH_FAILED(5904, "订单匹配失败", "error.server.order_tracking_match_failed"),
+    
+    // 回测服务错误 (4601-4699)
+    BACKTEST_TASK_NOT_FOUND(4601, "回测任务不存在", "error.backtest.task_not_found"),
+    BACKTEST_LEADER_NOT_FOUND(4602, "Leader不存在", "error.backtest.leader_not_found"),
+    BACKTEST_DAYS_INVALID(4603, "回测天数超出限制", "error.backtest.days_invalid"),
+    BACKTEST_INITIAL_BALANCE_INVALID(4604, "初始金额无效", "error.backtest.initial_balance_invalid"),
+    BACKTEST_TASK_RUNNING(4605, "回测任务正在运行，无法删除", "error.backtest.task_running"),
+    SERVER_BACKTEST_CREATE_FAILED(5603, "创建回测任务失败", "error.server.backtest_create_failed"),
+    SERVER_BACKTEST_UPDATE_FAILED(5604, "更新回测任务失败", "error.server.backtest_update_failed"),
+    SERVER_BACKTEST_DELETE_FAILED(5605, "删除回测任务失败", "error.server.backtest_delete_failed"),
+    SERVER_BACKTEST_LIST_FETCH_FAILED(5606, "查询回测列表失败", "error.server.backtest_list_fetch_failed"),
+    SERVER_BACKTEST_DETAIL_FETCH_FAILED(5607, "查询回测详情失败", "error.server.backtest_detail_fetch_failed"),
+    SERVER_BACKTEST_TRADES_FETCH_FAILED(5608, "查询回测交易记录失败", "error.server.backtest_trades_fetch_failed"),
+    SERVER_BACKTEST_EXECUTE_FAILED(5609, "回测执行失败", "error.server.backtest_execute_failed"),
+    SERVER_BACKTEST_HISTORICAL_DATA_FETCH_FAILED(5610, "历史数据获取失败", "error.server.backtest_historical_data_fetch_failed"),
+    SERVER_BACKTEST_STOP_FAILED(5611, "停止回测任务失败", "error.server.backtest_stop_failed");
     
     companion object {
         /**

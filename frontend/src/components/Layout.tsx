@@ -20,7 +20,8 @@ import {
   CheckCircleOutlined,
   SendOutlined,
   ApiOutlined,
-  NotificationOutlined
+  NotificationOutlined,
+  LineChartOutlined
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 import type { ReactNode } from 'react'
@@ -155,6 +156,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       key: '/positions',
       icon: <UnorderedListOutlined />,
       label: t('menu.positions')
+    },
+    {
+      key: '/backtest',
+      icon: <LineChartOutlined />,
+      label: t('menu.backtest') || '回测'
     },
     {
       key: '/statistics',

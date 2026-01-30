@@ -185,6 +185,7 @@ open class CopyOrderTrackingService(
                         processedAt = System.currentTimeMillis()
                     )
                     processedTradeRepository.save(processed)
+
                 } catch (e: Exception) {
                     // 检查是否是唯一键冲突异常（理论上不会发生，但保留作为兜底）
                     if (isUniqueConstraintViolation(e)) {

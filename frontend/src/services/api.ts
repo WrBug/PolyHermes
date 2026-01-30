@@ -726,3 +726,72 @@ export { apiClient }
 
 export default apiService
 
+/**
+ * 回测服务
+ */
+export const backtestService = {
+  /**
+   * 创建回测任务
+   */
+  create: (data: {
+    taskName: string
+    leaderId: number
+    initialBalance: string
+    backtestDays: number
+    copyMode?: 'RATIO' | 'FIXED'
+    copyRatio?: string
+    fixedAmount?: string
+    maxOrderSize?: string
+    minOrderSize?: string
+    maxDailyLoss?: string
+    maxDailyOrders?: number
+    priceTolerance?: string
+    delaySeconds?: number
+    supportSell?: boolean
+    minOrderDepth?: string
+    maxSpread?: string
+    minPrice?: string
+    maxPrice?: string
+    maxPositionValue?: string
+    keywordFilterMode?: 'DISABLED' | 'WHITELIST' | 'BLACKLIST'
+    keywords?: string[]
+    maxMarketEndDate?: number | null
+  }) => apiClient.post('/api/backtest/tasks', data),
+
+  /**
+   * 查询回测任务列表
+   */
+  list: (data: {
+    leaderId?: number
+    status?: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'STOPPED' | 'FAILED'
+    sortBy?: 'profitAmount' | 'profitRate' | 'createdAt'
+    sortOrder?: 'asc' | 'desc'
+    page: number
+    size: number
+  }) => apiClient.post('/api/backtest/tasks/list', data),
+
+  /**
+   * 查询回测任务详情
+   */
+  detail: (data: { id: number }) => apiClient.post('/api/backtest/tasks/detail', data),
+
+  /**
+   * 查询回测交易记录
+   */
+  trades: (data: {
+    taskId: number
+    page: number
+    size: number
+  }) => apiClient.post('/api/backtest/tasks/trades', data),
+
+  /**
+   * 停止回测任务
+   */
+  stop: (data: { id: number }) => apiClient.post('/api/backtest/tasks/stop', data),
+
+  /**
+   * 删除回测任务
+   */
+  delete: (data: { id: number }) => apiClient.post('/api/backtest/tasks/delete', data)
+}
+

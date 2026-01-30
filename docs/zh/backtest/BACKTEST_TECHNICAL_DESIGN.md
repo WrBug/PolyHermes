@@ -74,7 +74,6 @@ CREATE TABLE backtest_task (
     min_price DECIMAL(20, 8) DEFAULT NULL COMMENT '最低价格',
     max_price DECIMAL(20, 8) DEFAULT NULL COMMENT '最高价格',
     max_position_value DECIMAL(20, 8) DEFAULT NULL COMMENT '最大仓位金额',
-    max_position_count INT DEFAULT NULL COMMENT '最大仓位数量',
     keyword_filter_mode VARCHAR(20) DEFAULT 'DISABLED' COMMENT '关键字过滤模式',
     keywords JSON DEFAULT NULL COMMENT '关键字列表',
     max_market_end_date BIGINT DEFAULT NULL COMMENT '市场截止时间限制',
@@ -131,7 +130,53 @@ CREATE TABLE backtest_trade (
 ) COMMENT='回测交易记录表';
 ```
 
-### 2.3 索引优化建议
+### 2.3 回测历史交易表 (backtest_historical_trades)
+
+**说明**: 用于存储 Leader 的历史交易数据，供回测使用。独立于 `ProcessedTrade` 表，避免影响现有跟单功能。
+
+```sql
+CREATE TABLE backtest_historical_trades (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '记录ID',
+    leader_id BIGINT NOT NULL COMMENT 'Leader ID',
+    trade_id VARCHAR(100) NOT NULL COMMENT 'Leader 交易ID（唯一标识）',
+    market_id VARCHAR(100) NOT NULL COMMENT '市场ID',
+    market_title VARCHAR(500) DEFAULT NULL COMMENT '市场标题',
+    market_slug VARCHAR(200) DEFAULT NULL COMMENT '市场 slug（用于生成链接）',
+    side VARCHAR(10) NOT NULL COMMENT '交易方向: BUY/SELL',
+    outcome VARCHAR(50) DEFAULT NULL COMMENT '市场方向（如 YES, NO 等）',
+    outcome_index INT DEFAULT NULL COMMENT '结果索引（0, 1, 2, ...），支持多元市场',
+    price DECIMAL(20, 8) NOT NULL COMMENT '交易价格',
+    size DECIMAL(20, 8) NOT NULL COMMENT '交易数量',
+    amount DECIMAL(20, 8) NOT NULL COMMENT '交易金额（price × size）',
+    trade_timestamp BIGINT NOT NULL COMMENT '交易时间戳（毫秒）',
+
+    -- 元数据
+    source VARCHAR(20) NOT NULL DEFAULT 'POLLING' COMMENT '数据来源: WEBSOCKET/POLLING/API',
+    fetched_at BIGINT NOT NULL COMMENT '数据获取时间（毫秒）',
+    created_at BIGINT NOT NULL COMMENT '创建时间（毫秒）',
+
+    UNIQUE INDEX uk_leader_trade (leader_id, trade_id),
+    INDEX idx_leader_id (leader_id),
+    INDEX idx_trade_timestamp (trade_timestamp),
+    INDEX idx_market_id (market_id)
+) COMMENT='回测历史交易表';
+```
+
+**字段说明**:
+- `trade_id`: Leader 的交易唯一标识符，用于去重
+- `market_id`, `market_title`, `market_slug`: 市场信息，用于回测时显示和链接
+- `side`, `outcome`, `outcome_index`: 交易方向和结果，支持二元和多元市场
+- `price`, `size`, `amount`: 交易的价格、数量和金额
+- `trade_timestamp`: 交易发生的历史时间，用于按时间回放
+- `source`: 数据来源，区分 WebSocket 实时推送、轮询或 API 查询
+- `fetched_at`: 系统获取该交易数据的时间
+
+**数据获取策略**:
+1. **优先从现有 ProcessedTrade 扩展**: 在跟单系统处理交易时，同时写入此表
+2. **补充历史数据**: 调用 Polymarket API 获取更早的历史交易
+3. **去重机制**: 使用 `leader_id + trade_id` 唯一索引避免重复
+
+### 2.4 索引优化建议
 
 - `backtest_task`: 
   - 主查询索引: `idx_leader_id`, `idx_status`
@@ -139,6 +184,10 @@ CREATE TABLE backtest_trade (
 - `backtest_trade`:
   - 关联查询索引: `idx_backtest_task_id`
   - 时间序列索引: `idx_trade_time`
+- `backtest_historical_trades`:
+  - 去重索引: `uk_leader_trade`
+  - 主查询索引: `idx_leader_id`
+  - 时间序列索引: `idx_trade_timestamp`
 
 ## 三、API设计
 
@@ -172,7 +221,6 @@ POST /api/backtest/tasks
   "minPrice": null,
   "maxPrice": null,
   "maxPositionValue": null,
-  "maxPositionCount": null,
   "keywordFilterMode": "DISABLED",
   "keywords": [],
   "maxMarketEndDate": null
@@ -196,10 +244,22 @@ POST /api/backtest/tasks
 #### 3.1.2 查询回测任务列表
 
 ```
-GET /api/backtest/tasks?leaderId={leaderId}&status={status}&sortBy={field}&sortOrder={asc|desc}&page={page}&size={size}
+POST /api/backtest/tasks/list
 ```
 
-**Query Parameters**:
+**Request Body**:
+```json
+{
+  "leaderId": null,
+  "status": null,
+  "sortBy": "createdAt",
+  "sortOrder": "desc",
+  "page": 1,
+  "size": 20
+}
+```
+
+**Request Parameters**:
 - `leaderId` (可选): Leader ID
 - `status` (可选): PENDING/RUNNING/COMPLETED/STOPPED/FAILED
 - `sortBy` (可选): profitAmount / profitRate / createdAt (默认: createdAt)
@@ -241,7 +301,14 @@ GET /api/backtest/tasks?leaderId={leaderId}&status={status}&sortBy={field}&sortO
 #### 3.1.3 查询回测任务详情
 
 ```
-GET /api/backtest/tasks/{id}
+POST /api/backtest/tasks/detail
+```
+
+**Request Body**:
+```json
+{
+  "id": 12345
+}
 ```
 
 **Response**:
@@ -286,7 +353,16 @@ GET /api/backtest/tasks/{id}
 #### 3.1.4 查询回测交易记录
 
 ```
-GET /api/backtest/tasks/{id}/trades?page={page}&size={size}
+POST /api/backtest/tasks/trades
+```
+
+**Request Body**:
+```json
+{
+  "taskId": 12345,
+  "page": 1,
+  "size": 20
+}
 ```
 
 **Response**:
@@ -319,7 +395,14 @@ GET /api/backtest/tasks/{id}/trades?page={page}&size={size}
 #### 3.1.5 删除回测任务
 
 ```
-DELETE /api/backtest/tasks/{id}
+POST /api/backtest/tasks/delete
+```
+
+**Request Body**:
+```json
+{
+  "id": 12345
+}
 ```
 
 **Response**:
@@ -333,7 +416,14 @@ DELETE /api/backtest/tasks/{id}
 #### 3.1.6 停止运行中的回测
 
 ```
-POST /api/backtest/tasks/{id}/stop
+POST /api/backtest/tasks/stop
+```
+
+**Request Body**:
+```json
+{
+  "id": 12345
+}
 ```
 
 **Response**:
@@ -452,13 +542,94 @@ sequenceDiagram
 **职责**: 获取Leader历史数据
 
 **数据源**:
-1. **优先使用**: `ProcessedTrade` 表 (系统已记录的交易)
+1. **优先使用**: `BacktestHistoricalTrade` 表 (系统已记录的完整交易数据)
 2. **补充数据**: Polymarket API (获取更早的历史数据)
 
-**API调用**:
+**数据获取策略**:
+
 ```kotlin
-// Polymarket Trade History API
-// GET https://data-api.polymarket.com/trades?maker={address}&start_ts={startTime}&end_ts={endTime}
+suspend fun getLeaderHistoricalTrades(
+    leaderId: Long,
+    startTime: Long,
+    endTime: Long
+): List<HistoricalTrade> {
+    // 1. 优先从 backtest_historical_trades 表查询
+    val existingTrades = backtestHistoricalTradeRepository
+        .findByLeaderIdAndTradeTimestampBetween(leaderId, startTime, endTime)
+
+    if (existingTrades.isNotEmpty()) {
+        return existingTrades.map { it.toHistoricalTrade() }
+    }
+
+    // 2. 如果表中没有数据，调用 Polymarket API 获取
+    val leader = leaderRepository.findById(leaderId)
+        ?: throw IllegalArgumentException("Leader not found")
+
+    val apiTrades = polymarketDataService.getTradeHistory(
+        makerAddress = leader.address,
+        startTime = startTime,
+        endTime = endTime
+    )
+
+    // 3. 将 API 数据保存到 backtest_historical_trades 表
+    val entities = apiTrades.map { trade ->
+        BacktestHistoricalTrade(
+            leaderId = leaderId,
+            tradeId = trade.id,
+            marketId = trade.marketId,
+            marketTitle = trade.marketTitle,
+            marketSlug = trade.marketSlug,
+            side = trade.side.uppercase(),
+            outcome = trade.outcome,
+            outcomeIndex = trade.outcomeIndex,
+            price = trade.price.toSafeBigDecimal(),
+            size = trade.size.toSafeBigDecimal(),
+            amount = trade.amount.toSafeBigDecimal(),
+            tradeTimestamp = trade.timestamp,
+            source = "API",
+            fetchedAt = System.currentTimeMillis(),
+            createdAt = System.currentTimeMillis()
+        )
+    }
+
+    // 批量保存（去重由唯一索引处理）
+    backtestHistoricalTradeRepository.saveAll(entities)
+
+    return apiTrades
+}
+```
+
+**实时数据同步**:
+
+在跟单系统处理交易时，同时写入 `BacktestHistoricalTrade` 表：
+
+```kotlin
+// 在 CopyOrderTrackingService.processTrade() 中
+@Async
+fun syncToBacktestHistorical(trade: Trade, leaderId: Long) {
+    try {
+        val historicalTrade = BacktestHistoricalTrade(
+            leaderId = leaderId,
+            tradeId = trade.id,
+            marketId = trade.marketId,
+            marketTitle = trade.marketTitle,  // 从 API 获取
+            marketSlug = trade.marketSlug,  // 从 API 获取
+            side = trade.side.uppercase(),
+            outcome = trade.outcome,
+            outcomeIndex = trade.outcomeIndex,
+            price = trade.price.toSafeBigDecimal(),
+            size = trade.size.toSafeBigDecimal(),
+            amount = trade.amount.toSafeBigDecimal(),
+            tradeTimestamp = trade.timestamp,
+            source = "WEBSOCKET",
+            fetchedAt = System.currentTimeMillis(),
+            createdAt = System.currentTimeMillis()
+        )
+        backtestHistoricalTradeRepository.save(historicalTrade)
+    } catch (e: Exception) {
+        logger.warn("同步回测历史数据失败: ${e.message}")
+    }
+}
 ```
 
 **缓存策略**:
@@ -508,10 +679,20 @@ class BacktestPollingService(
 #### 4.2.1 回测算法伪代码
 
 ```kotlin
+// 持仓数据结构
+data class Position(
+    val marketId: String,
+    val outcome: String,
+    val outcomeIndex: Int? = null,  // 支持 outcomeIndex
+    var quantity: BigDecimal,
+    val avgPrice: BigDecimal,
+    val leaderBuyQuantity: BigDecimal?  // Leader 买入数量（用于比例模式）
+)
+
 fun executeBacktest(task: BacktestTask) {
     // 1. 初始化
     var currentBalance = task.initialBalance
-    val positions = mutableMapOf<String, Position>() // marketId + outcome -> Position
+    val positions = mutableMapOf<String, Position>() // marketId + outcomeIndex -> Position
     val trades = mutableListOf<BacktestTrade>()
     val marketInfoCache = mutableMapOf<String, MarketInfo>() // 缓存市场信息
     
@@ -589,12 +770,43 @@ fun executeBacktest(task: BacktestTask) {
             logger.info("余额不足 $currentBalance，但还有 ${positions.size} 个持仓，继续处理后续交易（等待卖出或结算）")
         }
         
-        // 4.3 应用过滤规则
-        if (!passFilters(task, leaderTrade)) {
+        // 4.3 每日订单数检查
+        // 统计当前交易时间当天已有的订单数
+        val dailyOrderCount = trades.count { isSameDay(it.tradeTime, leaderTrade.timestamp) }
+        if (dailyOrderCount >= task.maxDailyOrders) {
+            logger.info("已达到每日最大订单数限制: $dailyOrderCount / ${task.maxDailyOrders}")
             continue
         }
         
-        // 4.4 计算跟单金额
+        // 4.4 价格容忍度检查
+        if (task.priceTolerance > BigDecimal.ZERO) {
+            val tolerance = task.priceTolerance.toSafeBigDecimal().divide(BigDecimal("100"))
+            val minPrice = leaderTrade.price.multiply(BigDecimal.ONE.subtract(tolerance))
+            val maxPrice = leaderTrade.price.multiply(BigDecimal.ONE.add(tolerance))
+
+            // 获取当前市场价格（从市场服务或缓存）
+            val currentPrice = marketPriceService.getCurrentMarketPrice(
+                leaderTrade.marketId,
+                leaderTrade.outcomeIndex ?: 0
+            )
+
+            if (currentPrice < minPrice || currentPrice > maxPrice) {
+                logger.info("价格超出容忍度范围: 当前=$currentPrice, 可用范围=[$minPrice, $maxPrice]")
+                continue
+            }
+        }
+
+        // 4.5 应用其他过滤规则
+        // 复用 CopyTradingFilterService 的方法
+        if (!copyTradingFilterService.passAllFilters(
+            task = task,
+            trade = leaderTrade,
+            currentPositionValue = positions.values.sumOf { it.quantity * it.avgPrice }
+        )) {
+            continue
+        }
+
+        // 4.6 计算跟单金额
         val followAmount = calculateFollowAmount(task, leaderTrade)
         
         if (leaderTrade.side == "BUY") {
@@ -619,10 +831,11 @@ fun executeBacktest(task: BacktestTask) {
             
             // 更新余额和持仓
             currentBalance -= totalCost
-            val positionKey = "${leaderTrade.marketId}:${leaderTrade.outcome}"
+            val positionKey = "${leaderTrade.marketId}:${leaderTrade.outcomeIndex ?: 0}"
             positions[positionKey] = Position(
                 marketId = leaderTrade.marketId,
                 outcome = leaderTrade.outcome,
+                outcomeIndex = leaderTrade.outcomeIndex,
                 quantity = quantity,
                 avgPrice = leaderTrade.price,
                 leaderBuyQuantity = leaderTrade.quantity
@@ -645,13 +858,21 @@ fun executeBacktest(task: BacktestTask) {
         } else { // SELL
             if (!task.supportSell) continue
             
-            val positionKey = "${leaderTrade.marketId}:${leaderTrade.outcome}"
+            // 使用 outcomeIndex 构建持仓键（支持多元市场）
+            val positionKey = "${leaderTrade.marketId}:${leaderTrade.outcomeIndex ?: 0}"
             val position = positions[positionKey] ?: continue
             
-            // 计算卖出数量 (按比例)
+            // 计算卖出数量
             val sellQuantity = if (task.copyMode == "RATIO") {
-                // 比例模式: 按Leader卖出比例
+                // 比例模式: 按 Leader 卖出比例
+                // 如果 position.leaderBuyQuantity 为 null，则按持仓比例计算
+                if (position.leaderBuyQuantity != null && position.leaderBuyQuantity > BigDecimal.ZERO) {
                 position.quantity * (leaderTrade.quantity / position.leaderBuyQuantity)
+                } else {
+                    // 按比例卖出：卖出持仓的 (leaderTrade.quantity / 当前总持仓)
+                    // 但这种情况下无法获取 Leader 的总持仓，所以简化为全部卖出
+                    position.quantity
+                }
             } else {
                 // 固定金额模式: 全部卖出
                 position.quantity
@@ -695,11 +916,20 @@ fun executeBacktest(task: BacktestTask) {
                 marketService.getMarketInfo(position.marketId)
             }
             
-            // 如果市场已结算但endDate晚于回测结束时间,或市场信息获取失败
+            // 获取市场结算结果
+            // 方案: 通过市场价格判断
+            // - 价格 >= 0.95: 胜出 (按 1.0 结算)
+            // - 价格 <= 0.05: 失败 (按 0.0 结算)
+            // - 其他情况: 按成本价保守估计
+            val marketPrice = marketPriceService.getCurrentMarketPrice(
+                marketId = position.marketId,
+                outcomeIndex = position.outcomeIndex ?: 0
+            )
+
             val settlementPrice = when {
-                marketInfo?.winner == position.outcome -> BigDecimal.ONE
-                marketInfo?.winner != null -> BigDecimal.ZERO
-                else -> position.avgPrice  // 未结算或无法获取,按成本价
+                marketPrice >= BigDecimal("0.95") -> BigDecimal.ONE  // 胜出
+                marketPrice <= BigDecimal("0.05") -> BigDecimal.ZERO  // 失败
+                else -> position.avgPrice  // 未结算或不确定，按成本价
             }
             
             val settlementValue = position.quantity * settlementPrice

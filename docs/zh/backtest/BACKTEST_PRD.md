@@ -94,7 +94,6 @@
 | 最低价格 | minPrice | 最低价格限制 | null |
 | 最高价格 | maxPrice | 最高价格限制 | null |
 | 最大仓位金额 | maxPositionValue | 最大持仓总金额 | null |
-| 最大仓位数量 | maxPositionCount | 最大持仓数量 | null |
 | 关键字过滤模式 | keywordFilterMode | DISABLED/WHITELIST/BLACKLIST | DISABLED |
 | 关键字列表 | keywords | 关键字数组 | [] |
 | 市场截止时间限制 | maxMarketEndDate | 市场结束时间限制 | null |

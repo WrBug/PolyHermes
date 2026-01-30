@@ -4,7 +4,8 @@
   "description": "Utility scripts for Polyhermes",
   "type": "module",
   "scripts": {
-    "get-order-detail": "node get-order-detail.js"
+    "get-order-detail": "node get-order-detail.js",
+    "verify-backtest-data": "node verify-backtest-data.js"
   },
   "dependencies": {
     "@ethersproject/wallet": "^5.7.0",

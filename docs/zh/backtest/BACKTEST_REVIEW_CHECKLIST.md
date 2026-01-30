@@ -35,23 +35,56 @@
 > 2. **缓存策略**: 建议对Leader历史交易数据使用分层缓存 (内存 + Redis)
 > 3. **回测结果的序列化**: 考虑将详细交易记录存储为JSON,减少表的大小
 
-### 1.3 业务逻辑准确性 ⚠️
+### 1.3 业务逻辑准确性 ✅
 
-**需要验证的关键逻辑**:
+**已完善的关键逻辑**:
 
-#### 1.3.1 卖出匹配逻辑
-> [!CAUTION]
-> **潜在问题**: 当前设计中,卖出时如何匹配对应的买入持仓?
-> 
-> **当前方案**: 使用 `positionKey = marketId + outcome` 匹配
-> 
-> **问题场景**:
-> - 同一市场同一方向多次买入,价格不同 (需要先进先出FIFO吗?)
-> - Leader部分卖出时,如何计算跟单的卖出比例?
-> 
-> **建议**:
-> - 明确卖出匹配策略: FIFO (先进先出) 或 加权平均价
-> - 在技术设计文档中补充详细说明
+#### 1.3.1 历史数据获取 ⭐ (已修正)
+> [!NOTE]
+> **问题**: 现有 `ProcessedTrade` 表字段有限，无法满足回测需求。
+>
+> **解决方案**: 创建独立的 `backtest_historical_trades` 表
+> - ✅ 存储完整的交易信息（marketId, price, quantity, outcomeIndex 等）
+> - ✅ 支持实时数据同步（跟单时同时写入）
+> - ✅ 支持通过 API 补充历史数据
+> - ✅ 不影响现有跟单功能
+
+#### 1.3.2 卖出匹配逻辑 ⭐ (已修正)
+> [!NOTE]
+> **改进**: 使用 `outcomeIndex` 支持多元市场
+>
+> **实现方案**:
+> - 持仓键: `marketId + outcomeIndex`（支持多元市场）
+> - 比例模式: 按 Leader 卖出比例计算
+> - 固定金额模式: 全部卖出
+> - 参考 `CopyOrderTracking` 的逻辑
+
+**伪代码**:
+```kotlin
+val positionKey = "${leaderTrade.marketId}:${leaderTrade.outcomeIndex ?: 0}"
+val position = positions[positionKey] ?: continue
+
+val sellQuantity = if (task.copyMode == "RATIO") {
+    if (position.leaderBuyQuantity != null && position.leaderBuyQuantity > BigDecimal.ZERO) {
+        position.quantity * (leaderTrade.quantity / position.leaderBuyQuantity)
+    } else {
+        position.quantity  // 全部卖出
+    }
+} else {
+    position.quantity  // 固定金额模式全部卖出
+}
+```
+
+#### 1.3.3 价格滑点模拟 ✅ (已决策)
+> [!NOTE]
+> **用户决策**: 暂不模拟价格滑点
+>
+> **理由**:
+> - 简化回测逻辑
+> - 减少复杂度
+> - 后续可以作为可选项添加
+>
+> **实现**: 使用 Leader 的成交价，不进行滑点调整
 
 #### 1.3.2 价格滑点模拟
 > [!NOTE]
@@ -84,40 +117,57 @@
 
 #### 1.3.4 市场结算处理 ⭐ (已优化)
 > [!NOTE]
-> **关键问题**: 市场结束时,未平仓位如何自动结算?
-> 
+> **问题**: 市场结束时,未平仓位如何自动结算?
+>
 > **优化方案** (采纳用户建议):
 > - ✅ **实时检查**: 在回测循环中,每处理一笔Leader交易前,检查所有持仓的市场`endDate`
 > - ✅ **到期即结算**: 如果 `marketEndDate <= currentTradeTime`,立即结算该持仓
 > - ✅ **资金可用**: 结算后的资金立即计入余额,可以用于后续交易
 > - ✅ **兜底处理**: 回测结束时,结算所有剩余未到期持仓
-> 
+>
+> **结算价格判断** (通过市场价格):
+> - 价格 >= 0.95: 胜出 (按 1.0 结算)
+> - 价格 <= 0.05: 失败 (按 0.0 结算)
+> - 其他情况: 按成本价保守估计
+>
 > **实现要点**:
 > ```kotlin
 > // 在交易循环中实时检查市场到期
 > for (leaderTrade in leaderTrades.sortedBy { it.timestamp }) {
->     
+>
 >     // 1. 检查并结算已到期的市场
 >     val expiredPositions = positions.filter { (_, position) ->
 >         val marketInfo = getMarketInfo(position.marketId)
 >         marketInfo.endDate <= leaderTrade.timestamp
 >     }
->     
+>
 >     for ((positionKey, position) in expiredPositions) {
->         // 结算逻辑...
+>         val marketPrice = marketPriceService.getCurrentMarketPrice(
+>             marketId = position.marketId,
+>             outcomeIndex = position.outcomeIndex ?: 0
+>         )
+>
+>         val settlementPrice = when {
+>             marketPrice >= BigDecimal("0.95") -> BigDecimal.ONE  // 胜出
+>             marketPrice <= BigDecimal("0.05") -> BigDecimal.ZERO  // 失败
+>             else -> position.avgPrice  // 未结算，按成本价
+>         }
+>
+>         val settlementValue = position.quantity * settlementPrice
 >         currentBalance += settlementValue
 >         positions.remove(positionKey)
 >     }
->     
+>
 >     // 2. 处理当前Leader交易
 >     // ...
 > }
 > ```
-> 
+>
 > **优势**:
 > - 更符合真实场景 (市场结束时自动返还资金)
 > - 提高资金利用率 (结算资金可参与后续交易)
 > - 更准确的收益计算
+> - 通过市场价格判断，无需依赖可能不存在的 `winner` 字段
 
 #### 1.3.5 余额不足与持仓处理 ⚠️ (边缘场景) - 已修正
 > [!WARNING]
@@ -148,7 +198,53 @@
 > 
 > **已在文档中采用**: 严格模式
 
-#### 1.3.6 回测停止条件 ✅ (已修正)
+#### 1.3.6 每日订单数限制 ✅ (已补充)
+> [!NOTE]
+> **问题**: 文档提到了 `maxDailyOrders` 参数，但未在算法中实现
+>
+> **解决方案**: 在回测循环中添加每日订单数统计
+>
+> **实现**:
+> ```kotlin
+> // 统计当前交易时间当天已有的订单数
+> val dailyOrderCount = trades.count { isSameDay(it.tradeTime, leaderTrade.timestamp) }
+>
+> if (dailyOrderCount >= task.maxDailyOrders) {
+>     logger.info("已达到每日最大订单数限制: $dailyOrderCount / ${task.maxDailyOrders}")
+>     continue
+> }
+> ```
+>
+> **优势**:
+> - 符合实际跟单的风险控制逻辑
+> - 避免回测结果过于激进
+
+#### 1.3.7 价格容忍度检查 ✅ (已补充)
+> [!NOTE]
+> **问题**: 文档提到了 `priceTolerance` 参数，但未在算法中实现
+>
+> **解决方案**: 在执行交易前检查当前市场价格是否在容忍范围内
+>
+> **实现**:
+> ```kotlin
+> if (task.priceTolerance > BigDecimal.ZERO) {
+>     val tolerance = task.priceTolerance.divide(BigDecimal("100"))
+>     val minPrice = leaderTrade.price.multiply(BigDecimal.ONE.subtract(tolerance))
+>     val maxPrice = leaderTrade.price.multiply(BigDecimal.ONE.add(tolerance))
+>
+>     val currentPrice = marketPriceService.getCurrentMarketPrice(
+>         marketId = leaderTrade.marketId,
+>         outcomeIndex = leaderTrade.outcomeIndex ?: 0
+>     )
+>
+>     if (currentPrice < minPrice || currentPrice > maxPrice) {
+>         logger.info("价格超出容忍度范围: 当前=$currentPrice, 可用范围=[$minPrice, $maxPrice]")
+>         continue
+>     }
+> }
+> ```
+
+#### 1.3.8 回测停止条件 ✅ (已修正)
 > [!NOTE]
 > **修正**: 基于用户反馈，修正了停止逻辑
 > 
@@ -194,7 +290,54 @@
 
 ## 二、数据库设计补充
 
-### 2.1 缺失的字段建议
+### 2.1 新增回测历史交易表
+
+**问题**: 现有 `ProcessedTrade` 表字段有限，无法满足回测需求。
+
+**解决方案**: 创建独立的 `backtest_historical_trades` 表，存储完整的 Leader 历史交易数据。
+
+```sql
+CREATE TABLE backtest_historical_trades (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY COMMENT '记录ID',
+    leader_id BIGINT NOT NULL COMMENT 'Leader ID',
+    trade_id VARCHAR(100) NOT NULL COMMENT 'Leader 交易ID（唯一标识）',
+    market_id VARCHAR(100) NOT NULL COMMENT '市场ID',
+    market_title VARCHAR(500) DEFAULT NULL COMMENT '市场标题',
+    market_slug VARCHAR(200) DEFAULT NULL COMMENT '市场 slug（用于生成链接）',
+    side VARCHAR(10) NOT NULL COMMENT '交易方向: BUY/SELL',
+    outcome VARCHAR(50) DEFAULT NULL COMMENT '市场方向（如 YES, NO 等）',
+    outcome_index INT DEFAULT NULL COMMENT '结果索引（0, 1, 2, ...），支持多元市场',
+    price DECIMAL(20, 8) NOT NULL COMMENT '交易价格',
+    size DECIMAL(20, 8) NOT NULL COMMENT '交易数量',
+    amount DECIMAL(20, 8) NOT NULL COMMENT '交易金额（price × size）',
+    trade_timestamp BIGINT NOT NULL COMMENT '交易时间戳（毫秒）',
+
+    -- 元数据
+    source VARCHAR(20) NOT NULL DEFAULT 'POLLING' COMMENT '数据来源: WEBSOCKET/POLLING/API',
+    fetched_at BIGINT NOT NULL COMMENT '数据获取时间（毫秒）',
+    created_at BIGINT NOT NULL COMMENT '创建时间（毫秒）',
+
+    UNIQUE INDEX uk_leader_trade (leader_id, trade_id),
+    INDEX idx_leader_id (leader_id),
+    INDEX idx_trade_timestamp (trade_timestamp),
+    INDEX idx_market_id (market_id)
+) COMMENT='回测历史交易表';
+```
+
+**优势**:
+- ✅ 不影响现有跟单系统的 `ProcessedTrade` 表
+- ✅ 存储完整的交易信息，满足回测需求
+- ✅ 支持实时数据同步（跟单时同时写入）
+- ✅ 支持通过 API 补充历史数据
+- ✅ 唯一索引自动去重
+
+### 2.2 移除 max_position_count 字段
+
+**问题**: 文档中包含 `max_position_count` 字段，但 V26 迁移已删除该字段。
+
+**解决方案**: 从 `backtest_task` 表和相关 API 中移除该字段。
+
+### 2.3 其他字段建议
 
 #### `backtest_task` 表
 建议新增以下字段:
@@ -204,13 +347,13 @@
 avg_holding_time BIGINT DEFAULT NULL COMMENT '平均持仓时间(毫秒)',
 
 -- 用于记录回测使用的数据源
-data_source VARCHAR(50) DEFAULT 'API' COMMENT '数据源: INTERNAL/API/MIXED',
+data_source VARCHAR(50) DEFAULT 'MIXED' COMMENT '数据源: INTERNAL/API/MIXED',
 
 -- 用于记录回测执行的详细日志
 execution_log TEXT DEFAULT NULL COMMENT '执行日志(JSON格式)'
 ```
 
-### 2.2 索引优化
+### 2.4 索引优化
 
 建议添加复合索引:
 ```sql
@@ -223,13 +366,50 @@ CREATE INDEX idx_status_created ON backtest_task(status, created_at DESC);
 
 ## 三、API设计补充
 
-### 3.1 缺失的API
+### 3.1 API 规范修正
+
+**问题**: 文档中使用 GET/DELETE 方法，违反项目统一使用 POST 的规范。
+
+**修正方案**:
+
+```bash
+# ❌ 错误（使用 GET/DELETE）
+GET /api/backtest/tasks
+GET /api/backtest/tasks/{id}
+DELETE /api/backtest/tasks/{id}
+
+# ✅ 正确（统一使用 POST）
+POST /api/backtest/tasks/list
+POST /api/backtest/tasks/detail
+POST /api/backtest/tasks/delete
+```
+
+**完整的 API 列表**:
+
+| 功能 | 方法 | 路径 | 说明 |
+|-----|------|------|------|
+| 创建回测 | POST | /api/backtest/tasks | 创建新的回测任务 |
+| 查询列表 | POST | /api/backtest/tasks/list | 分页查询回测任务列表 |
+| 查询详情 | POST | /api/backtest/tasks/detail | 查询单个回测任务详情 |
+| 查询交易 | POST | /api/backtest/tasks/trades | 查询回测的交易记录 |
+| 删除任务 | POST | /api/backtest/tasks/delete | 删除回测任务 |
+| 停止任务 | POST | /api/backtest/tasks/stop | 停止运行中的回测 |
+| 查询进度 | POST | /api/backtest/tasks/progress | 查询回测执行进度 |
+
+### 3.2 缺失的API
 
 建议新增以下API:
 
-#### 3.1.1 查询回测进度 (实时更新)
+#### 3.2.1 查询回测进度 (实时更新)
 ```
-GET /api/backtest/tasks/{id}/progress
+POST /api/backtest/tasks/progress
+```
+
+**Request Body**:
+```json
+{
+  "id": 12345
+}
 ```
 
 **Response**:
@@ -245,9 +425,9 @@ GET /api/backtest/tasks/{id}/progress
 }
 ```
 
-#### 3.1.2 批量删除回测任务
+#### 3.2.2 批量删除回测任务
 ```
-DELETE /api/backtest/tasks
+POST /api/backtest/tasks/batch-delete
 ```
 
 **Request Body**:
@@ -257,9 +437,17 @@ DELETE /api/backtest/tasks
 }
 ```
 
-#### 3.1.3 导出回测报告
+#### 3.2.3 导出回测报告
 ```
-GET /api/backtest/tasks/{id}/export?format=csv|pdf
+POST /api/backtest/tasks/export
+```
+
+**Request Body**:
+```json
+{
+  "id": 12345,
+  "format": "csv"  // 或 "pdf"
+}
 ```
 
 ### 3.2 API错误码规范
