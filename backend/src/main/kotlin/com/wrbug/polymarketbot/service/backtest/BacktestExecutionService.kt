@@ -123,8 +123,8 @@ class BacktestExecutionService(
                 logger.info("恢复任务：已处理索引=$lastProcessedIndex, 从第 $nextPage 页开始")
                 nextPage
             } else {
-                logger.info("新任务：从第1页开始")
-                1
+                logger.info("新任务：从第0页开始")
+                0
             }
 
             // 5. 分页获取和处理交易数据
