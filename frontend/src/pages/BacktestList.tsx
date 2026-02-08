@@ -650,7 +650,7 @@ const BacktestList: React.FC = () => {
               {t('backtest.retry')}
             </Button>
           )}
-          {(record.status === 'PENDING' || record.status === 'COMPLETED') && (
+          {(record.status === 'PENDING' || record.status === 'COMPLETED' || record.status === 'STOPPED' || record.status === 'FAILED') && (
             <Button
               type="link"
               size="small"
