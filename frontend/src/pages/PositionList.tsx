@@ -875,6 +875,7 @@ const PositionList: React.FC = () => {
             : null
 
           const handleTitleClick = (e: React.MouseEvent) => {
+            e.preventDefault()
             e.stopPropagation()
             if (url) {
               window.open(url, '_blank', 'noopener,noreferrer')
