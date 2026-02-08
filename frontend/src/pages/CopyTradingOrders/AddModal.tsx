@@ -473,7 +473,7 @@ const AddModal: React.FC<AddModalProps> = ({
             <LeaderSelect
               leaders={leaders}
               placeholder={t('copyTradingAdd.selectLeaderPlaceholder') || '请选择 Leader'}
-              onSelectChange={(value) => fetchLeaderAssetInfo(value)}
+              onSelectChange={(value) => value !== undefined && fetchLeaderAssetInfo(value)}
               notFoundContent={
                 leaders.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '12px' }}>

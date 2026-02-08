@@ -881,8 +881,8 @@ const BacktestList: React.FC = () => {
               name="copyMode"
             >
               <Select onChange={(value) => setCopyMode(value)}>
-                <Option value="RATIO">{t('backtest.copyModeRatio')}</Option>
-                <Option value="FIXED">{t('backtest.copyModeFixed')}</Option>
+                <Select.Option value="RATIO">{t('backtest.copyModeRatio')}</Select.Option>
+                <Select.Option value="FIXED">{t('backtest.copyModeFixed')}</Select.Option>
               </Select>
             </Form.Item>
 
@@ -1006,9 +1006,9 @@ const BacktestList: React.FC = () => {
               name="keywordFilterMode"
             >
               <Select>
-                <Option value="DISABLED">{t('backtest.keywordFilterModeDisabled')}</Option>
-                <Option value="WHITELIST">{t('backtest.keywordFilterModeWhitelist')}</Option>
-                <Option value="BLACKLIST">{t('backtest.keywordFilterModeBlacklist')}</Option>
+                <Select.Option value="DISABLED">{t('backtest.keywordFilterModeDisabled')}</Select.Option>
+                <Select.Option value="WHITELIST">{t('backtest.keywordFilterModeWhitelist')}</Select.Option>
+                <Select.Option value="BLACKLIST">{t('backtest.keywordFilterModeBlacklist')}</Select.Option>
               </Select>
             </Form.Item>
 
