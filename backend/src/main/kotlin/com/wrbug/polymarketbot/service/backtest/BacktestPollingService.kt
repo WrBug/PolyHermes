@@ -32,8 +32,6 @@ class BacktestPollingService(
     @Scheduled(fixedDelay = 10000) // 10 秒
     fun pollPendingTasks() {
         try {
-            logger.debug("开始轮询待执行的回测任务")
-
             // 1. 检查是否有长时间处于 RUNNING 状态的任务（可能是应用重启导致的）
             val runningTasks = backtestTaskRepository.findByStatus("RUNNING")
             if (runningTasks.isNotEmpty()) {
@@ -72,7 +70,6 @@ class BacktestPollingService(
                 .sortedBy { it.createdAt }
 
             if (pendingTasks.isEmpty()) {
-                logger.debug("没有待执行的回测任务")
                 return
             }
 
