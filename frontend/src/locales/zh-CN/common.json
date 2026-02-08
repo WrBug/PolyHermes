@@ -1364,6 +1364,7 @@
     "fixedAmountInvalid": "固定金额必须大于 0",
     "priceFilters": "价格过滤",
     "keywordsPlaceholder": "请输入关键字，按回车添加",
+    "maxPositionValuePlaceholder": "留空表示不启用最大仓位限制",
     "delaySecondsHint": "延迟执行模拟真实跟单延迟",
     "supportSellHint": "是否跟随 Leader 卖出",
     "sortBy": "排序字段",

@@ -73,6 +73,9 @@ data class BacktestTask(
     @Column(name = "keywords", columnDefinition = "JSON")
     val keywords: String? = null,
 
+    @Column(name = "max_position_value", precision = 20, scale = 8)
+    val maxPositionValue: BigDecimal? = null,  // 最大仓位金额（USDC），NULL表示不启用
+
     // 统计字段
     @Column(name = "avg_holding_time")
     var avgHoldingTime: Long? = null,  // 平均持仓时间(毫秒)

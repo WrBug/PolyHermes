@@ -271,7 +271,8 @@ const BacktestList: React.FC = () => {
         maxDailyOrders: values.maxDailyOrders,
         supportSell: values.supportSell,
         keywordFilterMode: values.keywordFilterMode,
-        keywords: values.keywords
+        keywords: values.keywords,
+        maxPositionValue: values.maxPositionValue
       }
 
       const response = await backtestService.create(request)
@@ -802,7 +803,7 @@ const BacktestList: React.FC = () => {
           layout="vertical"
           initialValues={{
             maxDailyLoss: 500,
-            maxDailyOrders: 50,
+            maxDailyOrders: 100,
             supportSell: true,
             keywordFilterMode: 'DISABLED',
             backtestDays: 7
@@ -977,6 +978,18 @@ const BacktestList: React.FC = () => {
                 </Form.Item>
               </Col>
             </Row>
+
+            <Form.Item
+              label={t('backtest.maxPositionValue') + ' (USDC)'}
+              name="maxPositionValue"
+            >
+              <InputNumber
+                style={{ width: '100%' }}
+                placeholder={t('backtest.maxPositionValuePlaceholder') || '留空表示不启用最大仓位限制'}
+                precision={2}
+                min={0}
+              />
+            </Form.Item>
 
             <Form.Item
               label={t('backtest.supportSell')}
@@ -1246,6 +1259,11 @@ const BacktestList: React.FC = () => {
                   {detailConfig.keywords && detailConfig.keywords.length > 0 && (
                     <Descriptions.Item label={t('backtest.keywords')}>
                       {detailConfig.keywords.join(', ')}
+                    </Descriptions.Item>
+                  )}
+                  {detailConfig.maxPositionValue && (
+                    <Descriptions.Item label={t('backtest.maxPositionValue')}>
+                      {formatUSDC(detailConfig.maxPositionValue)} USDC
                     </Descriptions.Item>
                   )}
                 </Descriptions>

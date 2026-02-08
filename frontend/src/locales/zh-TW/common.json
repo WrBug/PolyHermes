@@ -1364,6 +1364,7 @@
     "fixedAmountInvalid": "固定金額必須大於 0",
     "priceFilters": "價格過濾",
     "keywordsPlaceholder": "請輸入關鍵字，按回車添加",
+    "maxPositionValuePlaceholder": "留空表示不啟用最大倉位限制",
     "delaySecondsHint": "延遲執行模擬真實跟單延遲",
     "supportSellHint": "是否跟隨 Leader 賣出",
     "sortBy": "排序欄位",

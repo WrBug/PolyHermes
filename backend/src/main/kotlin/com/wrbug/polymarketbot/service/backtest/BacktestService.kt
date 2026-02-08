@@ -81,7 +81,8 @@ class BacktestService(
                     request.keywords.toJson()
                 } else {
                     null
-                }
+                },
+                maxPositionValue = request.maxPositionValue?.toSafeBigDecimal()
             )
 
             backtestTaskRepository.save(task)
@@ -190,7 +191,8 @@ class BacktestService(
                     task.keywords.fromJson<List<String>>()
                 } else {
                     emptyList()
-                }
+                },
+                maxPositionValue = task.maxPositionValue?.toPlainString()
             )
 
             val statistics = BacktestStatisticsDto(
@@ -376,7 +378,8 @@ class BacktestService(
                 maxDailyOrders = source.maxDailyOrders,
                 supportSell = source.supportSell,
                 keywordFilterMode = source.keywordFilterMode,
-                keywords = source.keywords
+                keywords = source.keywords,
+                maxPositionValue = source.maxPositionValue
             )
 
             backtestTaskRepository.save(newTask)

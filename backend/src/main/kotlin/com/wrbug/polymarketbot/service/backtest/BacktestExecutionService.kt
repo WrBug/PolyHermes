@@ -10,6 +10,7 @@ import com.wrbug.polymarketbot.repository.BacktestTaskRepository
 import com.wrbug.polymarketbot.service.common.MarketPriceService
 import com.wrbug.polymarketbot.service.common.MarketService
 import com.wrbug.polymarketbot.service.copytrading.configs.CopyTradingFilterService
+import com.wrbug.polymarketbot.util.gt
 import com.wrbug.polymarketbot.util.toSafeBigDecimal
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -71,6 +72,7 @@ class BacktestExecutionService(
             supportSell = task.supportSell,
             minOrderDepth = null,  // 回测无实时订单簿数据
             maxSpread = null,  // 回测无实时价差数据
+            maxPositionValue = task.maxPositionValue,
             keywordFilterMode = task.keywordFilterMode,
             keywords = task.keywords,
             configName = null,
@@ -277,6 +279,26 @@ class BacktestExecutionService(
                                     continue
                                 }
                                 val totalCost = actualBuyAmount
+
+                                // 5.6.3 检查最大仓位限制（如果配置了）
+                                if (task.maxPositionValue != null) {
+                                    val positionKey = "${leaderTrade.marketId}:${leaderTrade.outcomeIndex ?: 0}"
+                                    val currentPosition = positions[positionKey]
+                                    val currentPositionValue = if (currentPosition != null) {
+                                        currentPosition.quantity.multiply(currentPosition.avgPrice)
+                                    } else {
+                                        BigDecimal.ZERO
+                                    }
+                                    val totalValueAfterOrder = currentPositionValue.add(actualBuyAmount)
+                                    
+                                    if (totalValueAfterOrder.gt(task.maxPositionValue)) {
+                                        val currentPositionValueStr = currentPositionValue.stripTrailingZeros().toPlainString()
+                                        val totalValueStr = totalValueAfterOrder.stripTrailingZeros().toPlainString()
+                                        val maxValueStr = task.maxPositionValue.stripTrailingZeros().toPlainString()
+                                        logger.info("超过最大仓位金额限制: 市场=${leaderTrade.marketId}, 方向=${leaderTrade.outcomeIndex}, 当前仓位=${currentPositionValueStr} USDC, 买入金额=${actualBuyAmount} USDC, 总计=${totalValueStr} USDC > 最大限制=${maxValueStr} USDC")
+                                        continue
+                                    }
+                                }
 
                                 // 更新余额和持仓（同市场同 outcome 多次买入合并：数量相加、加权均价、leaderBuyQuantity 相加）
                                 currentBalance -= totalCost

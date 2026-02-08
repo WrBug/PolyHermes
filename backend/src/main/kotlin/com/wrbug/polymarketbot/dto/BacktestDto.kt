@@ -21,6 +21,7 @@ data class BacktestCreateRequest(
     val supportSell: Boolean? = null,
     val keywordFilterMode: String? = null,  // 关键字过滤模式：DISABLED（不启用）、WHITELIST（白名单）、BLACKLIST（黑名单）
     val keywords: List<String>? = null,  // 关键字列表
+    val maxPositionValue: String? = null,  // 最大仓位金额（USDC），NULL表示不启用
     val pageForResume: Int? = null  // 用于恢复中断任务，从指定页码开始获取历史数据（从1开始）
 )
 
@@ -164,7 +165,8 @@ data class BacktestConfigDto(
     val maxDailyOrders: Int,
     val supportSell: Boolean,
     val keywordFilterMode: String?,
-    val keywords: List<String>?
+    val keywords: List<String>?,
+    val maxPositionValue: String?
 )
 
 /**
