@@ -323,7 +323,10 @@ const EditModal: React.FC<EditModalProps> = ({
           >
             <Select disabled>
               <Option value={copyTrading.leaderId}>
-                {copyTrading.leaderName || `Leader ${copyTrading.leaderId}`} ({copyTrading.leaderAddress.slice(0, 6)}...{copyTrading.leaderAddress.slice(-4)})
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span>{copyTrading.leaderName || `Leader ${copyTrading.leaderId}`}</span>
+                  <span style={{ fontSize: '12px', color: '#999' }}>{copyTrading.leaderAddress}</span>
+                </div>
               </Option>
             </Select>
           </Form.Item>

@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next'
 import { useMediaQuery } from 'react-responsive'
 import AccountImportForm from '../../components/AccountImportForm'
 import LeaderAddForm from '../../components/LeaderAddForm'
+import LeaderSelect from '../../components/LeaderSelect'
 
 const { Option } = Select
 
@@ -467,8 +468,10 @@ const AddModal: React.FC<AddModalProps> = ({
             name="leaderId"
             rules={[{ required: true, message: t('copyTradingAdd.leaderRequired') || '请选择 Leader' }]}
           >
-            <Select 
+            <LeaderSelect
+              leaders={leaders}
               placeholder={t('copyTradingAdd.selectLeaderPlaceholder') || '请选择 Leader'}
+              onSelectChange={(value) => fetchLeaderAssetInfo(value)}
               notFoundContent={
                 leaders.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '12px' }}>
@@ -484,14 +487,7 @@ const AddModal: React.FC<AddModalProps> = ({
                   </div>
                 ) : null
               }
-              onChange={(value) => fetchLeaderAssetInfo(value)}
-            >
-              {leaders.map(leader => (
-                <Option key={leader.id} value={leader.id}>
-                  {leader.leaderName || `Leader ${leader.id}`} ({leader.leaderAddress.slice(0, 6)}...{leader.leaderAddress.slice(-4)})
-                </Option>
-              ))}
-            </Select>
+            />
           </Form.Item>
           
           {/* Leader 资产信息 */}

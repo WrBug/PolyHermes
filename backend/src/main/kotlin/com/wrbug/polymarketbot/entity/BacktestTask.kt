@@ -37,7 +37,7 @@ data class BacktestTask(
     val backtestDays: Int,
 
     @Column(name = "start_time", nullable = false)
-    val startTime: Long,  // 回测开始时间(历史时间)
+    val startTime: Long,  // 回测开始时间(历史时间)，创建时计算；执行时以当前时间为基准用局部变量重算窗口
 
     @Column(name = "end_time")
     var endTime: Long? = null,  // 回测结束时间(历史时间)

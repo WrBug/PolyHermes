@@ -1363,6 +1363,11 @@
     "supportSellHint": "是否跟隨 Leader 賣出",
     "sortBy": "排序欄位",
     "sortOrder": "排序順序",
-    "createdAt": "創建時間"
+    "createdAt": "創建時間",
+    "rerun": "重新測試",
+    "rerunConfirm": "將按當前配置創建新的回測任務，是否繼續？",
+    "rerunTaskNamePlaceholder": "新任務名稱（留空使用「原名稱 (副本)」）",
+    "rerunSuccess": "已創建新回測任務",
+    "rerunFailed": "重新測試失敗"
   }
 }

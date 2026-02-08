@@ -239,6 +239,7 @@ enum class ErrorCode(
     BACKTEST_DAYS_INVALID(4603, "回测天数超出限制", "error.backtest.days_invalid"),
     BACKTEST_INITIAL_BALANCE_INVALID(4604, "初始金额无效", "error.backtest.initial_balance_invalid"),
     BACKTEST_TASK_RUNNING(4605, "回测任务正在运行，无法删除", "error.backtest.task_running"),
+    BACKTEST_TASK_NOT_COMPLETED(4606, "仅支持对已完成的回测任务重新测试", "error.backtest.task_not_completed"),
     SERVER_BACKTEST_CREATE_FAILED(5603, "创建回测任务失败", "error.server.backtest_create_failed"),
     SERVER_BACKTEST_UPDATE_FAILED(5604, "更新回测任务失败", "error.server.backtest_update_failed"),
     SERVER_BACKTEST_DELETE_FAILED(5605, "删除回测任务失败", "error.server.backtest_delete_failed"),
@@ -248,7 +249,8 @@ enum class ErrorCode(
     SERVER_BACKTEST_EXECUTE_FAILED(5609, "回测执行失败", "error.server.backtest_execute_failed"),
     SERVER_BACKTEST_HISTORICAL_DATA_FETCH_FAILED(5610, "历史数据获取失败", "error.server.backtest_historical_data_fetch_failed"),
     SERVER_BACKTEST_STOP_FAILED(5611, "停止回测任务失败", "error.server.backtest_stop_failed"),
-    SERVER_BACKTEST_RETRY_FAILED(5612, "重试回测任务失败", "error.server.backtest_retry_failed");
+    SERVER_BACKTEST_RETRY_FAILED(5612, "重试回测任务失败", "error.server.backtest_retry_failed"),
+    SERVER_BACKTEST_RERUN_FAILED(5613, "按配置重新测试失败", "error.server.backtest_rerun_failed");
     
     companion object {
         /**

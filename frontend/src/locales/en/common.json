@@ -1363,6 +1363,11 @@
     "supportSellHint": "Whether to follow Leader sell orders",
     "sortBy": "Sort By",
     "sortOrder": "Sort Order",
-    "createdAt": "Created At"
+    "createdAt": "Created At",
+    "rerun": "Re-run",
+    "rerunConfirm": "Create a new backtest task with the same config?",
+    "rerunTaskNamePlaceholder": "New task name (leave empty for \"Original name (copy)\")",
+    "rerunSuccess": "New backtest task created",
+    "rerunFailed": "Re-run failed"
   }
 }

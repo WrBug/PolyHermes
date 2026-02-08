@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Table, Card, Button, Select, Tag, Space, Modal, message, Row, Col, Form, Input, InputNumber, Switch, Statistic, Descriptions } from 'antd'
 import { useTranslation } from 'react-i18next'
-import { PlusOutlined, ReloadOutlined, DeleteOutlined, StopOutlined, EyeOutlined, RedoOutlined, CopyOutlined } from '@ant-design/icons'
+import { PlusOutlined, ReloadOutlined, DeleteOutlined, StopOutlined, EyeOutlined, RedoOutlined, CopyOutlined, SyncOutlined } from '@ant-design/icons'
 import { formatUSDC } from '../utils'
 import { backtestService, apiService } from '../services/api'
 import type { BacktestTaskDto, BacktestListRequest, BacktestCreateRequest, BacktestTradeDto } from '../types/backtest'
@@ -9,8 +9,7 @@ import type { Leader } from '../types'
 import { useMediaQuery } from 'react-responsive'
 import AddCopyTradingModal from './CopyTradingOrders/AddModal'
 import BacktestChart from './BacktestChart'
-
-const { Option } = Select
+import LeaderSelect from '../components/LeaderSelect'
 
 const BacktestList: React.FC = () => {
   const { t } = useTranslation()
@@ -35,6 +34,12 @@ const BacktestList: React.FC = () => {
   // 创建跟单配置 Modal
   const [addCopyTradingModalVisible, setAddCopyTradingModalVisible] = useState(false)
   const [preFilledConfig, setPreFilledConfig] = useState<any>(null)
+
+  // 重新测试 Modal 相关状态
+  const [rerunModalVisible, setRerunModalVisible] = useState(false)
+  const [rerunTask, setRerunTask] = useState<BacktestTaskDto | null>(null)
+  const [rerunTaskName, setRerunTaskName] = useState('')
+  const [rerunLoading, setRerunLoading] = useState(false)
 
   // 任务详情 Modal 相关状态
   const [detailModalVisible, setDetailModalVisible] = useState(false)
@@ -128,6 +133,38 @@ const BacktestList: React.FC = () => {
         }
       }
     })
+  }
+
+  // 按配置重新测试（仅已完成任务）
+  const handleRerun = (task: BacktestTaskDto) => {
+    setRerunTask(task)
+    setRerunTaskName(`${task.taskName} (副本)`)
+    setRerunModalVisible(true)
+  }
+
+  const handleRerunSubmit = async () => {
+    if (!rerunTask) return
+    setRerunLoading(true)
+    try {
+      const response = await backtestService.rerun({
+        id: rerunTask.id,
+        taskName: rerunTaskName.trim() || undefined
+      })
+      if (response.data.code === 0) {
+        message.success(t('backtest.rerunSuccess'))
+        setRerunModalVisible(false)
+        setRerunTask(null)
+        setRerunTaskName('')
+        fetchTasks()
+      } else {
+        message.error(response.data.msg || t('backtest.rerunFailed'))
+      }
+    } catch (error) {
+      console.error('Rerun backtest failed:', error)
+      message.error(t('backtest.rerunFailed'))
+    } finally {
+      setRerunLoading(false)
+    }
   }
 
   // 重试任务
@@ -545,14 +582,24 @@ const BacktestList: React.FC = () => {
             {t('common.viewDetail')}
           </Button>
           {record.status === 'COMPLETED' && (
-            <Button
-              type="link"
-              size="small"
-              icon={<CopyOutlined />}
-              onClick={() => handleCreateCopyTrading(record)}
-            >
-              {t('backtest.createCopyTrading')}
-            </Button>
+            <>
+              <Button
+                type="link"
+                size="small"
+                icon={<SyncOutlined />}
+                onClick={() => handleRerun(record)}
+              >
+                {t('backtest.rerun')}
+              </Button>
+              <Button
+                type="link"
+                size="small"
+                icon={<CopyOutlined />}
+                onClick={() => handleCreateCopyTrading(record)}
+              >
+                {t('backtest.createCopyTrading')}
+              </Button>
+            </>
           )}
           {record.status === 'RUNNING' && (
             <Button
@@ -675,6 +722,30 @@ const BacktestList: React.FC = () => {
         </Space>
       </Card>
 
+      {/* 重新测试 Modal */}
+      <Modal
+        title={t('backtest.rerun')}
+        open={rerunModalVisible}
+        onCancel={() => {
+          setRerunModalVisible(false)
+          setRerunTask(null)
+          setRerunTaskName('')
+        }}
+        onOk={handleRerunSubmit}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+        confirmLoading={rerunLoading}
+        destroyOnClose
+      >
+        <p style={{ marginBottom: 8 }}>{t('backtest.rerunConfirm')}</p>
+        <Input
+          value={rerunTaskName}
+          onChange={(e) => setRerunTaskName(e.target.value)}
+          placeholder={t('backtest.rerunTaskNamePlaceholder')}
+          maxLength={100}
+        />
+      </Modal>
+
       {/* 创建回测任务 Modal */}
       <Modal
         title={t('backtest.createTask')}
@@ -719,16 +790,10 @@ const BacktestList: React.FC = () => {
                 name="leaderId"
                 rules={[{ required: true, message: t('backtest.leaderRequired') || '请选择 Leader' }]}
               >
-                <Select placeholder={t('backtest.leader')} showSearch>
-                  {leaders.map((leader) => (
-                    <Option key={leader.id} value={leader.id}>
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span>{leader.leaderName || `Leader ${leader.id}`}</span>
-                        <span style={{ fontSize: '12px', color: '#999' }}>{leader.leaderAddress}</span>
-                      </div>
-                    </Option>
-                  ))}
-                </Select>
+                <LeaderSelect
+                  leaders={leaders}
+                  placeholder={t('backtest.leader')}
+                />
               </Form.Item>
             </Col>
           </Row>
@@ -945,6 +1010,12 @@ const BacktestList: React.FC = () => {
         footer={
           detailTask && detailTask.status === 'COMPLETED' && detailConfig ? (
             <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+              <Button icon={<SyncOutlined />} onClick={() => {
+                setDetailModalVisible(false)
+                handleRerun(detailTask)
+              }}>
+                {t('backtest.rerun')}
+              </Button>
               <Button type="primary" icon={<CopyOutlined />} onClick={() => {
                 const preFilled = {
                   leaderId: detailTask.leaderId,

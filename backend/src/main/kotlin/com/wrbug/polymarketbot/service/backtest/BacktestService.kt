@@ -343,6 +343,50 @@ class BacktestService(
             Result.failure(e)
         }
     }
+
+    /**
+     * 按当前配置重新测试：基于已完成的回测任务创建一份相同配置的新任务（名称可修改）
+     */
+    @Transactional
+    fun rerunBacktestTask(request: BacktestRerunRequest): Result<BacktestTaskDto> {
+        return try {
+            val source = backtestTaskRepository.findById(request.id).orElse(null)
+                ?: return Result.failure(IllegalArgumentException("回测任务不存在"))
+
+            if (source.status != "COMPLETED") {
+                return Result.failure(IllegalStateException("仅支持对已完成的回测任务重新测试"))
+            }
+
+            val newTaskName = request.taskName?.trim()?.takeIf { it.isNotEmpty() }
+                ?: "${source.taskName} (副本)"
+
+            val newTask = BacktestTask(
+                taskName = newTaskName,
+                leaderId = source.leaderId,
+                initialBalance = source.initialBalance,
+                backtestDays = source.backtestDays,
+                startTime = source.startTime,
+                status = "PENDING",
+                copyMode = source.copyMode,
+                copyRatio = source.copyRatio,
+                fixedAmount = source.fixedAmount,
+                maxOrderSize = source.maxOrderSize,
+                minOrderSize = source.minOrderSize,
+                maxDailyLoss = source.maxDailyLoss,
+                maxDailyOrders = source.maxDailyOrders,
+                supportSell = source.supportSell,
+                keywordFilterMode = source.keywordFilterMode,
+                keywords = source.keywords
+            )
+
+            backtestTaskRepository.save(newTask)
+            val leader = leaderRepository.findById(newTask.leaderId).orElse(null)
+            Result.success(newTask.toDto(leader))
+        } catch (e: Exception) {
+            logger.error("按配置重新测试失败", e)
+            Result.failure(e)
+        }
+    }
 }
 
 /**

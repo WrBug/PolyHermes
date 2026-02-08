@@ -81,6 +81,14 @@ data class BacktestRetryRequest(
 )
 
 /**
+ * 按当前配置重新测试请求（仅支持已完成任务）
+ */
+data class BacktestRerunRequest(
+    val id: Long,  // 源回测任务ID
+    val taskName: String? = null  // 新任务名称，为空时使用「原名称 (副本)」
+)
+
+/**
  * 回测任务列表响应
  */
 data class BacktestListResponse(
