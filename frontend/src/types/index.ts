@@ -65,6 +65,7 @@ export interface Leader {
   remark?: string  // Leader 备注（可选）
   website?: string  // Leader 网站（可选）
   copyTradingCount: number
+  backtestCount: number  // 回测数量
   totalOrders?: number
   totalPnl?: string
   createdAt: number
@@ -977,4 +978,28 @@ export interface NodeCheckResult {
   checkTime: number
   responseTimeMs?: number
   blockNumber?: string
+}
+
+/**
+ * 回测任务 DTO
+ */
+export interface BacktestTaskDto {
+  id: number
+  taskName: string
+  leaderId: number
+  leaderName?: string
+  leaderAddress?: string
+  initialBalance: string
+  finalBalance?: string
+  profitAmount?: string
+  profitRate?: string
+  backtestDays: number
+  startTime: number
+  endTime?: number
+  status: string  // PENDING/RUNNING/COMPLETED/STOPPED/FAILED
+  progress: number
+  totalTrades: number
+  createdAt: number
+  executionStartedAt?: number
+  executionFinishedAt?: number
 }

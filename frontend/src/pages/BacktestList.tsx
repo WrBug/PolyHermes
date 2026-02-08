@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Table, Card, Button, Select, Tag, Space, Modal, message, Row, Col, Form, Input, InputNumber, Switch, Statistic, Descriptions } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { PlusOutlined, ReloadOutlined, DeleteOutlined, StopOutlined, EyeOutlined, RedoOutlined, CopyOutlined, SyncOutlined } from '@ant-design/icons'
@@ -13,6 +14,7 @@ import LeaderSelect from '../components/LeaderSelect'
 
 const BacktestList: React.FC = () => {
   const { t } = useTranslation()
+  const [searchParams] = useSearchParams()
   const isMobile = useMediaQuery({ maxWidth: 768 })
   const [loading, setLoading] = useState(false)
   const [tasks, setTasks] = useState<BacktestTaskDto[]>([])
@@ -20,7 +22,14 @@ const BacktestList: React.FC = () => {
   const [page, setPage] = useState(1)
   const [size] = useState(10)
   const [statusFilter, setStatusFilter] = useState<string | undefined>()
-  const [leaderIdFilter] = useState<number | undefined>()
+  const [leaderIdFilter, setLeaderIdFilter] = useState<number | undefined>(() => {
+    const leaderIdParam = searchParams.get('leaderId')
+    if (leaderIdParam) {
+      const id = parseInt(leaderIdParam, 10)
+      return isNaN(id) ? undefined : id
+    }
+    return undefined
+  })
   const [sortBy, setSortBy] = useState<'profitAmount' | 'profitRate' | 'createdAt'>('createdAt')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
@@ -79,6 +88,15 @@ const BacktestList: React.FC = () => {
       if (!silent) setLoading(false)
     }
   }
+
+  // 从 URL 读取 leaderId 并应用筛选（如从 Leader 管理页跳转过来）
+  useEffect(() => {
+    const leaderIdParam = searchParams.get('leaderId')
+    if (leaderIdParam) {
+      const id = parseInt(leaderIdParam, 10)
+      setLeaderIdFilter(isNaN(id) ? undefined : id)
+    }
+  }, [searchParams])
 
   useEffect(() => {
     fetchTasks()
@@ -200,22 +218,20 @@ const BacktestList: React.FC = () => {
     })
   }
 
-  // 获取 Leader 列表
+  // 获取 Leader 列表（页面加载时请求，供筛选和创建任务使用）
   useEffect(() => {
-    if (createModalVisible) {
-      const fetchLeaders = async () => {
-        try {
-          const response = await apiService.leaders.list({})
-          if (response.data.code === 0 && response.data.data) {
-            setLeaders(response.data.data.list || [])
-          }
-        } catch (error) {
-          console.error('Failed to fetch leaders:', error)
+    const fetchLeaders = async () => {
+      try {
+        const response = await apiService.leaders.list({})
+        if (response.data.code === 0 && response.data.data) {
+          setLeaders(response.data.data.list || [])
         }
+      } catch (error) {
+        console.error('Failed to fetch leaders:', error)
       }
-      fetchLeaders()
     }
-  }, [createModalVisible])
+    fetchLeaders()
+  }, [])
 
   // 打开创建 modal
   const handleCreate = () => {
@@ -487,7 +503,7 @@ const BacktestList: React.FC = () => {
       dataIndex: 'leaderName',
       key: 'leaderName',
       width: isMobile ? 100 : 150,
-      render: (_: any, record: BacktestTaskDto) => record.leaderName || record.leaderAddress?.substring(0, 8) + '...' || '-'
+      render: (_: any, record: BacktestTaskDto) => record.leaderName || `Leader ${record.leaderId}`
     },
     {
       title: t('backtest.initialBalance'),
@@ -656,6 +672,14 @@ const BacktestList: React.FC = () => {
           <Row justify="space-between" align="middle" gutter={[16, 16]}>
             <Col xs={24} sm={24} md={12} lg={16}>
               <Space size="middle" direction={isMobile ? 'vertical' : 'horizontal'} style={{ width: isMobile ? '100%' : 'auto' }}>
+                <LeaderSelect
+                  style={{ width: isMobile ? '100%' : 180 }}
+                  placeholder={t('backtest.leader')}
+                  allowClear
+                  value={leaderIdFilter}
+                  onChange={(value) => setLeaderIdFilter(value)}
+                  leaders={leaders}
+                />
                 <Select
                   style={{ width: isMobile ? '100%' : 150 }}
                   placeholder={t('backtest.status')}
@@ -1068,7 +1092,7 @@ const BacktestList: React.FC = () => {
               <Descriptions column={isMobile ? 1 : 2} bordered size="small">
                 <Descriptions.Item label={t('backtest.taskName')}>{detailTask.taskName}</Descriptions.Item>
                 <Descriptions.Item label={t('backtest.leader')}>
-                  {detailTask.leaderName || detailTask.leaderAddress}
+                  {detailTask.leaderName || `Leader ${detailTask.leaderId}`}
                 </Descriptions.Item>
                 <Descriptions.Item label={t('backtest.initialBalance')}>
                   {formatUSDC(detailTask.initialBalance)} USDC

@@ -260,7 +260,34 @@ const LeaderList: React.FC = () => {
       dataIndex: 'copyTradingCount',
       key: 'copyTradingCount',
       width: 100,
-      render: (count: number) => <Tag color="cyan">{count}</Tag>
+      render: (count: number, record: Leader) => (
+        <Button
+          type="link"
+          size="small"
+          onClick={() => navigate(`/copy-trading?leaderId=${record.id}`)}
+          disabled={count === 0}
+          style={{ padding: 0 }}
+        >
+          <Tag color="cyan">{count}</Tag>
+        </Button>
+      )
+    },
+    {
+      title: t('leaderList.backtestCount'),
+      dataIndex: 'backtestCount',
+      key: 'backtestCount',
+      width: 100,
+      render: (count: number, record: Leader) => (
+        <Button
+          type="link"
+          size="small"
+          onClick={() => navigate(`/backtest?leaderId=${record.id}`)}
+          disabled={count === 0}
+          style={{ padding: 0 }}
+        >
+          <Tag color="purple">{count}</Tag>
+        </Button>
+      )
     },
     {
       title: t('common.actions'),
@@ -345,7 +372,24 @@ const LeaderList: React.FC = () => {
                       <Divider style={{ margin: '12px 0' }} />
 
                       <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
-                        <Tag color="cyan">{leader.copyTradingCount} {t('leaderList.copyTradingCount')}</Tag>
+                        <Button
+                          type="default"
+                          size="small"
+                          onClick={() => navigate(`/copy-trading?leaderId=${leader.id}`)}
+                          disabled={leader.copyTradingCount === 0}
+                          style={{ borderRadius: '6px', padding: '8px 16px' }}
+                        >
+                          {t('leaderList.viewCopyTradings')} ({leader.copyTradingCount})
+                        </Button>
+                        <Button
+                          type="default"
+                          size="small"
+                          onClick={() => navigate(`/backtest?leaderId=${leader.id}`)}
+                          disabled={leader.backtestCount === 0}
+                          style={{ borderRadius: '6px', padding: '8px 16px' }}
+                        >
+                          {t('leaderList.viewBacktests')} ({leader.backtestCount})
+                        </Button>
                       </div>
 
                       {leader.remark && (
@@ -356,15 +400,15 @@ const LeaderList: React.FC = () => {
                       )}
 
                       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        <Button type="primary" size="small" icon={<EyeOutlined />} onClick={() => handleShowDetail(leader)} style={{ flex: 1, minWidth: '80px', borderRadius: '6px' }}>
+                        <Button type="primary" size="small" icon={<EyeOutlined />} onClick={() => handleShowDetail(leader)} style={{ flex: 1, minWidth: '80px', borderRadius: '6px', padding: '8px 16px' }}>
                           {t('common.viewDetail')}
                         </Button>
                         {leader.website && (
-                          <Button type="default" size="small" icon={<GlobalOutlined />} onClick={() => window.open(leader.website, '_blank', 'noopener,noreferrer')} style={{ flex: 1, minWidth: '80px', borderRadius: '6px' }}>
+                          <Button type="default" size="small" icon={<GlobalOutlined />} onClick={() => window.open(leader.website, '_blank', 'noopener,noreferrer')} style={{ flex: 1, minWidth: '80px', borderRadius: '6px', padding: '8px 16px' }}>
                             {t('leaderList.openWebsite')}
                           </Button>
                         )}
-                        <Button type="default" size="small" icon={<EditOutlined />} onClick={() => navigate(`/leaders/edit?id=${leader.id}`)} style={{ flex: 1, minWidth: '80px', borderRadius: '6px' }}>
+                        <Button type="default" size="small" icon={<EditOutlined />} onClick={() => navigate(`/leaders/edit?id=${leader.id}`)} style={{ flex: 1, minWidth: '80px', borderRadius: '6px', padding: '8px 16px' }}>
                           {t('common.edit')}
                         </Button>
                         <Popconfirm
@@ -374,7 +418,7 @@ const LeaderList: React.FC = () => {
                           okText={t('common.confirm')}
                           cancelText={t('common.cancel')}
                         >
-                          <Button type="primary" danger size="small" icon={<DeleteOutlined />} style={{ flex: 1, minWidth: '80px', borderRadius: '6px' }}>
+                          <Button type="primary" danger size="small" icon={<DeleteOutlined />} style={{ flex: 1, minWidth: '80px', borderRadius: '6px', padding: '8px 16px' }}>
                             {t('common.delete')}
                           </Button>
                         </Popconfirm>

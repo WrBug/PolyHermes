@@ -3,6 +3,7 @@ package com.wrbug.polymarketbot.service.copytrading.leaders
 import com.wrbug.polymarketbot.dto.*
 import com.wrbug.polymarketbot.entity.Leader
 import com.wrbug.polymarketbot.repository.AccountRepository
+import com.wrbug.polymarketbot.repository.BacktestTaskRepository
 import com.wrbug.polymarketbot.repository.CopyTradingRepository
 import com.wrbug.polymarketbot.repository.LeaderRepository
 import com.wrbug.polymarketbot.service.common.BlockchainService
@@ -20,9 +21,10 @@ class LeaderService(
     private val leaderRepository: LeaderRepository,
     private val accountRepository: AccountRepository,
     private val copyTradingRepository: CopyTradingRepository,
+    private val backtestTaskRepository: BacktestTaskRepository,
     private val blockchainService: BlockchainService
 ) {
-    
+
     private val logger = LoggerFactory.getLogger(LeaderService::class.java)
     
     /**
@@ -157,7 +159,8 @@ class LeaderService(
             
             val leaderDtos = leaders.map { leader ->
                 val copyTradingCount = copyTradingRepository.countByLeaderId(leader.id!!)
-                toDto(leader, copyTradingCount)
+                val backtestCount = backtestTaskRepository.findByLeaderId(leader.id).size.toLong()
+                toDto(leader, copyTradingCount, backtestCount)
             }
             
             Result.success(
@@ -181,7 +184,8 @@ class LeaderService(
                 ?: return Result.failure(IllegalArgumentException("Leader 不存在"))
 
             val copyTradingCount = copyTradingRepository.countByLeaderId(leaderId)
-            Result.success(toDto(leader, copyTradingCount))
+            val backtestCount = backtestTaskRepository.findByLeaderId(leaderId).size.toLong()
+            Result.success(toDto(leader, copyTradingCount, backtestCount))
         } catch (e: Exception) {
             logger.error("查询 Leader 详情失败", e)
             Result.failure(e)
@@ -225,7 +229,7 @@ class LeaderService(
     /**
      * 转换为 DTO
      */
-    private fun toDto(leader: Leader, copyTradingCount: Long = 0): LeaderDto {
+    private fun toDto(leader: Leader, copyTradingCount: Long = 0, backtestCount: Long = 0): LeaderDto {
         return LeaderDto(
             id = leader.id!!,
             leaderAddress = leader.leaderAddress,
@@ -234,6 +238,7 @@ class LeaderService(
             remark = leader.remark,
             website = leader.website,
             copyTradingCount = copyTradingCount,
+            backtestCount = backtestCount,
             createdAt = leader.createdAt,
             updatedAt = leader.updatedAt
         )

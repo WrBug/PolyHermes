@@ -14,6 +14,7 @@ interface LeaderSelectProps {
   showSearch?: boolean
   allowClear?: boolean
   notFoundContent?: React.ReactNode
+  style?: React.CSSProperties
 }
 
 const LeaderSelect: React.FC<LeaderSelectProps> = ({
@@ -25,7 +26,8 @@ const LeaderSelect: React.FC<LeaderSelectProps> = ({
   disabled,
   showSearch = true,
   allowClear = false,
-  notFoundContent
+  notFoundContent,
+  style
 }) => {
   // 处理选择变化
   const handleChange = (val: number | undefined) => {
@@ -46,6 +48,7 @@ const LeaderSelect: React.FC<LeaderSelectProps> = ({
       showSearch={showSearch}
       allowClear={allowClear}
       notFoundContent={notFoundContent}
+      style={style}
       optionFilterProp="label"
       optionLabelProp="label"
     >

@@ -434,7 +434,10 @@
     "openWebsite": "打開網頁",
     "all": "全部",
     "copyTradingCount": "跟單數",
+    "backtestCount": "回測數",
     "copyTradingRelations": "{{count}} 個跟單關係",
+    "viewCopyTradings": "查看跟單配置",
+    "viewBacktests": "查看回測",
     "createdAt": "創建時間",
     "noData": "暫無 Leader 數據",
     "fetchFailed": "獲取 Leader 列表失敗",
@@ -442,7 +445,9 @@
     "deleteFailed": "刪除 Leader 失敗",
     "deleteConfirm": "確定要刪除這個 Leader 嗎？",
     "deleteConfirmDesc": "該 Leader 還有 {{count}} 個跟單關係，請先刪除跟單關係",
-    "openDetailFailed": "打開詳情失敗"
+    "openDetailFailed": "打開詳情失敗",
+    "noCopyTradings": "暫無跟單配置",
+    "noBacktests": "暫無回測"
   },
   "leaderAdd": {
     "title": "添加 Leader",

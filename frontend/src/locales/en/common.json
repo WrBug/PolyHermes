@@ -434,7 +434,10 @@
     "openWebsite": "Open Website",
     "all": "All",
     "copyTradingCount": "Copy Trading Count",
+    "backtestCount": "Backtest Count",
     "copyTradingRelations": "{{count}} copy trading relations",
+    "viewCopyTradings": "View Copy Tradings",
+    "viewBacktests": "View Backtests",
     "createdAt": "Created At",
     "noData": "No Leader data",
     "fetchFailed": "Failed to get Leader list",
@@ -442,7 +445,9 @@
     "deleteFailed": "Failed to delete Leader",
     "deleteConfirm": "Are you sure you want to delete this Leader?",
     "deleteConfirmDesc": "This Leader has {{count}} copy trading relations, please delete them first",
-    "openDetailFailed": "Failed to open detail"
+    "openDetailFailed": "Failed to open detail",
+    "noCopyTradings": "No copy trading configs",
+    "noBacktests": "No backtests"
   },
   "leaderAdd": {
     "title": "Add Leader",
