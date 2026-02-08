@@ -722,7 +722,10 @@ const BacktestList: React.FC = () => {
                 <Select placeholder={t('backtest.leader')} showSearch>
                   {leaders.map((leader) => (
                     <Option key={leader.id} value={leader.id}>
-                      {leader.leaderName || leader.leaderAddress}
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span>{leader.leaderName || `Leader ${leader.id}`}</span>
+                        <span style={{ fontSize: '12px', color: '#999' }}>{leader.leaderAddress}</span>
+                      </div>
                     </Option>
                   ))}
                 </Select>
