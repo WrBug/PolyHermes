@@ -29,6 +29,7 @@ interface AddModalProps {
     supportSell?: boolean
     keywordFilterMode?: string
     keywords?: string[]
+    maxPositionValue?: number
     configName?: string
   }
 }
@@ -125,7 +126,8 @@ const AddModal: React.FC<AddModalProps> = ({
       maxDailyLoss: config.maxDailyLoss,
       maxDailyOrders: config.maxDailyOrders,
       supportSell: config.supportSell,
-      keywordFilterMode: config.keywordFilterMode || 'DISABLED'
+      keywordFilterMode: config.keywordFilterMode || 'DISABLED',
+      maxPositionValue: config.maxPositionValue
     }
     console.log('[AddModal] fillPreFilledConfig: setting form values:', formValues)
     

@@ -323,6 +323,7 @@ const BacktestList: React.FC = () => {
           supportSell: taskConfig.supportSell,
           keywordFilterMode: taskConfig.keywordFilterMode || 'DISABLED',
           keywords: taskConfig.keywords || [],
+          maxPositionValue: taskConfig.maxPositionValue,
           configName: `回测任务-${taskDetail.taskName}`
         }
 
@@ -1076,6 +1077,7 @@ const BacktestList: React.FC = () => {
                   supportSell: detailConfig.supportSell,
                   keywordFilterMode: detailConfig.keywordFilterMode,
                   keywords: detailConfig.keywords || [],
+                  maxPositionValue: detailConfig.maxPositionValue,
                   configName: `回测任务-${detailTask.taskName}`
                 }
                 setPreFilledConfig(preFilled)
