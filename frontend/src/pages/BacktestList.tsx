@@ -53,9 +53,9 @@ const BacktestList: React.FC = () => {
   const [detailTradesPage, setDetailTradesPage] = useState(1)
   const [detailTradesSize] = useState(20)
 
-  // 获取回测任务列表
-  const fetchTasks = async () => {
-    setLoading(true)
+  // 获取回测任务列表（silent 为 true 时不显示 loading，用于轮询刷新）
+  const fetchTasks = async (silent = false) => {
+    if (!silent) setLoading(true)
     try {
       const request: BacktestListRequest = {
         leaderId: leaderIdFilter,
@@ -69,20 +69,30 @@ const BacktestList: React.FC = () => {
       if (response.data.code === 0 && response.data.data) {
         setTasks(response.data.data.list)
         setTotal(response.data.data.total)
-      } else {
+      } else if (!silent) {
         message.error(response.data.msg || t('backtest.fetchTasksFailed'))
       }
     } catch (error) {
       console.error('Failed to fetch backtest tasks:', error)
-      message.error(t('backtest.fetchTasksFailed'))
+      if (!silent) message.error(t('backtest.fetchTasksFailed'))
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
   useEffect(() => {
     fetchTasks()
   }, [page, statusFilter, leaderIdFilter, sortBy, sortOrder])
+
+  // 存在非终态任务（PENDING/RUNNING）时每 3s 轮询刷新进度
+  const hasNonTerminalTask = tasks.some(
+    (task) => task.status === 'PENDING' || task.status === 'RUNNING'
+  )
+  useEffect(() => {
+    if (!hasNonTerminalTask) return
+    const timer = setInterval(() => fetchTasks(true), 3000)
+    return () => clearInterval(timer)
+  }, [hasNonTerminalTask, page, statusFilter, leaderIdFilter, sortBy, sortOrder])
 
   // 刷新
   const handleRefresh = () => {

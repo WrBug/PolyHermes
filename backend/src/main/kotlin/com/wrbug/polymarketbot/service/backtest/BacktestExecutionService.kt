@@ -554,11 +554,12 @@ class BacktestExecutionService(
 
                 balance += settlementValue
 
+                val marketTitle = marketService.getMarket(position.marketId)?.title ?: ""
                 val settlementTrade = BacktestTrade(
                     backtestTaskId = task.id!!,
                     tradeTime = currentTime,
                     marketId = position.marketId,
-                    marketTitle = "",
+                    marketTitle = marketTitle,
                     side = "SETTLEMENT",
                     outcome = when {
                         settlementPrice == BigDecimal.ONE -> "WIN"
@@ -611,11 +612,12 @@ class BacktestExecutionService(
 
             balance += settlementValue
 
+            val marketTitle = marketService.getMarket(position.marketId)?.title ?: ""
             val closedTrade = BacktestTrade(
                 backtestTaskId = task.id!!,
                 tradeTime = currentTime,
                 marketId = position.marketId,
-                marketTitle = "",
+                marketTitle = marketTitle,
                 side = "SETTLEMENT",
                 outcome = "CLOSED",
                 outcomeIndex = position.outcomeIndex,
