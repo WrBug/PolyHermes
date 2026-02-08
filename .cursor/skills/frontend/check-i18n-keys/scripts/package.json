@@ -1,0 +1,16 @@
+{
+  "name": "cursor-skill-frontend-scripts",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "check-i18n": "tsx check-i18n-keys.ts"
+  },
+  "dependencies": {
+    "glob": "^13.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  }
+}

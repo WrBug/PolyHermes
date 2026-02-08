@@ -35,6 +35,10 @@
     "success": "成功",
     "failed": "失败",
     "close": "关闭",
+    "create": "创建",
+    "copy": "复制",
+    "copySuccess": "复制成功",
+    "copyFailed": "复制失败",
     "ascending": "升序",
     "descending": "降序",
     "day": "天"
@@ -437,7 +441,8 @@
     "deleteSuccess": "删除 Leader 成功",
     "deleteFailed": "删除 Leader 失败",
     "deleteConfirm": "确定要删除这个 Leader 吗？",
-    "deleteConfirmDesc": "该 Leader 还有 {{count}} 个跟单关系，请先删除跟单关系"
+    "deleteConfirmDesc": "该 Leader 还有 {{count}} 个跟单关系，请先删除跟单关系",
+    "openDetailFailed": "打开详情失败"
   },
   "leaderAdd": {
     "title": "添加 Leader",
@@ -510,6 +515,7 @@
     "totalBalance": "总余额",
     "positions": "持仓列表",
     "noPositions": "暂无持仓",
+    "market": "市场",
     "marketId": "市场ID",
     "side": "方向",
     "quantity": "数量",
@@ -968,8 +974,10 @@
       "priceRange": "价格区间不符",
       "maxPositionValue": "超过最大仓位金额",
       "marketEndDate": "市场截止时间超出限制",
+      "keywordFilter": "关键字过滤",
       "unknown": "未知原因"
     },
+    "orderDetails": "订单详情",
     "noData": "暂无已过滤订单",
     "noFilteredOrders": "暂无已过滤订单"
   },

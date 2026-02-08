@@ -16,6 +16,10 @@
     "submit": "Submit",
     "reset": "Reset",
     "close": "Close",
+    "create": "Create",
+    "copy": "Copy",
+    "copySuccess": "Copied successfully",
+    "copyFailed": "Copy failed",
     "yes": "Yes",
     "no": "No",
     "actions": "Actions",
@@ -437,7 +441,8 @@
     "deleteSuccess": "Leader deleted successfully",
     "deleteFailed": "Failed to delete Leader",
     "deleteConfirm": "Are you sure you want to delete this Leader?",
-    "deleteConfirmDesc": "This Leader has {{count}} copy trading relations, please delete them first"
+    "deleteConfirmDesc": "This Leader has {{count}} copy trading relations, please delete them first",
+    "openDetailFailed": "Failed to open detail"
   },
   "leaderAdd": {
     "title": "Add Leader",
@@ -510,6 +515,7 @@
     "totalBalance": "Total Balance",
     "positions": "Positions",
     "noPositions": "No positions",
+    "market": "Market",
     "marketId": "Market ID",
     "side": "Side",
     "quantity": "Quantity",
@@ -968,8 +974,10 @@
       "priceRange": "Price Range Mismatch",
       "maxPositionValue": "Exceeds Max Position Value",
       "marketEndDate": "Market End Date Exceeds Limit",
+      "keywordFilter": "Keyword Filter",
       "unknown": "Unknown Reason"
     },
+    "orderDetails": "Order Details",
     "noData": "No filtered orders",
     "noFilteredOrders": "No filtered orders"
   },

@@ -16,6 +16,10 @@
     "submit": "提交",
     "reset": "重置",
     "close": "關閉",
+    "create": "創建",
+    "copy": "複製",
+    "copySuccess": "複製成功",
+    "copyFailed": "複製失敗",
     "yes": "是",
     "no": "否",
     "actions": "操作",
@@ -437,7 +441,8 @@
     "deleteSuccess": "刪除 Leader 成功",
     "deleteFailed": "刪除 Leader 失敗",
     "deleteConfirm": "確定要刪除這個 Leader 嗎？",
-    "deleteConfirmDesc": "該 Leader 還有 {{count}} 個跟單關係，請先刪除跟單關係"
+    "deleteConfirmDesc": "該 Leader 還有 {{count}} 個跟單關係，請先刪除跟單關係",
+    "openDetailFailed": "打開詳情失敗"
   },
   "leaderAdd": {
     "title": "添加 Leader",
@@ -510,6 +515,7 @@
     "totalBalance": "總餘額",
     "positions": "持倉列表",
     "noPositions": "暫無持倉",
+    "market": "市場",
     "marketId": "市場ID",
     "side": "方向",
     "quantity": "數量",
@@ -968,8 +974,10 @@
       "priceRange": "價格區間不符",
       "maxPositionValue": "超過最大倉位金額",
       "marketEndDate": "市場截止時間超出限制",
+      "keywordFilter": "關鍵字過濾",
       "unknown": "未知原因"
     },
+    "orderDetails": "訂單詳情",
     "noData": "暫無已過濾訂單",
     "noFilteredOrders": "暫無已過濾訂單"
   },
