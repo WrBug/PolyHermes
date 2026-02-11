@@ -82,7 +82,9 @@ class BacktestService(
                 } else {
                     null
                 },
-                maxPositionValue = request.maxPositionValue?.toSafeBigDecimal()
+                maxPositionValue = request.maxPositionValue?.toSafeBigDecimal(),
+                minPrice = request.minPrice?.toSafeBigDecimal(),
+                maxPrice = request.maxPrice?.toSafeBigDecimal()
             )
 
             backtestTaskRepository.save(task)
@@ -192,7 +194,9 @@ class BacktestService(
                 } else {
                     emptyList()
                 },
-                maxPositionValue = task.maxPositionValue?.toPlainString()
+                maxPositionValue = task.maxPositionValue?.toPlainString(),
+                minPrice = task.minPrice?.toPlainString(),
+                maxPrice = task.maxPrice?.toPlainString()
             )
 
             val statistics = BacktestStatisticsDto(
@@ -379,7 +383,9 @@ class BacktestService(
                 supportSell = source.supportSell,
                 keywordFilterMode = source.keywordFilterMode,
                 keywords = source.keywords,
-                maxPositionValue = source.maxPositionValue
+                maxPositionValue = source.maxPositionValue,
+                minPrice = source.minPrice,
+                maxPrice = source.maxPrice
             )
 
             backtestTaskRepository.save(newTask)

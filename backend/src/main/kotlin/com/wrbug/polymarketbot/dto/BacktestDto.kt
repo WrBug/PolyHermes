@@ -22,6 +22,8 @@ data class BacktestCreateRequest(
     val keywordFilterMode: String? = null,  // 关键字过滤模式：DISABLED（不启用）、WHITELIST（白名单）、BLACKLIST（黑名单）
     val keywords: List<String>? = null,  // 关键字列表
     val maxPositionValue: String? = null,  // 最大仓位金额（USDC），NULL表示不启用
+    val minPrice: String? = null,  // 最低价格（可选），NULL表示不限制最低价
+    val maxPrice: String? = null,  // 最高价格（可选），NULL表示不限制最高价
     val pageForResume: Int? = null  // 用于恢复中断任务，从指定页码开始获取历史数据（从1开始）
 )
 
@@ -166,7 +168,9 @@ data class BacktestConfigDto(
     val supportSell: Boolean,
     val keywordFilterMode: String?,
     val keywords: List<String>?,
-    val maxPositionValue: String?
+    val maxPositionValue: String?,
+    val minPrice: String?,  // 最低价格（可选），NULL表示不限制最低价
+    val maxPrice: String?  // 最高价格（可选），NULL表示不限制最高价
 )
 
 /**

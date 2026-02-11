@@ -272,7 +272,9 @@ const BacktestList: React.FC = () => {
         supportSell: values.supportSell,
         keywordFilterMode: values.keywordFilterMode,
         keywords: values.keywords,
-        maxPositionValue: values.maxPositionValue
+        maxPositionValue: values.maxPositionValue,
+        minPrice: values.minPrice,
+        maxPrice: values.maxPrice
       }
 
       const response = await backtestService.create(request)
@@ -324,6 +326,8 @@ const BacktestList: React.FC = () => {
           keywordFilterMode: taskConfig.keywordFilterMode || 'DISABLED',
           keywords: taskConfig.keywords || [],
           maxPositionValue: taskConfig.maxPositionValue,
+          minPrice: taskConfig.minPrice,
+          maxPrice: taskConfig.maxPrice,
           configName: `回测任务-${taskDetail.taskName}`
         }
 
@@ -993,6 +997,50 @@ const BacktestList: React.FC = () => {
             </Form.Item>
 
             <Form.Item
+              label={t('backtest.priceRange')}
+              tooltip={t('backtest.priceRangeTooltip')}
+            >
+              <Row gutter={12}>
+                <Col span={12}>
+                  <Form.Item name="minPrice" noStyle>
+                    <InputNumber
+                      style={{ width: '100%' }}
+                      placeholder={t('backtest.minPricePlaceholder') || '最低价（留空不限制）'}
+                      min={0.01}
+                      max={0.99}
+                      step={0.0001}
+                      precision={4}
+                      formatter={(value) => {
+                        if (!value && value !== 0) return ''
+                        const num = parseFloat(value.toString())
+                        if (isNaN(num)) return ''
+                        return num.toString().replace(/\.0+$/, '')
+                      }}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item name="maxPrice" noStyle>
+                    <InputNumber
+                      style={{ width: '100%' }}
+                      placeholder={t('backtest.maxPricePlaceholder') || '最高价（留空不限制）'}
+                      min={0.01}
+                      max={0.99}
+                      step={0.0001}
+                      precision={4}
+                      formatter={(value) => {
+                        if (!value && value !== 0) return ''
+                        const num = parseFloat(value.toString())
+                        if (isNaN(num)) return ''
+                        return num.toString().replace(/\.0+$/, '')
+                      }}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </Form.Item>
+
+            <Form.Item
               label={t('backtest.supportSell')}
               name="supportSell"
               valuePropName="checked"
@@ -1078,6 +1126,8 @@ const BacktestList: React.FC = () => {
                   keywordFilterMode: detailConfig.keywordFilterMode,
                   keywords: detailConfig.keywords || [],
                   maxPositionValue: detailConfig.maxPositionValue,
+                  minPrice: detailConfig.minPrice,
+                  maxPrice: detailConfig.maxPrice,
                   configName: `回测任务-${detailTask.taskName}`
                 }
                 setPreFilledConfig(preFilled)
@@ -1266,6 +1316,20 @@ const BacktestList: React.FC = () => {
                   {detailConfig.maxPositionValue && (
                     <Descriptions.Item label={t('backtest.maxPositionValue')}>
                       {formatUSDC(detailConfig.maxPositionValue)} USDC
+                    </Descriptions.Item>
+                  )}
+                  {(detailConfig.minPrice || detailConfig.maxPrice) && (
+                    <Descriptions.Item label={t('backtest.priceRange')}>
+                      {detailConfig.minPrice !== undefined && detailConfig.minPrice !== null && detailConfig.minPrice !== '' 
+                        ? `≥ ${parseFloat(detailConfig.minPrice).toFixed(4)}` 
+                        : ''}
+                      {(detailConfig.minPrice !== undefined && detailConfig.minPrice !== null && detailConfig.minPrice !== '') && 
+                       (detailConfig.maxPrice !== undefined && detailConfig.maxPrice !== null && detailConfig.maxPrice !== '') 
+                        ? ' ~ ' 
+                        : ''}
+                      {detailConfig.maxPrice !== undefined && detailConfig.maxPrice !== null && detailConfig.maxPrice !== '' 
+                        ? `≤ ${parseFloat(detailConfig.maxPrice).toFixed(4)}` 
+                        : ''}
                     </Descriptions.Item>
                   )}
                 </Descriptions>

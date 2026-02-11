@@ -73,6 +73,8 @@ class BacktestExecutionService(
             minOrderDepth = null,  // 回测无实时订单簿数据
             maxSpread = null,  // 回测无实时价差数据
             maxPositionValue = task.maxPositionValue,
+            minPrice = task.minPrice,  // 最低价格
+            maxPrice = task.maxPrice,  // 最高价格
             keywordFilterMode = task.keywordFilterMode,
             keywords = task.keywords,
             configName = null,

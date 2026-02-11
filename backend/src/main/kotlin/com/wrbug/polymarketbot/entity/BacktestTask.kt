@@ -76,6 +76,12 @@ data class BacktestTask(
     @Column(name = "max_position_value", precision = 20, scale = 8)
     val maxPositionValue: BigDecimal? = null,  // 最大仓位金额（USDC），NULL表示不启用
 
+    @Column(name = "min_price", precision = 20, scale = 8)
+    val minPrice: BigDecimal? = null,  // 最低价格（可选），NULL表示不限制最低价
+
+    @Column(name = "max_price", precision = 20, scale = 8)
+    val maxPrice: BigDecimal? = null,  // 最高价格（可选），NULL表示不限制最高价
+
     // 统计字段
     @Column(name = "avg_holding_time")
     var avgHoldingTime: Long? = null,  // 平均持仓时间(毫秒)
