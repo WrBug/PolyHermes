@@ -187,24 +187,37 @@ class CryptoTailStrategyService(
 
     fun getStrategy(strategyId: Long): CryptoTailStrategy? = strategyRepository.findById(strategyId).orElse(null)
 
-    private fun entityToDto(e: CryptoTailStrategy, lastTriggerAt: Long?): CryptoTailStrategyDto = CryptoTailStrategyDto(
-        id = e.id ?: 0L,
-        accountId = e.accountId,
-        name = e.name,
-        marketSlugPrefix = e.marketSlugPrefix,
-        marketTitle = null,
-        intervalSeconds = e.intervalSeconds,
-        windowStartSeconds = e.windowStartSeconds,
-        windowEndSeconds = e.windowEndSeconds,
-        minPrice = e.minPrice.toPlainString(),
-        maxPrice = e.maxPrice.toPlainString(),
-        amountMode = e.amountMode,
-        amountValue = e.amountValue.toPlainString(),
-        enabled = e.enabled,
-        lastTriggerAt = lastTriggerAt,
-        createdAt = e.createdAt,
-        updatedAt = e.updatedAt
-    )
+    private fun entityToDto(e: CryptoTailStrategy, lastTriggerAt: Long?): CryptoTailStrategyDto {
+        val strategyId = e.id ?: 0L
+        val totalPnl = triggerRepository.sumRealizedPnlByStrategyId(strategyId)
+        val settledCount = triggerRepository.countResolvedByStrategyId(strategyId)
+        val winCount = triggerRepository.countWinsByStrategyId(strategyId)
+        val winRateStr = if (settledCount > 0L) {
+            BigDecimal(winCount).divide(BigDecimal(settledCount), 4, java.math.RoundingMode.HALF_UP).toPlainString()
+        } else null
+        return CryptoTailStrategyDto(
+            id = strategyId,
+            accountId = e.accountId,
+            name = e.name,
+            marketSlugPrefix = e.marketSlugPrefix,
+            marketTitle = null,
+            intervalSeconds = e.intervalSeconds,
+            windowStartSeconds = e.windowStartSeconds,
+            windowEndSeconds = e.windowEndSeconds,
+            minPrice = e.minPrice.toPlainString(),
+            maxPrice = e.maxPrice.toPlainString(),
+            amountMode = e.amountMode,
+            amountValue = e.amountValue.toPlainString(),
+            enabled = e.enabled,
+            lastTriggerAt = lastTriggerAt,
+            totalRealizedPnl = totalPnl?.toPlainString(),
+            settledCount = settledCount,
+            winCount = winCount,
+            winRate = winRateStr,
+            createdAt = e.createdAt,
+            updatedAt = e.updatedAt
+        )
+    }
 
     private fun triggerToDto(t: CryptoTailStrategyTrigger): CryptoTailStrategyTriggerDto = CryptoTailStrategyTriggerDto(
         id = t.id ?: 0L,
@@ -217,6 +230,10 @@ class CryptoTailStrategyService(
         orderId = t.orderId,
         status = t.status,
         failReason = t.failReason,
+        resolved = t.resolved,
+        realizedPnl = t.realizedPnl?.toPlainString(),
+        winnerOutcomeIndex = t.winnerOutcomeIndex,
+        settledAt = t.settledAt,
         createdAt = t.createdAt
     )
 }

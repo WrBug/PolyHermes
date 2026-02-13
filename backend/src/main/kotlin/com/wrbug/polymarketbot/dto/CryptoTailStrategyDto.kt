@@ -59,6 +59,14 @@ data class CryptoTailStrategyDto(
     val amountValue: String = "0",
     val enabled: Boolean = true,
     val lastTriggerAt: Long? = null,
+    /** 已实现总收益 USDC（已结算订单的 realizedPnl 之和） */
+    val totalRealizedPnl: String? = null,
+    /** 已结算笔数（用于胜率分母） */
+    val settledCount: Long = 0L,
+    /** 已结算中赢的笔数（用于胜率分子） */
+    val winCount: Long = 0L,
+    /** 胜率 0~1（已结算时 = winCount/settledCount，无结算为 null） */
+    val winRate: String? = null,
     val createdAt: Long = 0L,
     val updatedAt: Long = 0L
 )
@@ -101,6 +109,13 @@ data class CryptoTailStrategyTriggerDto(
     val orderId: String? = null,
     val status: String = "success",
     val failReason: String? = null,
+    /** 是否已结算 */
+    val resolved: Boolean = false,
+    /** 已实现盈亏 USDC（结算后有值） */
+    val realizedPnl: String? = null,
+    /** 市场赢家 outcome 索引（结算后有值） */
+    val winnerOutcomeIndex: Int? = null,
+    val settledAt: Long? = null,
     val createdAt: Long = 0L
 )
 
