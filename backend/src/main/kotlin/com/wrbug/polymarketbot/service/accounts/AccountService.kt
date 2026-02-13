@@ -7,6 +7,7 @@ import com.wrbug.polymarketbot.repository.AccountRepository
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.toSafeBigDecimal
 import com.wrbug.polymarketbot.util.eq
+import com.wrbug.polymarketbot.util.gt
 import com.wrbug.polymarketbot.util.JsonUtils
 import com.wrbug.polymarketbot.util.getEventSlug
 import com.wrbug.polymarketbot.service.common.PolymarketClobService
@@ -167,6 +168,192 @@ class AccountService(
             Result.success(toDto(saved))
         } catch (e: Exception) {
             logger.error("导入账户失败", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 检查代理地址选项（用于账户导入前选择代理类型）
+     * 私钥导入：返回 Magic 和 Safe 两个选项
+     * 助记词导入：仅返回 Safe 选项
+     */
+    suspend fun checkProxyOptions(request: CheckProxyOptionsRequest): Result<CheckProxyOptionsResponse> {
+        return try {
+            // 1. 验证钱包地址格式
+            if (!isValidWalletAddress(request.walletAddress)) {
+                return Result.failure(IllegalArgumentException("无效的钱包地址格式"))
+            }
+
+            // 2. 验证至少提供了私钥或助记词之一
+            if (request.privateKey.isNullOrBlank() && request.mnemonic.isNullOrBlank()) {
+                return Result.failure(IllegalArgumentException("必须提供私钥或助记词"))
+            }
+
+            val options = mutableListOf<ProxyOptionDto>()
+
+            // 3. 判断导入类型
+            val isPrivateKeyImport = !request.privateKey.isNullOrBlank()
+
+            if (isPrivateKeyImport) {
+                // 私钥导入：并行获取 Magic 和 Safe 代理地址及资产
+                coroutineScope {
+                    val magicDeferred = async {
+                        try {
+                            val proxyAddress = blockchainService.getProxyAddress(request.walletAddress, "magic").getOrNull()
+                            if (proxyAddress != null) {
+                                val balance = blockchainService.getWalletBalance(proxyAddress).getOrNull()
+                                ProxyOptionDto(
+                                    walletType = "magic",
+                                    proxyAddress = proxyAddress,
+                                    descriptionKey = "accountImport.proxyOption.magic.description",
+                                    availableBalance = balance?.availableBalance ?: "0",
+                                    positionBalance = balance?.positionBalance ?: "0",
+                                    totalBalance = balance?.totalBalance ?: "0",
+                                    positionCount = balance?.positions?.size ?: 0,
+                                    hasAssets = (balance?.availableBalance?.toSafeBigDecimal()?.gt(BigDecimal.ZERO) == true) ||
+                                            (balance?.positionBalance?.toSafeBigDecimal()?.gt(BigDecimal.ZERO) == true) ||
+                                            (balance?.positions?.isNotEmpty() == true),
+                                    error = null
+                                )
+                            } else {
+                                ProxyOptionDto(
+                                    walletType = "magic",
+                                    proxyAddress = "",
+                                    descriptionKey = "accountImport.proxyOption.magic.description",
+                                    availableBalance = "0",
+                                    positionBalance = "0",
+                                    totalBalance = "0",
+                                    positionCount = 0,
+                                    hasAssets = false,
+                                    error = "获取 Magic 代理地址失败"
+                                )
+                            }
+                        } catch (e: Exception) {
+                            logger.warn("获取 Magic 代理地址或资产失败: ${e.message}", e)
+                            ProxyOptionDto(
+                                walletType = "magic",
+                                proxyAddress = blockchainService.calculateMagicProxyAddress(request.walletAddress),
+                                descriptionKey = "accountImport.proxyOption.magic.description",
+                                availableBalance = "0",
+                                positionBalance = "0",
+                                totalBalance = "0",
+                                positionCount = 0,
+                                hasAssets = false,
+                                error = "获取资产信息失败: ${e.message}"
+                            )
+                        }
+                    }
+
+                    val safeDeferred = async {
+                        try {
+                            val proxyAddress = blockchainService.getProxyAddress(request.walletAddress, "safe").getOrNull()
+                            if (proxyAddress != null) {
+                                val balance = blockchainService.getWalletBalance(proxyAddress).getOrNull()
+                                ProxyOptionDto(
+                                    walletType = "safe",
+                                    proxyAddress = proxyAddress,
+                                    descriptionKey = "accountImport.proxyOption.safe.description",
+                                    availableBalance = balance?.availableBalance ?: "0",
+                                    positionBalance = balance?.positionBalance ?: "0",
+                                    totalBalance = balance?.totalBalance ?: "0",
+                                    positionCount = balance?.positions?.size ?: 0,
+                                    hasAssets = (balance?.availableBalance?.toSafeBigDecimal()?.gt(BigDecimal.ZERO) == true) ||
+                                            (balance?.positionBalance?.toSafeBigDecimal()?.gt(BigDecimal.ZERO) == true) ||
+                                            (balance?.positions?.isNotEmpty() == true),
+                                    error = null
+                                )
+                            } else {
+                                ProxyOptionDto(
+                                    walletType = "safe",
+                                    proxyAddress = "",
+                                    descriptionKey = "accountImport.proxyOption.safe.description",
+                                    availableBalance = "0",
+                                    positionBalance = "0",
+                                    totalBalance = "0",
+                                    positionCount = 0,
+                                    hasAssets = false,
+                                    error = "获取 Safe 代理地址失败"
+                                )
+                            }
+                        } catch (e: Exception) {
+                            logger.warn("获取 Safe 代理地址或资产失败: ${e.message}", e)
+                            ProxyOptionDto(
+                                walletType = "safe",
+                                proxyAddress = "",
+                                descriptionKey = "accountImport.proxyOption.safe.description",
+                                availableBalance = "0",
+                                positionBalance = "0",
+                                totalBalance = "0",
+                                positionCount = 0,
+                                hasAssets = false,
+                                error = "获取资产信息失败: ${e.message}"
+                            )
+                        }
+                    }
+
+                    val magicOption = magicDeferred.await()
+                    val safeOption = safeDeferred.await()
+                    // Safe 在前，Magic 在后
+                    options.add(safeOption)
+                    options.add(magicOption)
+                }
+            } else {
+                // 助记词导入：仅获取 Safe 代理地址及资产
+                try {
+                    val proxyAddress = blockchainService.getProxyAddress(request.walletAddress, "safe").getOrNull()
+                    if (proxyAddress != null) {
+                        val balance = blockchainService.getWalletBalance(proxyAddress).getOrNull()
+                        options.add(
+                            ProxyOptionDto(
+                                walletType = "safe",
+                                proxyAddress = proxyAddress,
+                                descriptionKey = "accountImport.proxyOption.safe.description",
+                                availableBalance = balance?.availableBalance ?: "0",
+                                positionBalance = balance?.positionBalance ?: "0",
+                                totalBalance = balance?.totalBalance ?: "0",
+                                positionCount = balance?.positions?.size ?: 0,
+                                hasAssets = (balance?.availableBalance?.toSafeBigDecimal()?.gt(BigDecimal.ZERO) == true) ||
+                                        (balance?.positionBalance?.toSafeBigDecimal()?.gt(BigDecimal.ZERO) == true) ||
+                                        (balance?.positions?.isNotEmpty() == true),
+                                error = null
+                            )
+                        )
+                    } else {
+                        options.add(
+                            ProxyOptionDto(
+                                walletType = "safe",
+                                proxyAddress = "",
+                                descriptionKey = "accountImport.proxyOption.safe.description",
+                                availableBalance = "0",
+                                positionBalance = "0",
+                                totalBalance = "0",
+                                positionCount = 0,
+                                hasAssets = false,
+                                error = "获取 Safe 代理地址失败"
+                            )
+                        )
+                    }
+                } catch (e: Exception) {
+                    logger.warn("获取 Safe 代理地址或资产失败: ${e.message}", e)
+                    options.add(
+                        ProxyOptionDto(
+                            walletType = "safe",
+                            proxyAddress = "",
+                            descriptionKey = "accountImport.proxyOption.safe.description",
+                            availableBalance = "0",
+                            positionBalance = "0",
+                            totalBalance = "0",
+                            positionCount = 0,
+                            hasAssets = false,
+                            error = "获取资产信息失败: ${e.message}"
+                        )
+                    )
+                }
+            }
+
+            Result.success(CheckProxyOptionsResponse(options = options))
+        } catch (e: Exception) {
+            logger.error("检查代理地址选项失败: ${e.message}", e)
             Result.failure(e)
         }
     }

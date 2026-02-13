@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { Card, Table, Tag, message, Space, Input, Radio, Select, Button, Row, Col, Empty, Modal, Form, Descriptions } from 'antd'
 import { SearchOutlined, AppstoreOutlined, UnorderedListOutlined, UpOutlined, DownOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
@@ -62,10 +62,10 @@ const PositionList: React.FC = () => {
     }
   }, [])
 
-  // 当仓位数据变化时，更新可赎回统计
+  // 当仓位数据变化时，静默更新可赎回统计（不显示loading状态）
   useEffect(() => {
     if (currentPositions.length > 0) {
-      fetchRedeemableSummary()
+      fetchRedeemableSummarySilently()
     }
   }, [currentPositions, selectedAccountId])
 
@@ -74,7 +74,19 @@ const PositionList: React.FC = () => {
     setCurrentPage(1)
   }, [positionFilter, selectedAccountId, searchKeyword])
 
-  // 获取可赎回仓位统计
+  // 静默获取可赎回仓位统计（不显示loading状态）
+  const fetchRedeemableSummarySilently = async () => {
+    try {
+      const response = await apiService.accounts.getRedeemableSummary({ accountId: selectedAccountId })
+      if (response.data.code === 0 && response.data.data) {
+        setRedeemableSummary(response.data.data)
+      }
+    } catch (error: any) {
+      console.error('获取可赎回统计失败:', error)
+    }
+  }
+
+  // 获取可赎回仓位统计（带loading状态，用于用户主动操作）
   const fetchRedeemableSummary = async () => {
     setLoadingRedeemableSummary(true)
     try {
@@ -91,8 +103,9 @@ const PositionList: React.FC = () => {
 
   // 处理赎回按钮点击
   const handleRedeemClick = async () => {
-    await fetchRedeemableSummary()
     setRedeemModalVisible(true)
+    // 打开模态框时重新获取最新数据
+    fetchRedeemableSummary()
   }
 
   // 提交赎回

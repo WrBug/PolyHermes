@@ -215,7 +215,29 @@
     "walletTypeHelp": "Web3錢包：使用 MetaMask 等瀏覽器錢包連接的 Polymarket 帳戶\nMagic：透過郵箱或社群帳號（如 Google、Twitter）登入的 Polymarket 帳戶",
     "walletTypeMagic": "Magic（郵箱/社群帳號登入）",
     "walletTypeSafe": "Web3錢包",
-    "magicNotSupported": ""
+    "magicNotSupported": "",
+    "loadingProxyOptions": "正在獲取代理地址和資產信息...",
+    "selectProxyOption": "請選擇代理地址",
+    "proxyOptionRequired": "請選擇一個代理地址",
+    "proxyOption": {
+      "magic": {
+        "description": "郵箱/社群帳號登入帳戶（Magic）",
+        "title": "Magic 代理地址"
+      },
+      "safe": {
+        "description": "MetaMask 等瀏覽器錢包帳戶（Safe）",
+        "title": "Safe 代理地址"
+      },
+      "proxyAddress": "代理地址",
+      "availableBalance": "可用餘額",
+      "positionBalance": "倉位餘額",
+      "totalBalance": "總餘額",
+      "positionCount": "持倉數量",
+      "noAssets": "無資產",
+      "hasAssets": "有資產",
+      "error": "獲取失敗",
+      "select": "選擇此代理地址"
+    }
   },
   "leader": {
     "title": "Leader 管理",

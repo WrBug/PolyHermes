@@ -12,6 +12,37 @@ data class AccountImportRequest(
 )
 
 /**
+ * 检查代理地址选项请求
+ */
+data class CheckProxyOptionsRequest(
+    val walletAddress: String,  // EOA 地址（必需）
+    val privateKey: String? = null,  // 私钥（加密，私钥导入时提供）
+    val mnemonic: String? = null  // 助记词（加密，助记词导入时提供）
+)
+
+/**
+ * 代理地址选项信息
+ */
+data class ProxyOptionDto(
+    val walletType: String,  // "magic" 或 "safe"
+    val proxyAddress: String,  // 代理地址
+    val descriptionKey: String,  // 说明文案的多语言 key（如 "accountImport.proxyOption.magic.description"）
+    val availableBalance: String,  // 可用余额
+    val positionBalance: String,  // 仓位余额
+    val totalBalance: String,  // 总余额
+    val positionCount: Int,  // 持仓数量
+    val hasAssets: Boolean,  // 是否有资产（余额>0 或持仓>0）
+    val error: String? = null  // 获取失败时的错误信息（可选）
+)
+
+/**
+ * 检查代理地址选项响应
+ */
+data class CheckProxyOptionsResponse(
+    val options: List<ProxyOptionDto>  // 代理地址选项列表（私钥导入返回2个，助记词返回1个）
+)
+
+/**
  * 账户更新请求
  */
 data class AccountUpdateRequest(

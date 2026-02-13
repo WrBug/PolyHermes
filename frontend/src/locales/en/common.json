@@ -215,7 +215,29 @@
     "walletTypeHelp": "Web3 Wallet: Polymarket accounts connected via browser wallets like MetaMask\nMagic: Polymarket accounts logged in via email or social accounts (Google, Twitter, etc.)",
     "walletTypeMagic": "Magic (Email/Social Login)",
     "walletTypeSafe": "Web3 Wallet",
-    "magicNotSupported": ""
+    "magicNotSupported": "",
+    "loadingProxyOptions": "Loading proxy addresses and asset information...",
+    "selectProxyOption": "Please select a proxy address",
+    "proxyOptionRequired": "Please select a proxy address",
+    "proxyOption": {
+      "magic": {
+        "description": "Email/Social Login Account (Magic)",
+        "title": "Magic Proxy Address"
+      },
+      "safe": {
+        "description": "MetaMask Browser Wallet Account (Safe)",
+        "title": "Safe Proxy Address"
+      },
+      "proxyAddress": "Proxy Address",
+      "availableBalance": "Available Balance",
+      "positionBalance": "Position Balance",
+      "totalBalance": "Total Balance",
+      "positionCount": "Position Count",
+      "noAssets": "No Assets",
+      "hasAssets": "Has Assets",
+      "error": "Failed to fetch",
+      "select": "Select this proxy address"
+    }
   },
   "leader": {
     "title": "Leader Management",

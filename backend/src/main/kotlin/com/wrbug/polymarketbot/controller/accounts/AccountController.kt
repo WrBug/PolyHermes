@@ -24,6 +24,50 @@ class AccountController(
     private val logger = LoggerFactory.getLogger(AccountController::class.java)
 
     /**
+     * 检查代理地址选项（用于导入前选择代理类型）
+     */
+    @PostMapping("/check-proxy-options")
+    fun checkProxyOptions(@RequestBody request: CheckProxyOptionsRequest): ResponseEntity<ApiResponse<CheckProxyOptionsResponse>> {
+        return try {
+            if (request.walletAddress.isBlank()) {
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_WALLET_ADDRESS_EMPTY, messageSource = messageSource))
+            }
+            if (request.privateKey.isNullOrBlank() && request.mnemonic.isNullOrBlank()) {
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ERROR, "必须提供私钥或助记词", messageSource))
+            }
+
+            val result = runBlocking { accountService.checkProxyOptions(request) }
+            result.fold(
+                onSuccess = { response ->
+                    ResponseEntity.ok(ApiResponse.success(response))
+                },
+                onFailure = { e ->
+                    logger.error("检查代理地址选项失败: ${e.message}", e)
+                    when (e) {
+                        is IllegalArgumentException -> ResponseEntity.ok(
+                            ApiResponse.error(
+                                ErrorCode.PARAM_ERROR,
+                                e.message,
+                                messageSource
+                            )
+                        )
+                        else -> ResponseEntity.ok(
+                            ApiResponse.error(
+                                ErrorCode.SERVER_ERROR,
+                                e.message,
+                                messageSource
+                            )
+                        )
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            logger.error("检查代理地址选项异常: ${e.message}", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
+        }
+    }
+
+    /**
      * 通过私钥导入账户
      */
     @PostMapping("/import")

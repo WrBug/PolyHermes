@@ -207,6 +207,12 @@ export const apiService = {
    */
   accounts: {
     /**
+     * 检查代理地址选项（导入前选择代理类型）
+     */
+    checkProxyOptions: (data: any) =>
+      apiClient.post<ApiResponse<any>>('/accounts/check-proxy-options', data),
+    
+    /**
      * 导入账户
      */
     import: (data: any) => 
