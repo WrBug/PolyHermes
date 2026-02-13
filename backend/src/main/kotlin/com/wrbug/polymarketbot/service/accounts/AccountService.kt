@@ -68,11 +68,6 @@ class AccountService(
                 return Result.failure(IllegalArgumentException("无效的钱包地址格式"))
             }
 
-            // 2. 检查地址是否已存在
-            if (accountRepository.existsByWalletAddress(request.walletAddress)) {
-                return Result.failure(IllegalArgumentException("该钱包地址已存在"))
-            }
-
             // 3. 验证私钥和地址的对应关系
             // 注意：前端已经验证了私钥和地址的对应关系，这里只做格式验证
             // 如果需要更严格的验证，可以使用以太坊库（如 web3j）进行验证
@@ -123,25 +118,31 @@ class AccountService(
                 }
             }
 
+            // 6. 按代理地址去重：该代理地址已存在则不允许重复导入
+            if (accountRepository.existsByProxyAddress(proxyAddress)) {
+                return Result.failure(IllegalArgumentException("ACCOUNT_ALREADY_EXISTS"))
+            }
+
             // 7. 加密敏感信息
             val encryptedPrivateKey = cryptoUtils.encrypt(request.privateKey)
             val encryptedApiSecret = apiKeyCreds.secret?.let { cryptoUtils.encrypt(it) }
             val encryptedApiPassphrase = apiKeyCreds.passphrase?.let { cryptoUtils.encrypt(it) }
 
-            // 8. 生成账户名称（如果未提供，使用钱包地址后四位）
+            // 8. 生成账户名称（如果未提供，使用 SAFE/MAGIC-代理地址后4位）
             val accountName = if (request.accountName.isNullOrBlank()) {
-                val walletAddress = request.walletAddress.trim()
-                // 取地址后四位（去掉 0x 前缀后取后四位）
-                val addressWithoutPrefix = if (walletAddress.startsWith("0x") || walletAddress.startsWith("0X")) {
-                    walletAddress.substring(2)
+                val walletTypeEnum = WalletType.fromStringOrDefault(request.walletType, WalletType.MAGIC)
+                val typeLabel = walletTypeEnum.name.uppercase()
+                val proxyWithoutPrefix = if (proxyAddress.startsWith("0x") || proxyAddress.startsWith("0X")) {
+                    proxyAddress.substring(2)
                 } else {
-                    walletAddress
+                    proxyAddress
                 }
-                if (addressWithoutPrefix.length >= 4) {
-                    addressWithoutPrefix.substring(addressWithoutPrefix.length - 4).uppercase()
+                val suffix = if (proxyWithoutPrefix.length >= 4) {
+                    proxyWithoutPrefix.substring(proxyWithoutPrefix.length - 4).uppercase()
                 } else {
-                    addressWithoutPrefix.uppercase()
+                    proxyWithoutPrefix.uppercase()
                 }
+                "$typeLabel-$suffix"
             } else {
                 request.accountName.trim()
             }

@@ -89,14 +89,17 @@ class AccountController(
                 onFailure = { e ->
                     logger.error("导入账户失败: ${e.message}", e)
                     when (e) {
-                        is IllegalArgumentException -> ResponseEntity.ok(
-                            ApiResponse.error(
-                                ErrorCode.PARAM_ERROR,
-                                e.message,
-                                messageSource
+                        is IllegalArgumentException -> if (e.message == "ACCOUNT_ALREADY_EXISTS") {
+                            ResponseEntity.ok(ApiResponse.error(ErrorCode.ACCOUNT_ALREADY_EXISTS, messageSource = messageSource))
+                        } else {
+                            ResponseEntity.ok(
+                                ApiResponse.error(
+                                    ErrorCode.PARAM_ERROR,
+                                    e.message,
+                                    messageSource
+                                )
                             )
-                        )
-
+                        }
                         else -> ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ACCOUNT_IMPORT_FAILED, e.message, messageSource))
                     }
                 }

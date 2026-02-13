@@ -267,7 +267,10 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
       }
       
       return Promise.resolve()
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error as Error & { code?: number }
+      const isDuplicate = err?.code === 4601
+      message.error(isDuplicate ? t('accountImport.duplicateAccount') : (err?.message ?? t('accountImport.importFailed')))
       return Promise.reject(error)
     }
   }
