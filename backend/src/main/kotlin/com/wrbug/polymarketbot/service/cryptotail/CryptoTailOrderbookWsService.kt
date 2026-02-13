@@ -26,6 +26,7 @@ import org.springframework.context.event.EventListener
 import org.springframework.stereotype.Service
 import jakarta.annotation.PostConstruct
 import java.math.BigDecimal
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -55,6 +56,9 @@ class CryptoTailOrderbookWsService(
     /** 重连延迟（毫秒） */
     private val reconnectDelayMs = 10_000L
 
+    /** 因无启用策略而主动关闭 WS 时置为 true，onClosing 中不触发重连 */
+    private val closedForNoStrategies = AtomicBoolean(false)
+
     data class WsBookEntry(
         val strategy: CryptoTailStrategy,
         val periodStartUnix: Long,
@@ -65,7 +69,7 @@ class CryptoTailOrderbookWsService(
 
     @PostConstruct
     fun init() {
-        connect()
+        if (strategyRepository.findAllByEnabledTrue().isNotEmpty()) connect()
     }
 
     private fun connect() {
@@ -84,7 +88,7 @@ class CryptoTailOrderbookWsService(
 
                 override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
                     this@CryptoTailOrderbookWsService.webSocket = null
-                    scheduleReconnect()
+                    if (!closedForNoStrategies.getAndSet(false)) scheduleReconnect()
                 }
 
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: okhttp3.Response?) {
@@ -192,7 +196,14 @@ class CryptoTailOrderbookWsService(
         periodEndCountdownJob = null
         val (tokenIds, newMap) = buildSubscriptionMap()
         tokenToEntries.set(newMap)
-        if (tokenIds.isEmpty()) return
+        if (tokenIds.isEmpty()) {
+            closeWebSocketForNoStrategies()
+            return
+        }
+        if (webSocket == null) {
+            connect()
+            return
+        }
         val marketSlugs = newMap.values.asSequence().flatten()
             .distinctBy { "${it.strategy.marketSlugPrefix}-${it.periodStartUnix}" }
             .map { "${it.strategy.marketSlugPrefix}-${it.periodStartUnix}" }
@@ -206,6 +217,25 @@ class CryptoTailOrderbookWsService(
             return
         }
         scheduleRefreshAtPeriodEnd(newMap)
+    }
+
+    /**
+     * 无启用策略或无需订阅时关闭 WebSocket，并取消重连；停用策略后刷新订阅会走到此处。
+     */
+    private fun closeWebSocketForNoStrategies() {
+        reconnectJob?.cancel()
+        reconnectJob = null
+        val ws = webSocket
+        if (ws != null) {
+            closedForNoStrategies.set(true)
+            webSocket = null
+            try {
+                ws.close(1000, "no_enabled_strategies")
+            } catch (e: Exception) {
+                logger.debug("关闭尾盘策略 WebSocket 时异常: ${e.message}")
+            }
+            logger.info("尾盘策略订单簿 WebSocket 已关闭（无启用策略）")
+        }
     }
 
     /**
