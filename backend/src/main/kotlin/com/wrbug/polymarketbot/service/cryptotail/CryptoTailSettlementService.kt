@@ -201,14 +201,25 @@ class CryptoTailSettlementService(
 
     /**
      * 通过 CLOB API 获取订单实际成交价与成交量；需 L2 认证（账户 API 凭证）。
+     * 只有此接口成功返回有效 price/sizeMatched 时，结算才会更新 triggerPrice、amountUsdc（表现）；
+     * 否则只更新结算字段（resolved、realizedPnl 等），表现仍为触发时的值。
      */
     private suspend fun fetchOrderFill(
         trigger: CryptoTailStrategyTrigger,
         strategy: CryptoTailStrategy
     ): Pair<BigDecimal, BigDecimal>? {
-        val orderId = trigger.orderId?.takeIf { it.isNotBlank() } ?: return null
-        val account = accountRepository.findById(strategy.accountId).orElse(null) ?: return null
-        if (account.apiKey == null || account.apiSecret == null || account.apiPassphrase == null) return null
+        val orderId = trigger.orderId?.takeIf { it.isNotBlank() } ?: run {
+            logger.debug("尾盘结算未拉取订单: orderId 为空, triggerId=${trigger.id}")
+            return null
+        }
+        val account = accountRepository.findById(strategy.accountId).orElse(null) ?: run {
+            logger.warn("尾盘结算未拉取订单: 账户不存在, triggerId=${trigger.id}, accountId=${strategy.accountId}")
+            return null
+        }
+        if (account.apiKey == null || account.apiSecret == null || account.apiPassphrase == null) {
+            logger.warn("尾盘结算未拉取订单: 账户未配置 API 凭证, triggerId=${trigger.id}, accountId=${account.id}")
+            return null
+        }
         val apiSecret = try {
             account.apiSecret?.let { cryptoUtils.decrypt(it) } ?: ""
         } catch (e: Exception) {
@@ -228,11 +239,22 @@ class CryptoTailSettlementService(
             apiPassphrase = apiPassphrase,
             walletAddress = account.walletAddress
         )
-        return result.getOrNull()?.let { order ->
-            val price = order.price.toSafeBigDecimal()
-            val sizeMatched = order.sizeMatched.toSafeBigDecimal()
-            Pair(price, sizeMatched)
-        }
+        return result.fold(
+            onSuccess = { order ->
+                val price = order.price.toSafeBigDecimal()
+                val sizeMatched = order.sizeMatched.toSafeBigDecimal()
+                if (price.gt(BigDecimal.ZERO) && sizeMatched.gt(BigDecimal.ZERO)) {
+                    Pair(price, sizeMatched)
+                } else {
+                    logger.debug("尾盘结算订单无有效成交: triggerId=${trigger.id}, orderId=$orderId, price=$price, sizeMatched=$sizeMatched")
+                    null
+                }
+            },
+            onFailure = { e ->
+                logger.warn("尾盘结算拉取历史订单失败，触发价/投入金额不会更新: triggerId=${trigger.id}, orderId=$orderId, error=${e.message}")
+                null
+            }
+        )
     }
 
     /**

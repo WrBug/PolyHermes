@@ -15,6 +15,8 @@ import com.wrbug.polymarketbot.service.copytrading.orders.OrderSigningService
 import com.wrbug.polymarketbot.util.CryptoUtils
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.fromJson
+import com.wrbug.polymarketbot.util.gt
+import com.wrbug.polymarketbot.util.multi
 import com.wrbug.polymarketbot.util.toSafeBigDecimal
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
@@ -30,6 +32,12 @@ private const val TRIGGER_FIXED_PRICE = "0.99"
 
 /** 数量小数位数，与 OrderSigningService 的 roundConfig.size 一致 */
 private const val SIZE_DECIMAL_SCALE = 2
+
+/** 下单成功后拉取订单成交数据的短暂延迟（毫秒），便于交易所更新订单状态 */
+private const val FETCH_ORDER_AFTER_PLACE_DELAY_MS = 800L
+
+/** 存库时投入金额/触发价小数精度，与结算服务一致 */
+private const val FILL_AMOUNT_SCALE = 8
 
 /**
  * 周期内预置上下文：账户、解密凭证、费率、签名类型、CLOB 客户端；FIXED 模式含预签订单。
@@ -250,7 +258,10 @@ class CryptoTailStrategyExecutionService(
                 ctx.preSignedOrderByOutcome != null -> {
                     val orderRequest = ctx.preSignedOrderByOutcome[outcomeIndex]
                     if (orderRequest != null) {
-                        submitOrderAndSaveRecord(ctx.clobApi, strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, amountUsdc, orderRequest)
+                        submitOrderAndSaveRecord(
+                            ctx.clobApi, strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, amountUsdc, orderRequest,
+                            ctx.account.apiKey, ctx.apiSecretDecrypted, ctx.apiPassphraseDecrypted, ctx.account.walletAddress
+                        )
                         return
                     }
                 }
@@ -276,7 +287,10 @@ class CryptoTailStrategyExecutionService(
                         orderType = "FAK",
                         deferExec = false
                     )
-                    submitOrderAndSaveRecord(ctx.clobApi, strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, amountUsdc, orderRequest)
+                    submitOrderAndSaveRecord(
+                        ctx.clobApi, strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, amountUsdc, orderRequest,
+                        ctx.account.apiKey, ctx.apiSecretDecrypted, ctx.apiPassphraseDecrypted, ctx.account.walletAddress
+                    )
                     return
                 }
             }
@@ -285,6 +299,9 @@ class CryptoTailStrategyExecutionService(
         placeOrderForTriggerSlowPath(strategy, periodStartUnix, marketTitle, tokenIds, outcomeIndex, triggerPrice)
     }
 
+    /**
+     * 下单并写触发记录。若传入账户 L2 凭证，下单成功后会拉取订单实际成交价与成交量，用真实触发价与投入金额写库，表现从首条记录起即正确。
+     */
     private suspend fun submitOrderAndSaveRecord(
         clobApi: PolymarketClobApi,
         strategy: CryptoTailStrategy,
@@ -293,7 +310,11 @@ class CryptoTailStrategyExecutionService(
         outcomeIndex: Int,
         triggerPrice: BigDecimal,
         amountUsdc: BigDecimal,
-        orderRequest: NewOrderRequest
+        orderRequest: NewOrderRequest,
+        apiKey: String? = null,
+        apiSecret: String? = null,
+        apiPassphrase: String? = null,
+        walletAddress: String? = null
     ) {
         var lastError: String? = null
         for (attempt in 1..maxRetryAttempts) {
@@ -302,8 +323,17 @@ class CryptoTailStrategyExecutionService(
                 if (response.isSuccessful && response.body() != null) {
                     val body = response.body()!!
                     if (body.success && body.orderId != null) {
-                        saveTriggerRecord(strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, amountUsdc, body.orderId, "success", null)
-                        logger.info("尾盘策略下单成功: strategyId=${strategy.id}, periodStartUnix=$periodStartUnix, outcomeIndex=$outcomeIndex, orderId=${body.orderId}")
+                        val (savePrice, saveAmount) = resolveFillPriceAndAmount(
+                            orderId = body.orderId,
+                            triggerPrice = triggerPrice,
+                            amountUsdc = amountUsdc,
+                            apiKey = apiKey,
+                            apiSecret = apiSecret,
+                            apiPassphrase = apiPassphrase,
+                            walletAddress = walletAddress
+                        )
+                        saveTriggerRecord(strategy, periodStartUnix, marketTitle, outcomeIndex, savePrice, saveAmount, body.orderId, "success", null)
+                        logger.info("尾盘策略下单成功: strategyId=${strategy.id}, periodStartUnix=$periodStartUnix, outcomeIndex=$outcomeIndex, orderId=${body.orderId}, triggerPrice=$savePrice")
                         return
                     }
                     lastError = body.errorMsg ?: "unknown"
@@ -318,6 +348,41 @@ class CryptoTailStrategyExecutionService(
         }
         saveTriggerRecord(strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, amountUsdc, null, "fail", lastError)
         logger.warn("尾盘策略下单失败(已重试${maxRetryAttempts}次): strategyId=${strategy.id}, periodStartUnix=$periodStartUnix, reason=$lastError")
+    }
+
+    /**
+     * 下单成功后拉取订单实际成交价与成交量；需 L2 凭证。失败或无效则返回传入的 triggerPrice、amountUsdc。
+     */
+    private suspend fun resolveFillPriceAndAmount(
+        orderId: String,
+        triggerPrice: BigDecimal,
+        amountUsdc: BigDecimal,
+        apiKey: String?,
+        apiSecret: String?,
+        apiPassphrase: String?,
+        walletAddress: String?
+    ): Pair<BigDecimal, BigDecimal> {
+        if (apiKey.isNullOrBlank() || apiSecret.isNullOrBlank() || apiPassphrase.isNullOrBlank() || walletAddress.isNullOrBlank()) {
+            return Pair(triggerPrice, amountUsdc)
+        }
+        delay(FETCH_ORDER_AFTER_PLACE_DELAY_MS)
+        val result = clobService.getOrder(
+            orderId = orderId,
+            apiKey = apiKey!!,
+            apiSecret = apiSecret!!,
+            apiPassphrase = apiPassphrase!!,
+            walletAddress = walletAddress!!
+        )
+        return result.getOrNull()?.let { order ->
+            val price = order.price.toSafeBigDecimal()
+            val sizeMatched = order.sizeMatched.toSafeBigDecimal()
+            if (price.gt(BigDecimal.ZERO) && sizeMatched.gt(BigDecimal.ZERO)) {
+                val cost = price.multi(sizeMatched).setScale(FILL_AMOUNT_SCALE, RoundingMode.HALF_UP)
+                Pair(price, cost)
+            } else {
+                Pair(triggerPrice, amountUsdc)
+            }
+        } ?: Pair(triggerPrice, amountUsdc)
     }
 
     /** 无预置上下文时的完整流程：固定价格 0.99，账户/解密/费率/签名在触发时执行 */
@@ -393,7 +458,10 @@ class CryptoTailStrategyExecutionService(
             orderType = "FAK",
             deferExec = false
         )
-        submitOrderAndSaveRecord(clobApi, strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, amountUsdc, orderRequest)
+        submitOrderAndSaveRecord(
+            clobApi, strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, amountUsdc, orderRequest,
+            account.apiKey, apiSecret, apiPassphrase, account.walletAddress
+        )
     }
 
     private suspend fun fetchEventBySlug(slug: String): Result<GammaEventBySlugResponse> {
