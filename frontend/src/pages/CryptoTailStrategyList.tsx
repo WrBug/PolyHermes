@@ -24,7 +24,7 @@ import { useMediaQuery } from 'react-responsive'
 import { apiService } from '../services/api'
 import { useAccountStore } from '../store/accountStore'
 import type { CryptoTailStrategyDto, CryptoTailStrategyTriggerDto, CryptoTailMarketOptionDto } from '../types'
-import { formatUSDC } from '../utils'
+import { formatUSDC, formatNumber } from '../utils'
 
 const CryptoTailStrategyList: React.FC = () => {
   const { t } = useTranslation()
@@ -258,6 +258,22 @@ const CryptoTailStrategyList: React.FC = () => {
     return d.toLocaleString()
   }
 
+  const formatPriceRange = (minPrice: string, maxPrice: string): string => {
+    const min = formatNumber(minPrice, 2)
+    const max = formatNumber(maxPrice, 2)
+    if (min === '' || max === '') return '-'
+    return `${min} ~ ${max}`
+  }
+
+  const pnlColor = (value: string | number | null | undefined): string | undefined => {
+    if (value == null || value === '') return undefined
+    const num = typeof value === 'string' ? Number(value) : value
+    if (Number.isNaN(num)) return undefined
+    if (num > 0) return '#52c41a'
+    if (num < 0) return '#ff4d4f'
+    return undefined
+  }
+
   const columns = [
     {
       title: t('cryptoTailStrategy.list.strategyName'),
@@ -283,7 +299,7 @@ const CryptoTailStrategyList: React.FC = () => {
       title: t('cryptoTailStrategy.list.priceRange'),
       key: 'priceRange',
       width: isMobile ? 90 : 120,
-      render: (_: unknown, r: CryptoTailStrategyDto) => `[${r.minPrice}, ${r.maxPrice}]`
+      render: (_: unknown, r: CryptoTailStrategyDto) => formatPriceRange(r.minPrice, r.maxPrice)
     },
     {
       title: t('cryptoTailStrategy.list.amountMode'),
@@ -314,6 +330,23 @@ const CryptoTailStrategyList: React.FC = () => {
       key: 'lastTriggerAt',
       width: isMobile ? 100 : 160,
       render: (ts: number | undefined) => formatLastTrigger(ts)
+    },
+    {
+      title: t('cryptoTailStrategy.list.totalRealizedPnl'),
+      key: 'totalRealizedPnl',
+      width: isMobile ? 90 : 110,
+      render: (_: unknown, r: CryptoTailStrategyDto) => {
+        const text = r.totalRealizedPnl != null ? `${formatUSDC(r.totalRealizedPnl)} USDC` : '-'
+        const color = pnlColor(r.totalRealizedPnl)
+        return color ? <span style={{ color }}>{text}</span> : text
+      }
+    },
+    {
+      title: t('cryptoTailStrategy.list.winRate'),
+      key: 'winRate',
+      width: isMobile ? 70 : 80,
+      render: (_: unknown, r: CryptoTailStrategyDto) =>
+        r.winRate != null ? `${(Number(r.winRate) * 100).toFixed(1)}%` : '-'
     },
     {
       title: t('cryptoTailStrategy.list.actions'),
@@ -410,10 +443,21 @@ const CryptoTailStrategyList: React.FC = () => {
                     {t('cryptoTailStrategy.list.timeWindow')}: {formatTimeWindow(item.windowStartSeconds, item.windowEndSeconds)}
                   </div>
                   <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
-                    {t('cryptoTailStrategy.list.priceRange')}: [{item.minPrice}, {item.maxPrice}]
+                    {t('cryptoTailStrategy.list.priceRange')}: {formatPriceRange(item.minPrice, item.maxPrice)}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
+                    {item.amountMode === 'RATIO' ? `${item.amountValue}%` : `${formatUSDC(item.amountValue)} USDC`}
                   </div>
                   <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>
-                    {item.amountMode === 'RATIO' ? `${item.amountValue}%` : `${formatUSDC(item.amountValue)} USDC`}
+                    {t('cryptoTailStrategy.list.totalRealizedPnl')}:{' '}
+                    {item.totalRealizedPnl != null ? (
+                      <span style={{ color: pnlColor(item.totalRealizedPnl) ?? '#666' }}>
+                        {formatUSDC(item.totalRealizedPnl)} USDC
+                      </span>
+                    ) : (
+                      '-'
+                    )}
+                    {item.winRate != null ? ` · ${t('cryptoTailStrategy.list.winRate')}: ${(Number(item.winRate) * 100).toFixed(1)}%` : ''}
                   </div>
                   <Space>
                     <Switch
@@ -603,12 +647,6 @@ const CryptoTailStrategyList: React.FC = () => {
                 render: (ts: number) => new Date(ts).toLocaleString()
               },
               {
-                title: t('cryptoTailStrategy.triggerRecords.market'),
-                dataIndex: 'marketTitle',
-                key: 'marketTitle',
-                ellipsis: true
-              },
-              {
                 title: t('cryptoTailStrategy.triggerRecords.direction'),
                 dataIndex: 'outcomeIndex',
                 key: 'outcomeIndex',
@@ -617,7 +655,8 @@ const CryptoTailStrategyList: React.FC = () => {
               {
                 title: t('cryptoTailStrategy.triggerRecords.triggerPrice'),
                 dataIndex: 'triggerPrice',
-                key: 'triggerPrice'
+                key: 'triggerPrice',
+                render: (v: string) => (formatNumber(v, 2) || '-')
               },
               {
                 title: t('cryptoTailStrategy.triggerRecords.amount'),
@@ -640,6 +679,19 @@ const CryptoTailStrategyList: React.FC = () => {
                     {s === 'success' ? t('cryptoTailStrategy.triggerRecords.success') : t('cryptoTailStrategy.triggerRecords.fail')}
                   </Tag>
                 )
+              },
+              {
+                title: t('cryptoTailStrategy.triggerRecords.realizedPnl'),
+                dataIndex: 'realizedPnl',
+                key: 'realizedPnl',
+                render: (v: string | undefined, r: CryptoTailStrategyTriggerDto) => {
+                  if (v == null || v === '') return r.resolved ? formatUSDC('0') : '-'
+                  const num = Number(v)
+                  const formatted = formatUSDC(String(Math.abs(num)))
+                  const text = num >= 0 ? `+${formatted}` : `-${formatted}`
+                  const color = pnlColor(v)
+                  return color ? <span style={{ color }}>{text}</span> : text
+                }
               }
             ]}
             pagination={false}

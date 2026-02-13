@@ -1053,6 +1053,12 @@ export interface CryptoTailStrategyDto {
   amountValue: string
   enabled: boolean
   lastTriggerAt?: number
+  /** 已实现总收益 USDC */
+  totalRealizedPnl?: string
+  settledCount?: number
+  winCount?: number
+  /** 胜率 0~1 */
+  winRate?: string
   createdAt: number
   updatedAt: number
 }
@@ -1071,6 +1077,11 @@ export interface CryptoTailStrategyTriggerDto {
   orderId?: string
   status: string
   failReason?: string
+  resolved?: boolean
+  /** 已实现盈亏 USDC（结算后有值） */
+  realizedPnl?: string
+  winnerOutcomeIndex?: number
+  settledAt?: number
   createdAt: number
 }
 

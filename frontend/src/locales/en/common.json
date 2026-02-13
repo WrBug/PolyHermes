@@ -1414,6 +1414,8 @@
       "ratio": "Ratio",
       "fixed": "Fixed",
       "recentTrigger": "Last Trigger",
+      "totalRealizedPnl": "Total PnL",
+      "winRate": "Win Rate",
       "actions": "Actions",
       "edit": "Edit",
       "enable": "Enable",
@@ -1463,7 +1465,9 @@
       "orderId": "Order ID",
       "status": "Status",
       "success": "Success",
-      "fail": "Fail"
+      "fail": "Fail",
+      "realizedPnl": "PnL",
+      "resolved": "Settled"
     }
   }
 }

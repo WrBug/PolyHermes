@@ -15,8 +15,8 @@ interface CryptoTailStrategyTriggerRepository : JpaRepository<CryptoTailStrategy
     fun findAllByStrategyIdAndStatusOrderByCreatedAtDesc(strategyId: Long, status: String, pageable: Pageable): Page<CryptoTailStrategyTrigger>
     fun countByStrategyIdAndStatus(strategyId: Long, status: String): Long
 
-    /** 轮询结算：状态成功且未结算的触发记录（用于定时扫描并回写收益） */
-    fun findByStatusAndResolvedOrderByCreatedAtAsc(status: String, resolved: Boolean): List<CryptoTailStrategyTrigger>
+    /** 轮询结算：仅处理下单成功的订单（status=success 且 orderId 非空）、且未结算的触发记录 */
+    fun findByStatusAndResolvedAndOrderIdIsNotNullOrderByCreatedAtAsc(status: String, resolved: Boolean): List<CryptoTailStrategyTrigger>
 
     /** 策略已结算订单的总已实现盈亏（用于收益统计） */
     @Query("SELECT COALESCE(SUM(t.realizedPnl), 0) FROM CryptoTailStrategyTrigger t WHERE t.strategyId = :strategyId AND t.resolved = true")

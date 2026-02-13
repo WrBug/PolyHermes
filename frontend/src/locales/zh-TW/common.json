@@ -1414,6 +1414,8 @@
       "ratio": "比例",
       "fixed": "固定金額",
       "recentTrigger": "最近觸發",
+      "totalRealizedPnl": "總收益",
+      "winRate": "勝率",
       "actions": "操作",
       "edit": "編輯",
       "enable": "啟用",
@@ -1463,7 +1465,9 @@
       "orderId": "訂單 ID",
       "status": "狀態",
       "success": "成功",
-      "fail": "失敗"
+      "fail": "失敗",
+      "realizedPnl": "收益",
+      "resolved": "已結算"
     }
   }
 }

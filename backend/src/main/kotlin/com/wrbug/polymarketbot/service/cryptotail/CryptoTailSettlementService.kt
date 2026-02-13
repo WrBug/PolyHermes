@@ -85,7 +85,7 @@ class CryptoTailSettlementService(
     }
 
     private suspend fun doPollAndSettle(): Int {
-        val pending = triggerRepository.findByStatusAndResolvedOrderByCreatedAtAsc("success", false)
+        val pending = triggerRepository.findByStatusAndResolvedAndOrderIdIsNotNullOrderByCreatedAtAsc("success", false)
         if (pending.isEmpty()) return 0
         var settledCount = 0
         for (trigger in pending) {
@@ -103,15 +103,36 @@ class CryptoTailSettlementService(
 
     /**
      * 处理单条触发记录：解析 conditionId -> 查链上结算 -> 若已结算则计算 pnl 并更新。
+     * 通过 copy() 生成新实体再 save，不直接修改原实体；有订单信息时用实际成交价与投入金额更新 triggerPrice、amountUsdc。
      * @return true 表示本条已结算并更新
      */
     private suspend fun settleOne(trigger: CryptoTailStrategyTrigger): Boolean {
         if (trigger.resolved) return false
         val strategy = strategyRepository.findById(trigger.strategyId).orElse(null) ?: return false
-        val conditionId = resolveConditionId(strategy, trigger)
-            ?: return false
-        val (_, payouts) = blockchainService.getCondition(conditionId).getOrNull() ?: return false
-        if (payouts.isEmpty()) return false
+        val fill = fetchOrderFill(trigger, strategy)
+        val (newTriggerPrice, newAmountUsdc) = if (fill != null && fill.first.gt(BigDecimal.ZERO) && fill.second.gt(BigDecimal.ZERO)) {
+            val price = fill.first
+            val cost = price.multi(fill.second).setScale(pnlScale, RoundingMode.HALF_UP)
+            Pair(price, cost)
+        } else {
+            Pair(trigger.triggerPrice, trigger.amountUsdc)
+        }
+
+        val conditionId = resolveConditionId(strategy, trigger) ?: return false
+        val (_, payouts) = blockchainService.getCondition(conditionId).getOrNull() ?: run {
+            if (fill != null) {
+                val updated = trigger.copy(triggerPrice = newTriggerPrice, amountUsdc = newAmountUsdc)
+                triggerRepository.save(updated)
+            }
+            return false
+        }
+        if (payouts.isEmpty()) {
+            if (fill != null) {
+                val updated = trigger.copy(triggerPrice = newTriggerPrice, amountUsdc = newAmountUsdc)
+                triggerRepository.save(updated)
+            }
+            return false
+        }
         val winnerIndex = payouts.indexOfFirst { it == java.math.BigInteger.ONE }
         if (winnerIndex < 0) return false
 
@@ -119,12 +140,16 @@ class CryptoTailSettlementService(
         val pnl = computePnlFromApiOrFallback(trigger, strategy, won)
         val now = System.currentTimeMillis()
 
-        trigger.conditionId = conditionId
-        trigger.resolved = true
-        trigger.winnerOutcomeIndex = winnerIndex
-        trigger.realizedPnl = pnl
-        trigger.settledAt = now
-        triggerRepository.save(trigger)
+        val updated = trigger.copy(
+            triggerPrice = newTriggerPrice,
+            amountUsdc = newAmountUsdc,
+            conditionId = conditionId,
+            resolved = true,
+            winnerOutcomeIndex = winnerIndex,
+            realizedPnl = pnl,
+            settledAt = now
+        )
+        triggerRepository.save(updated)
         logger.debug("尾盘结算已更新: triggerId=${trigger.id}, winnerOutcomeIndex=$winnerIndex, won=$won, pnl=$pnl")
         return true
     }

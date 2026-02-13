@@ -36,19 +36,19 @@ data class CryptoTailStrategyTrigger(
     val orderId: String? = null,
 
     @Column(name = "condition_id", length = 66)
-    var conditionId: String? = null,
+    val conditionId: String? = null,
 
     @Column(name = "resolved", nullable = false)
-    var resolved: Boolean = false,
+    val resolved: Boolean = false,
 
     @Column(name = "winner_outcome_index")
-    var winnerOutcomeIndex: Int? = null,
+    val winnerOutcomeIndex: Int? = null,
 
     @Column(name = "realized_pnl", precision = 20, scale = 8)
-    var realizedPnl: BigDecimal? = null,
+    val realizedPnl: BigDecimal? = null,
 
     @Column(name = "settled_at")
-    var settledAt: Long? = null,
+    val settledAt: Long? = null,
 
     @Column(name = "status", nullable = false, length = 20)
     val status: String = "success",
