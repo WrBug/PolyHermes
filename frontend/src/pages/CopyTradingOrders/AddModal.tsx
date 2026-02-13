@@ -1106,9 +1106,9 @@ const AddModal: React.FC<AddModalProps> = ({
           accountImportForm.resetFields()
         }}
         footer={null}
-        width={isMobile ? '95%' : 600}
+        width={isMobile ? '95%' : 640}
         style={{ top: isMobile ? 20 : 50 }}
-        bodyStyle={{ padding: '24px', maxHeight: 'calc(100vh - 150px)', overflow: 'auto' }}
+        bodyStyle={{ padding: isMobile ? '16px 20px' : '24px 28px', maxHeight: 'calc(100vh - 140px)', overflow: 'auto' }}
         destroyOnClose
         maskClosable
         closable

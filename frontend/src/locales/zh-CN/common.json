@@ -213,7 +213,7 @@
     "walletType": "钱包类型",
     "walletTypeHelp": "Web3钱包：使用 MetaMask 等浏览器钱包连接的 Polymarket 账户\nMagic：通过邮箱或社交账号（如 Google、Twitter）登录的 Polymarket 账户",
     "loadingProxyOptions": "正在获取代理地址和资产信息...",
-    "selectProxyOption": "请选择代理地址",
+    "selectProxyOption": "请选择账户类型",
     "proxyOptionRequired": "请选择一个代理地址",
     "proxyOption": {
       "magic": {
@@ -225,6 +225,7 @@
         "title": "Safe 代理地址"
       },
       "proxyAddress": "代理地址",
+      "proxyAddressHelp": "代理地址是您在 Polymarket 上实际使用的钱包地址：Magic 为邮箱/社交登录账户，Safe 为浏览器钱包（如 MetaMask）账户。请选择与您 Polymarket 登录方式一致的一项。",
       "availableBalance": "可用余额",
       "positionBalance": "仓位余额",
       "totalBalance": "总余额",

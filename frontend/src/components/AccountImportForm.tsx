@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Form, Input, Button, Radio, Space, Card, Spin, message, Alert } from 'antd'
-import { CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
+import { Form, Input, Button, Radio, Space, Card, Spin, message, Alert, Steps, Tag } from 'antd'
+import { KeyOutlined, WalletOutlined, UserOutlined, CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useAccountStore } from '../store/accountStore'
 import {
@@ -42,9 +42,14 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
   const [loadingProxyOptions, setLoadingProxyOptions] = useState<boolean>(false)
   const [step, setStep] = useState<'input' | 'select'>('input') // 步骤：输入 -> 选择代理地址
   
-  // 当私钥输入时，自动推导地址
+  // 当私钥输入时，自动推导地址（不支持换行，自动去除换行符）
   const handlePrivateKeyChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const privateKey = e.target.value.trim()
+    const raw = e.target.value
+    const normalized = raw.replace(/\r?\n/g, '')
+    if (normalized !== raw) {
+      form.setFieldsValue({ privateKey: normalized })
+    }
+    const privateKey = normalized.trim()
     if (!privateKey) {
       setDerivedAddress('')
       setAddressError('')
@@ -85,9 +90,14 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
     }
   }
   
-  // 当助记词输入时，自动推导地址
+  // 当助记词输入时，自动推导地址（不支持换行，换行符转为空格）
   const handleMnemonicChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const mnemonic = e.target.value.trim()
+    const raw = e.target.value
+    const normalized = raw.replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trimStart()
+    if (/\r?\n/.test(raw)) {
+      form.setFieldsValue({ mnemonic: normalized })
+    }
+    const mnemonic = normalized.trim()
     if (!mnemonic) {
       setDerivedAddress('')
       setAddressError('')
@@ -150,7 +160,7 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
         if (options.length > 0) {
           setStep('select')
           // 如果有资产，默认选择第一个有资产的选项
-          const hasAssetsOption = options.find(opt => opt.hasAssets)
+          const hasAssetsOption = options.find((opt: ProxyOption) => opt.hasAssets)
           if (hasAssetsOption) {
             setSelectedProxyType(hasAssetsOption.walletType)
           } else {
@@ -262,23 +272,38 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
     }
   }
   
+  const currentStep = step === 'input' ? 0 : 1
+
   return (
-    <>
+    <div style={{ padding: isMobile ? '0 4px' : '0 8px' }}>
+      <Steps
+        current={currentStep}
+        size="small"
+        style={{ marginBottom: 24 }}
+        items={[
+          { title: t('accountImport.importMethod'), icon: <KeyOutlined /> },
+          { title: t('accountImport.selectProxyOption'), icon: <WalletOutlined /> },
+          { title: t('accountImport.accountName'), icon: <UserOutlined /> }
+        ]}
+      />
       <Form
         form={form}
         layout="vertical"
         onFinish={handleSubmit}
         size={isMobile ? 'middle' : 'large'}
       >
-        <Form.Item label={t('accountImport.importMethod')}>
+        <Form.Item label={t('accountImport.importMethod')} style={{ marginBottom: 16 }}>
           <Radio.Group
             value={importType}
             onChange={(e) => {
               setImportType(e.target.value)
             }}
+            optionType="button"
+            buttonStyle="solid"
+            size={isMobile ? 'middle' : 'large'}
           >
-            <Radio value="privateKey">{t('accountImport.privateKey')}</Radio>
-            <Radio value="mnemonic">{t('accountImport.mnemonic')}</Radio>
+            <Radio.Button value="privateKey">{t('accountImport.privateKey')}</Radio.Button>
+            <Radio.Button value="mnemonic">{t('accountImport.mnemonic')}</Radio.Button>
           </Radio.Group>
         </Form.Item>
         
@@ -303,9 +328,10 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
               validateStatus={addressError ? 'error' : derivedAddress ? 'success' : ''}
             >
               <Input.TextArea
-                rows={3}
+                rows={2}
                 placeholder={t('accountImport.privateKeyPlaceholder')}
                 onChange={handlePrivateKeyChange}
+                onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
                 disabled={loadingProxyOptions}
               />
             </Form.Item>
@@ -357,9 +383,10 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
               validateStatus={addressError ? 'error' : derivedAddress ? 'success' : ''}
             >
               <Input.TextArea
-                rows={4}
+                rows={2}
                 placeholder={t('accountImport.mnemonicPlaceholder')}
                 onChange={handleMnemonicChange}
+                onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}
                 disabled={loadingProxyOptions}
               />
             </Form.Item>
@@ -397,14 +424,14 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
           <Form.Item>
             <Alert
               message={
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Spin size="small" />
                   <span>{t('accountImport.loadingProxyOptions')}</span>
                 </div>
               }
               type="info"
               showIcon={false}
-              style={{ marginBottom: '16px' }}
+              style={{ marginBottom: 16 }}
             />
           </Form.Item>
         )}
@@ -424,70 +451,70 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
                 }
               }
             ]}
+            style={{ marginBottom: 20 }}
           >
             {loadingProxyOptions ? (
-              <Spin tip={t('accountImport.loadingProxyOptions')} />
+              <div style={{ padding: '32px 0', textAlign: 'center' }}>
+                <Spin tip={t('accountImport.loadingProxyOptions')} />
+              </div>
             ) : (
-              <Space direction="vertical" style={{ width: '100%' }} size="middle">
-                {proxyOptions.map((option) => (
-                  <Card
-                    key={option.walletType}
-                    hoverable
-                    onClick={() => setSelectedProxyType(option.walletType)}
-                    style={{
-                      cursor: 'pointer',
-                      border: selectedProxyType === option.walletType ? '2px solid #1890ff' : '1px solid #d9d9d9',
-                      backgroundColor: selectedProxyType === option.walletType ? '#e6f7ff' : '#fff'
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '8px' }}>
-                          <Radio checked={selectedProxyType === option.walletType} />
-                          <strong style={{ marginLeft: '8px' }}>
-                            {t(`accountImport.proxyOption.${option.walletType}.title`)}
-                          </strong>
+              <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                {proxyOptions.map((option) => {
+                  const isSelected = selectedProxyType === option.walletType
+                  const typeLabel = option.walletType.toLowerCase() === 'magic' ? 'Magic' : 'Safe'
+                  return (
+                    <Card
+                      key={option.walletType}
+                      hoverable
+                      onClick={() => setSelectedProxyType(option.walletType)}
+                      size="small"
+                      style={{
+                        cursor: 'pointer',
+                        borderColor: isSelected ? 'var(--ant-color-primary)' : undefined,
+                        borderWidth: isSelected ? 2 : 1,
+                        backgroundColor: isSelected ? 'var(--ant-color-primary-bg)' : undefined,
+                        transition: 'border-color 0.2s, background-color 0.2s'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                        <Space size="middle">
+                          <Radio checked={isSelected} />
+                          <Tag color={option.walletType.toLowerCase() === 'magic' ? 'purple' : 'blue'}>
+                            {typeLabel}
+                          </Tag>
                           {option.hasAssets && (
-                            <span style={{ marginLeft: '8px', color: '#52c41a' }}>
+                            <span style={{ color: '#52c41a', fontSize: 12 }}>
                               <CheckCircleOutlined /> {t('accountImport.proxyOption.hasAssets')}
                             </span>
                           )}
                           {option.error && (
-                            <span style={{ marginLeft: '8px', color: '#ff4d4f' }}>
+                            <span style={{ color: 'var(--ant-color-error)', fontSize: 12 }}>
                               <ExclamationCircleOutlined /> {t('accountImport.proxyOption.error')}
                             </span>
                           )}
-                        </div>
-                        <div style={{ marginLeft: '24px', color: '#666', fontSize: '14px', marginBottom: '8px' }}>
-                          {t(`accountImport.proxyOption.${option.walletType}.description`)}
-                        </div>
-                        <div style={{ marginLeft: '24px', fontSize: '12px', color: '#999', marginBottom: '4px' }}>
-                          {t('accountImport.proxyOption.proxyAddress')}: {option.proxyAddress || '-'}
-                        </div>
-                        {option.error ? (
-                          <div style={{ marginLeft: '24px', color: '#ff4d4f', fontSize: '12px' }}>
-                            {option.error}
-                          </div>
-                        ) : (
-                          <div style={{ marginLeft: '24px', display: 'flex', gap: '16px', fontSize: '12px', color: '#666' }}>
-                            <span>
-                              {t('accountImport.proxyOption.availableBalance')}: {formatUSDC(option.availableBalance)} USDC
-                            </span>
-                            <span>
-                              {t('accountImport.proxyOption.positionBalance')}: {formatUSDC(option.positionBalance)} USDC
-                            </span>
-                            <span>
-                              {t('accountImport.proxyOption.totalBalance')}: {formatUSDC(option.totalBalance)} USDC
-                            </span>
-                            <span>
-                              {t('accountImport.proxyOption.positionCount')}: {option.positionCount}
-                            </span>
-                          </div>
+                        </Space>
+                        {!option.error && (
+                          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--ant-color-primary)' }}>
+                            {formatUSDC(option.totalBalance)} USDC
+                          </span>
                         )}
                       </div>
-                    </div>
-                  </Card>
-                ))}
+                      <div style={{ marginTop: 8, marginLeft: 28, fontSize: 12, color: 'var(--ant-color-text-secondary)', wordBreak: 'break-all' }}>
+                        {option.proxyAddress ? (
+                          <span style={{ fontFamily: 'monospace' }}>{option.proxyAddress}</span>
+                        ) : (
+                          '-'
+                        )}
+                        {option.error && (
+                          <span style={{ color: 'var(--ant-color-error)', marginLeft: 8 }}>{option.error}</span>
+                        )}
+                      </div>
+                      <div style={{ marginTop: 8, marginLeft: 28, fontSize: 12, color: 'var(--ant-color-text-secondary)', lineHeight: 1.5 }}>
+                        {t('accountImport.proxyOption.proxyAddressHelp')}
+                      </div>
+                    </Card>
+                  )
+                })}
               </Space>
             )}
           </Form.Item>
@@ -496,30 +523,32 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
         <Form.Item
           label={t('accountImport.accountName')}
           name="accountName"
+          style={{ marginBottom: 24 }}
         >
           <Input placeholder={t('accountImport.accountNamePlaceholder')} />
         </Form.Item>
         
-        <Form.Item>
-          <Space>
+        <Form.Item style={{ marginBottom: 0 }}>
+          <Space size="middle">
             <Button
               type="primary"
               htmlType="submit"
               loading={loading}
               disabled={step !== 'select' || !selectedProxyType || loadingProxyOptions}
               size={isMobile ? 'middle' : 'large'}
+              style={isMobile ? { minHeight: 44 } : undefined}
             >
               {t('accountImport.importAccount')}
             </Button>
             {showCancelButton && onCancel && (
-              <Button onClick={onCancel}>
+              <Button onClick={onCancel} size={isMobile ? 'middle' : 'large'}>
                 {t('common.cancel')}
               </Button>
             )}
           </Space>
         </Form.Item>
       </Form>
-    </>
+    </div>
   )
 }
 

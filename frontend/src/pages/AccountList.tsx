@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Card, Table, Button, Space, Tag, Popconfirm, message, Typography, Spin, Modal, Descriptions, Divider, Form, Input } from 'antd'
+import { Card, Table, Button, Space, Tag, Popconfirm, message, Typography, Spin, Modal, Descriptions, Divider, Form, Input, Alert } from 'antd'
 import { PlusOutlined, ReloadOutlined, EditOutlined, CopyOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useAccountStore } from '../store/accountStore'
@@ -883,9 +883,9 @@ const AccountList: React.FC = () => {
           accountImportForm.resetFields()
         }}
         footer={null}
-        width={isMobile ? '95%' : 600}
+        width={isMobile ? '95%' : 640}
         style={{ top: isMobile ? 20 : 50 }}
-        bodyStyle={{ padding: '24px', maxHeight: 'calc(100vh - 150px)', overflow: 'auto' }}
+        bodyStyle={{ padding: isMobile ? '16px 20px' : '24px 28px', maxHeight: 'calc(100vh - 140px)', overflow: 'auto' }}
         destroyOnClose
         maskClosable
         closable

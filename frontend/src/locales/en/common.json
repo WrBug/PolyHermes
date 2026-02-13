@@ -214,7 +214,7 @@
     "walletType": "Wallet Type",
     "walletTypeHelp": "Web3 Wallet: Polymarket accounts connected via browser wallets like MetaMask\nMagic: Polymarket accounts logged in via email or social accounts (Google, Twitter, etc.)",
     "loadingProxyOptions": "Loading proxy addresses and asset information...",
-    "selectProxyOption": "Please select a proxy address",
+    "selectProxyOption": "Please select account type",
     "proxyOptionRequired": "Please select a proxy address",
     "proxyOption": {
       "magic": {
@@ -226,6 +226,7 @@
         "title": "Safe Proxy Address"
       },
       "proxyAddress": "Proxy Address",
+      "proxyAddressHelp": "The proxy address is the wallet address you actually use on Polymarket: Magic for email/social login accounts, Safe for browser wallet (e.g. MetaMask) accounts. Please select the one that matches how you log in to Polymarket.",
       "availableBalance": "Available Balance",
       "positionBalance": "Position Balance",
       "totalBalance": "Total Balance",
