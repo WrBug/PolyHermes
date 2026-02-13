@@ -215,7 +215,7 @@
     "walletTypeHelp": "Web3錢包：使用 MetaMask 等瀏覽器錢包連接的 Polymarket 帳戶\nMagic：透過郵箱或社群帳號（如 Google、Twitter）登入的 Polymarket 帳戶",
     "walletTypeMagic": "Magic（郵箱/社群帳號登入）",
     "walletTypeSafe": "Web3錢包",
-    "magicNotSupported": "（暫不支持）"
+    "magicNotSupported": ""
   },
   "leader": {
     "title": "Leader 管理",

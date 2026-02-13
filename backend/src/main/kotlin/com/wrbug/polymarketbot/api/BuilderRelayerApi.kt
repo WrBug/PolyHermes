@@ -41,6 +41,17 @@ interface BuilderRelayerApi {
         @Query("address") address: String,
         @Query("type") type: String
     ): Response<NoncePayload>
+
+    /**
+     * 获取 Relay Payload（PROXY 类型执行时使用）
+     * GET /relay-payload?address={address}&type=PROXY
+     * 参考: builder-relayer-client endpoints GET_RELAY_PAYLOAD
+     */
+    @GET("/relay-payload")
+    suspend fun getRelayPayload(
+        @Query("address") address: String,
+        @Query("type") type: String
+    ): Response<RelayPayload>
     
     /**
      * 获取交易状态
@@ -96,6 +107,7 @@ interface BuilderRelayerApi {
     /**
      * 签名参数
      * 参考: builder-relayer-client/src/types.ts 的 SignatureParams
+     * Safe 使用 operation/safeTxnGas/baseGas 等，PROXY 使用 relayHub/relay/relayerFee 等
      */
     data class SignatureParams(
         @SerializedName("gasPrice")
@@ -114,7 +126,19 @@ interface BuilderRelayerApi {
         val gasToken: String? = null,
         
         @SerializedName("refundReceiver")
-        val refundReceiver: String? = null
+        val refundReceiver: String? = null,
+        
+        @SerializedName("relayerFee")
+        val relayerFee: String? = null,
+        
+        @SerializedName("gasLimit")
+        val gasLimit: String? = null,
+        
+        @SerializedName("relayHub")
+        val relayHub: String? = null,
+        
+        @SerializedName("relay")
+        val relay: String? = null
     )
     
     /**
@@ -139,6 +163,17 @@ interface BuilderRelayerApi {
      * Nonce 响应
      */
     data class NoncePayload(
+        @SerializedName("nonce")
+        val nonce: String
+    )
+
+    /**
+     * Relay Payload（PROXY 执行时获取 relay 地址与 nonce）
+     * 参考: builder-relayer-client types RelayPayload
+     */
+    data class RelayPayload(
+        @SerializedName("address")
+        val address: String,
         @SerializedName("nonce")
         val nonce: String
     )

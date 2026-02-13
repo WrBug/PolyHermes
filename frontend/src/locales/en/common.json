@@ -215,7 +215,7 @@
     "walletTypeHelp": "Web3 Wallet: Polymarket accounts connected via browser wallets like MetaMask\nMagic: Polymarket accounts logged in via email or social accounts (Google, Twitter, etc.)",
     "walletTypeMagic": "Magic (Email/Social Login)",
     "walletTypeSafe": "Web3 Wallet",
-    "magicNotSupported": "(Not Supported)"
+    "magicNotSupported": ""
   },
   "leader": {
     "title": "Leader Management",

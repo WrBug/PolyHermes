@@ -40,6 +40,11 @@ class RelayClientService(
     // 空集合ID
     private val EMPTY_SET = "0x0000000000000000000000000000000000000000000000000000000000000000"
 
+    // Polygon PROXY（Magic）合约地址，参考 builder-relayer-client config
+    private val proxyFactoryAddress = "0xaB45c5A4B0c941a2F231C04C3f49182e1A254052"
+    private val relayHubAddress = "0xD216153c06E857cD7f72665E0aF1d7D82172F494"
+    private val defaultProxyGasLimit = "10000000"
+
     private val polygonRpcApi: EthereumRpcApi by lazy {
         val rpcUrl = rpcNodeService.getHttpUrl()
         retrofitFactory.createEthereumRpcApi(rpcUrl)
@@ -201,33 +206,45 @@ class RelayClientService(
     }
 
     /**
-     * 执行 Safe 交易（通过 Proxy.execTransaction）
+     * 执行代理交易（Safe 或 Magic PROXY）
      * 参考 TypeScript: RelayClient.execute()
-     *
-     * 优先使用 Builder Relayer（Gasless），如果未配置则回退到手动发送交易
      *
      * @param privateKey 私钥
      * @param proxyAddress 代理钱包地址
-     * @param safeTx Safe 交易对象
+     * @param safeTx 交易对象（to/data/value）
+     * @param walletType 钱包类型："magic" 使用 PROXY Gasless，"safe" 使用 Safe 流程
      * @return 交易哈希
      */
     suspend fun execute(
         privateKey: String,
         proxyAddress: String,
-        safeTx: SafeTransaction
+        safeTx: SafeTransaction,
+        walletType: String = "safe"
     ): Result<String> {
         return try {
-            // 验证参数
             if (proxyAddress.isBlank() || !proxyAddress.startsWith("0x") || proxyAddress.length != 42) {
                 return Result.failure(IllegalArgumentException("proxyAddress 格式错误，必须是有效的以太坊地址"))
             }
 
-            // 检查 Builder API Key 是否已配置
             val builderApiKey = systemConfigService.getBuilderApiKey()
             val builderSecret = systemConfigService.getBuilderSecret()
             val builderPassphrase = systemConfigService.getBuilderPassphrase()
 
-            // 优先使用 Builder Relayer（Gasless）
+            if (walletType.lowercase() == "magic") {
+                if (!isBuilderRelayerEnabled(builderApiKey, builderSecret, builderPassphrase)) {
+                    return Result.failure(IllegalStateException("Magic 账户赎回必须配置 Builder API Key（Gasless）"))
+                }
+                logger.info("使用 Builder Relayer PROXY 执行 Magic 赎回")
+                return executeViaBuilderRelayerProxy(
+                    privateKey,
+                    proxyAddress,
+                    safeTx,
+                    builderApiKey!!,
+                    builderSecret!!,
+                    builderPassphrase!!
+                )
+            }
+
             if (isBuilderRelayerEnabled(builderApiKey, builderSecret, builderPassphrase)) {
                 logger.info("使用 Builder Relayer 执行 Gasless 交易")
                 return executeViaBuilderRelayer(
@@ -240,13 +257,164 @@ class RelayClientService(
                 )
             }
 
-            // 回退到手动发送交易（需要用户支付 gas）
             logger.info("Builder Relayer 未配置，使用手动发送交易（需要用户支付 gas）")
             return executeManually(privateKey, proxyAddress, safeTx)
         } catch (e: Exception) {
-            logger.error("执行 Safe 交易失败: ${e.message}", e)
+            logger.error("执行交易失败: ${e.message}", e)
             Result.failure(e)
         }
+    }
+
+    /**
+     * 通过 Builder Relayer 执行 PROXY（Magic）交易（Gasless）
+     * 参考: builder-relayer-client client.ts executeProxyTransactions, builder/proxy.ts
+     */
+    private suspend fun executeViaBuilderRelayerProxy(
+        privateKey: String,
+        proxyAddress: String,
+        safeTx: SafeTransaction,
+        builderApiKey: String,
+        builderSecret: String,
+        builderPassphrase: String
+    ): Result<String> {
+        val relayerApi = retrofitFactory.createBuilderRelayerApi(
+            relayerUrl = PolymarketConstants.BUILDER_RELAYER_URL,
+            apiKey = builderApiKey,
+            secret = builderSecret,
+            passphrase = builderPassphrase
+        )
+
+        val cleanPrivateKey = privateKey.removePrefix("0x")
+        val privateKeyBigInt = BigInteger(cleanPrivateKey, 16)
+        val credentials = org.web3j.crypto.Credentials.create(privateKeyBigInt.toString(16))
+        val fromAddress = credentials.address
+
+        val relayPayloadResponse = relayerApi.getRelayPayload(fromAddress, "PROXY")
+        if (!relayPayloadResponse.isSuccessful || relayPayloadResponse.body() == null) {
+            val errorBody = relayPayloadResponse.errorBody()?.string() ?: "未知错误"
+            logger.error("获取 Relay Payload 失败: code=${relayPayloadResponse.code()}, body=$errorBody")
+            return Result.failure(Exception("获取 Relay Payload 失败: ${relayPayloadResponse.code()} - $errorBody"))
+        }
+        val relayPayload = relayPayloadResponse.body()!!
+        val relayAddress = relayPayload.address
+        val nonce = relayPayload.nonce
+
+        val proxyCallData = encodeProxyTransactionData(safeTx)
+        val gasLimit = defaultProxyGasLimit
+
+        val structHash = createProxyStructHash(
+            from = fromAddress,
+            to = proxyFactoryAddress,
+            data = proxyCallData,
+            txFee = "0",
+            gasPrice = "0",
+            gasLimit = gasLimit,
+            nonce = nonce,
+            relayHubAddress = relayHubAddress,
+            relayAddress = relayAddress
+        )
+
+        val prefix = "\u0019Ethereum Signed Message:\n32".toByteArray(Charsets.UTF_8)
+        val messageWithPrefix = ByteArray(prefix.size + structHash.size)
+        System.arraycopy(prefix, 0, messageWithPrefix, 0, prefix.size)
+        System.arraycopy(structHash, 0, messageWithPrefix, prefix.size, structHash.size)
+
+        val keccak256 = org.bouncycastle.crypto.digests.KeccakDigest(256)
+        keccak256.update(messageWithPrefix, 0, messageWithPrefix.size)
+        val hashWithPrefix = ByteArray(keccak256.digestSize)
+        keccak256.doFinal(hashWithPrefix, 0)
+
+        val ecKeyPair = org.web3j.crypto.ECKeyPair.create(privateKeyBigInt)
+        val signature = org.web3j.crypto.Sign.signMessage(hashWithPrefix, ecKeyPair, false)
+        val sigHex = "0x" + org.web3j.utils.Numeric.toHexString(signature.r).removePrefix("0x").padStart(64, '0') +
+                org.web3j.utils.Numeric.toHexString(signature.s).removePrefix("0x").padStart(64, '0') +
+                String.format("%02x", (signature.v as ByteArray).getOrElse(0) { 0 }.toInt() and 0xff)
+
+        val request = BuilderRelayerApi.TransactionRequest(
+            type = "PROXY",
+            from = fromAddress,
+            to = proxyFactoryAddress,
+            proxyWallet = proxyAddress,
+            data = proxyCallData,
+            nonce = nonce,
+            signature = sigHex,
+            signatureParams = BuilderRelayerApi.SignatureParams(
+                gasPrice = "0",
+                gasLimit = gasLimit,
+                relayerFee = "0",
+                relayHub = relayHubAddress,
+                relay = relayAddress
+            ),
+            metadata = "Redeem positions via Builder Relayer PROXY"
+        )
+
+        val response = relayerApi.submitTransaction(request)
+        if (!response.isSuccessful || response.body() == null) {
+            val errorBody = response.errorBody()?.string() ?: "未知错误"
+            logger.error("Builder Relayer PROXY API 调用失败: code=${response.code()}, body=$errorBody")
+            return Result.failure(Exception("Builder Relayer PROXY 调用失败: ${response.code()} - $errorBody"))
+        }
+
+        val relayerResponse = response.body()!!
+        val txHash = relayerResponse.transactionHash ?: relayerResponse.hash
+            ?: return Result.failure(Exception("Builder Relayer 返回的交易哈希为空"))
+        logger.info("Builder Relayer PROXY 执行成功: transactionID=${relayerResponse.transactionID}, txHash=$txHash")
+        return Result.success(txHash)
+    }
+
+    /**
+     * 编码 ProxyFactory.proxy(calls) 调用数据
+     * 参考: builder-relayer-client encode/proxy.ts, abis proxyFactory proxy((uint8,address,uint256,bytes)[])
+     */
+    private fun encodeProxyTransactionData(safeTx: SafeTransaction): String {
+        val selector = EthereumUtils.getFunctionSelector("proxy((uint8,address,uint256,bytes)[])")
+        val callData = safeTx.data.removePrefix("0x")
+        val dataLen = callData.length / 2
+        val dataLenPadded = (dataLen + 31) / 32 * 32 * 2
+        val dataPadded = callData.padEnd(dataLenPadded, '0')
+
+        val arrayOffset = EthereumUtils.encodeUint256(BigInteger.valueOf(32))
+        val arrayLength = EthereumUtils.encodeUint256(BigInteger.ONE)
+        val typeCode = EthereumUtils.encodeUint256(BigInteger.ONE)
+        val toEncoded = EthereumUtils.encodeAddress(safeTx.to)
+        val valueEncoded = EthereumUtils.encodeUint256(BigInteger.ZERO)
+        val dataOffsetInTuple = BigInteger.valueOf(192)
+        val dataOffsetEncoded = EthereumUtils.encodeUint256(dataOffsetInTuple)
+        val dataLengthEncoded = EthereumUtils.encodeUint256(BigInteger.valueOf(dataLen.toLong()))
+        return "0x" + selector.removePrefix("0x") + arrayOffset + arrayLength +
+                typeCode + toEncoded + valueEncoded + dataOffsetEncoded +
+                dataLengthEncoded + dataPadded
+    }
+
+    /**
+     * 创建 PROXY 结构哈希，参考 builder-relayer-client builder/proxy.ts createStructHash
+     * concat: "rlx:" + from + to + data + txFee + gasPrice + gasLimit + nonce + relayHub + relay, then keccak256
+     */
+    private fun createProxyStructHash(
+        from: String,
+        to: String,
+        data: String,
+        txFee: String,
+        gasPrice: String,
+        gasLimit: String,
+        nonce: String,
+        relayHubAddress: String,
+        relayAddress: String
+    ): ByteArray {
+        val rlxPrefix = "rlx:".toByteArray(Charsets.UTF_8)
+        val fromBytes = EthereumUtils.hexToBytes(from.lowercase().removePrefix("0x").padStart(40, '0'))
+        val toBytes = EthereumUtils.hexToBytes(to.lowercase().removePrefix("0x").padStart(40, '0'))
+        val dataBytes = EthereumUtils.hexToBytes(data.removePrefix("0x"))
+        val txFeeBytes = EthereumUtils.encodeUint256(BigInteger(txFee)).let { EthereumUtils.hexToBytes(it) }
+        val gasPriceBytes = EthereumUtils.encodeUint256(BigInteger(gasPrice)).let { EthereumUtils.hexToBytes(it) }
+        val gasLimitBytes = EthereumUtils.encodeUint256(BigInteger(gasLimit)).let { EthereumUtils.hexToBytes(it) }
+        val nonceBytes = EthereumUtils.encodeUint256(BigInteger(nonce)).let { EthereumUtils.hexToBytes(it) }
+        val relayHubBytes = EthereumUtils.hexToBytes(relayHubAddress.lowercase().removePrefix("0x").padStart(40, '0'))
+        val relayBytes = EthereumUtils.hexToBytes(relayAddress.lowercase().removePrefix("0x").padStart(40, '0'))
+
+        val concat = rlxPrefix + fromBytes + toBytes + dataBytes + txFeeBytes + gasPriceBytes +
+                gasLimitBytes + nonceBytes + relayHubBytes + relayBytes
+        return EthereumUtils.keccak256(concat)
     }
 
     /**

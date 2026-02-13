@@ -827,7 +827,7 @@ class AccountService(
                 "0"
             }
 
-            // 11. 创建并签名订单（使用计算后的卖出数量）
+            // 11. 创建并签名订单（使用计算后的卖出数量，按账户钱包类型使用对应 signatureType）
             val signedOrder = try {
                 orderSigningService.createAndSignOrder(
                     privateKey = decryptedPrivateKey,
@@ -836,7 +836,7 @@ class AccountService(
                     side = "SELL",
                     price = sellPrice,
                     size = sellQuantity.toPlainString(),  // 使用计算后的卖出数量
-                    signatureType = 2,  // Browser Wallet（与正确订单数据一致）
+                    signatureType = orderSigningService.getSignatureTypeForWalletType(account.walletType),
                     nonce = "0",
                     feeRateBps = feeRateBps,  // 使用动态获取的费率
                     expiration = expiration
@@ -1260,7 +1260,7 @@ class AccountService(
                 accountRedeemedInfo[accountId] = accountInfo
             }
 
-            // 5. 对每个账户执行赎回
+            // 5. 对每个账户执行赎回（Safe 与 Magic 均支持，Magic 通过 Builder Relayer PROXY Gasless 执行）
             val accountTransactions = mutableListOf<com.wrbug.polymarketbot.dto.AccountRedeemTransaction>()
             var totalRedeemedValue = BigDecimal.ZERO
 
@@ -1284,7 +1284,8 @@ class AccountService(
                         privateKey = decryptedPrivateKey,
                         proxyAddress = account.proxyAddress,
                         conditionId = marketId,
-                        indexSets = indexSets
+                        indexSets = indexSets,
+                        walletType = account.walletType
                     )
 
                     redeemResult.fold(
