@@ -265,6 +265,7 @@
     "leaders": "Leader 管理",
     "templates": "跟单模板",
     "copyTradingConfig": "跟单配置",
+    "cryptoTailStrategy": "尾盘策略",
     "positions": "仓位管理",
     "backtest": "回测",
     "statistics": "统计信息",
@@ -1398,5 +1399,70 @@
     "rerunTaskNamePlaceholder": "新任务名称（留空使用「原名称 (副本)」）",
     "rerunSuccess": "已创建新回测任务",
     "rerunFailed": "重新测试失败"
+  },
+  "cryptoTailStrategy": {
+    "list": {
+      "title": "加密尾盘策略",
+      "walletTip": "请使用单独的钱包运行尾盘策略，避免该钱包用于手动交易、跟单等其他操作，否则可能导致余额或仓位变化，造成策略执行异常。",
+      "addStrategy": "新增策略",
+      "strategyName": "策略名称",
+      "market": "关联市场",
+      "timeWindow": "时间区间",
+      "priceRange": "价格区间",
+      "amountMode": "投入方式",
+      "ratio": "比例",
+      "fixed": "固定金额",
+      "recentTrigger": "最近触发",
+      "actions": "操作",
+      "edit": "编辑",
+      "enable": "启用",
+      "disable": "停用",
+      "delete": "删除",
+      "viewTriggers": "查看触发记录",
+      "deleteConfirm": "确定删除该策略？",
+      "fetchFailed": "获取列表失败"
+    },
+    "form": {
+      "walletTip": "建议使用专用钱包，避免手动操作等导致余额或下单异常。",
+      "strategyName": "策略名称",
+      "strategyNamePlaceholder": "自动生成",
+      "selectAccount": "选择账户",
+      "selectMarket": "选择市场",
+      "timeWindowStart": "区间开始",
+      "timeWindowEnd": "区间结束",
+      "minute": "分",
+      "second": "秒",
+      "minPrice": "最低价",
+      "maxPrice": "最高价",
+      "maxPricePlaceholder": "不填默认为 1",
+      "amountMode": "投入方式",
+      "ratioPercent": "比例 %",
+      "fixedUsdc": "固定金额 (USDC)",
+      "enabled": "启用",
+      "create": "创建",
+      "update": "更新",
+      "timeWindowStartLEEnd": "时间区间开始不能大于结束",
+      "timeWindowExceed": "时间区间不能超过周期长度"
+    },
+    "redeemRequiredModal": {
+      "title": "请先配置自动赎回",
+      "description": "尾盘策略依赖自动赎回功能，请先在系统设置中配置 Builder API Key 并开启自动赎回。",
+      "goToSettings": "去配置",
+      "cancel": "取消"
+    },
+    "triggerRecords": {
+      "title": "触发记录",
+      "triggerTime": "触发时间",
+      "market": "市场",
+      "direction": "方向",
+      "up": "Up",
+      "down": "Down",
+      "triggerPrice": "触发价格",
+      "amount": "投入金额",
+      "orderId": "订单 ID",
+      "status": "状态",
+      "success": "成功",
+      "fail": "失败"
+    }
   }
 }

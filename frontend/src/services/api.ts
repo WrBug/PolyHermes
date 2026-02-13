@@ -429,6 +429,46 @@ export const apiService = {
     }) => 
       apiClient.post<ApiResponse<any>>('/copy-trading/configs/filtered-orders', data)
   },
+
+  /**
+   * 尾盘策略 API
+   */
+  cryptoTailStrategy: {
+    list: (data: { accountId?: number; enabled?: boolean } = {}) =>
+      apiClient.post<ApiResponse<{ list: import('../types').CryptoTailStrategyDto[] }>>('/crypto-tail-strategy/list', data),
+    create: (data: {
+      accountId: number
+      name?: string
+      marketSlugPrefix: string
+      intervalSeconds: number
+      windowStartSeconds: number
+      windowEndSeconds: number
+      minPrice: string
+      maxPrice?: string
+      amountMode: string
+      amountValue: string
+      enabled?: boolean
+    }) =>
+      apiClient.post<ApiResponse<import('../types').CryptoTailStrategyDto>>('/crypto-tail-strategy/create', data),
+    update: (data: {
+      strategyId: number
+      name?: string
+      windowStartSeconds?: number
+      windowEndSeconds?: number
+      minPrice?: string
+      maxPrice?: string
+      amountMode?: string
+      amountValue?: string
+      enabled?: boolean
+    }) =>
+      apiClient.post<ApiResponse<import('../types').CryptoTailStrategyDto>>('/crypto-tail-strategy/update', data),
+    delete: (data: { strategyId: number }) =>
+      apiClient.post<ApiResponse<void>>('/crypto-tail-strategy/delete', data),
+    triggers: (data: { strategyId: number; page?: number; pageSize?: number; status?: string }) =>
+      apiClient.post<ApiResponse<{ list: import('../types').CryptoTailStrategyTriggerDto[]; total: number }>>('/crypto-tail-strategy/triggers', data),
+    marketOptions: () =>
+      apiClient.post<ApiResponse<import('../types').CryptoTailMarketOptionDto[]>>('/crypto-tail-strategy/market-options', {})
+  },
   
   /**
    * 订单管理 API

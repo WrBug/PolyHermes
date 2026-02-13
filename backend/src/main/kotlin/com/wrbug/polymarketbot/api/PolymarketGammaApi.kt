@@ -2,6 +2,7 @@ package com.wrbug.polymarketbot.api
 
 import retrofit2.Response
 import retrofit2.http.GET
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 /**
@@ -26,7 +27,38 @@ interface PolymarketGammaApi {
         @Query("clob_token_ids") clobTokenIds: List<String>? = null,
         @Query("include_tag") includeTag: Boolean? = null
     ): Response<List<MarketResponse>>
+
+    /**
+     * 根据 slug 获取事件（用于 5/15 分钟加密市场）
+     * GET /events/slug/{slug}，如 btc-updown-5m-1771007400
+     * 返回事件含 markets（conditionId、endDate、clobTokenIds 等）
+     */
+    @GET("/events/slug/{slug}")
+    suspend fun getEventBySlug(@Path("slug") slug: String): Response<GammaEventBySlugResponse>
 }
+
+/**
+ * Gamma 按 slug 返回的事件结构
+ */
+data class GammaEventBySlugResponse(
+    val id: String? = null,
+    val slug: String? = null,
+    val title: String? = null,
+    val startDate: String? = null,
+    val endDate: String? = null,
+    val markets: List<GammaEventMarketItem>? = null
+)
+
+/**
+ * 事件下的市场项（5/15 分钟市场为二元，通常两个 outcome）
+ */
+data class GammaEventMarketItem(
+    val conditionId: String? = null,
+    val question: String? = null,
+    val endDate: String? = null,
+    val startDate: String? = null,
+    val clobTokenIds: String? = null
+)
 
 /**
  * 事件响应（从 MarketResponse.events 解析）

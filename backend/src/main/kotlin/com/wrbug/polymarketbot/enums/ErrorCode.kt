@@ -158,6 +158,13 @@ enum class ErrorCode(
     ACCOUNT_BALANCE_FETCH_FAILED(4707, "查询账户余额失败", "error.account_balance_fetch_failed"),
     ACCOUNT_POSITIONS_FETCH_FAILED(4708, "查询仓位列表失败", "error.account_positions_fetch_failed"),
     
+    // 尾盘策略 (4710-4729)
+    CRYPTO_TAIL_STRATEGY_NOT_FOUND(4710, "尾盘策略不存在", "error.crypto_tail_strategy_not_found"),
+    CRYPTO_TAIL_STRATEGY_WINDOW_INVALID(4711, "时间区间开始不能大于结束", "error.crypto_tail_strategy_window_invalid"),
+    CRYPTO_TAIL_STRATEGY_WINDOW_EXCEED(4712, "时间区间不能超过周期长度", "error.crypto_tail_strategy_window_exceed"),
+    CRYPTO_TAIL_STRATEGY_INTERVAL_INVALID(4713, "周期仅支持 300 或 900 秒", "error.crypto_tail_strategy_interval_invalid"),
+    CRYPTO_TAIL_STRATEGY_AMOUNT_MODE_INVALID(4714, "投入方式仅支持 RATIO 或 FIXED", "error.crypto_tail_strategy_amount_mode_invalid"),
+
     // 统计相关 (4801-4899)
     STATISTICS_FETCH_FAILED(4801, "获取统计信息失败", "error.statistics_fetch_failed"),
     ORDER_LIST_FETCH_FAILED(4802, "查询订单列表失败", "error.order_list_fetch_failed"),
@@ -250,7 +257,14 @@ enum class ErrorCode(
     SERVER_BACKTEST_HISTORICAL_DATA_FETCH_FAILED(5610, "历史数据获取失败", "error.server.backtest_historical_data_fetch_failed"),
     SERVER_BACKTEST_STOP_FAILED(5611, "停止回测任务失败", "error.server.backtest_stop_failed"),
     SERVER_BACKTEST_RETRY_FAILED(5612, "重试回测任务失败", "error.server.backtest_retry_failed"),
-    SERVER_BACKTEST_RERUN_FAILED(5613, "按配置重新测试失败", "error.server.backtest_rerun_failed");
+    SERVER_BACKTEST_RERUN_FAILED(5613, "按配置重新测试失败", "error.server.backtest_rerun_failed"),
+
+    // 尾盘策略服务 (5620-5629)
+    SERVER_CRYPTO_TAIL_STRATEGY_CREATE_FAILED(5620, "创建尾盘策略失败", "error.server.crypto_tail_strategy_create_failed"),
+    SERVER_CRYPTO_TAIL_STRATEGY_UPDATE_FAILED(5621, "更新尾盘策略失败", "error.server.crypto_tail_strategy_update_failed"),
+    SERVER_CRYPTO_TAIL_STRATEGY_DELETE_FAILED(5622, "删除尾盘策略失败", "error.server.crypto_tail_strategy_delete_failed"),
+    SERVER_CRYPTO_TAIL_STRATEGY_LIST_FETCH_FAILED(5623, "查询尾盘策略列表失败", "error.server.crypto_tail_strategy_list_fetch_failed"),
+    SERVER_CRYPTO_TAIL_STRATEGY_TRIGGERS_FETCH_FAILED(5624, "查询触发记录失败", "error.server.crypto_tail_strategy_triggers_fetch_failed");
     
     companion object {
         /**

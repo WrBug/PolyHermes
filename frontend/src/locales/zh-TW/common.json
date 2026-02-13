@@ -266,6 +266,7 @@
     "leaders": "Leader 管理",
     "templates": "跟單模板",
     "copyTradingConfig": "跟單配置",
+    "cryptoTailStrategy": "尾盤策略",
     "positions": "倉位管理",
     "backtest": "回測",
     "statistics": "統計信息",
@@ -1399,5 +1400,70 @@
     "rerunTaskNamePlaceholder": "新任務名稱（留空使用「原名稱 (副本)」）",
     "rerunSuccess": "已創建新回測任務",
     "rerunFailed": "重新測試失敗"
+  },
+  "cryptoTailStrategy": {
+    "list": {
+      "title": "加密尾盤策略",
+      "walletTip": "請使用單獨的錢包運行尾盤策略，避免該錢包用於手動交易、跟單等其他操作，否則可能導致餘額或倉位變化，造成策略執行異常。",
+      "addStrategy": "新增策略",
+      "strategyName": "策略名稱",
+      "market": "關聯市場",
+      "timeWindow": "時間區間",
+      "priceRange": "價格區間",
+      "amountMode": "投入方式",
+      "ratio": "比例",
+      "fixed": "固定金額",
+      "recentTrigger": "最近觸發",
+      "actions": "操作",
+      "edit": "編輯",
+      "enable": "啟用",
+      "disable": "停用",
+      "delete": "刪除",
+      "viewTriggers": "查看觸發記錄",
+      "deleteConfirm": "確定刪除該策略？",
+      "fetchFailed": "獲取列表失敗"
+    },
+    "form": {
+      "walletTip": "建議使用專用錢包，避免手動操作等導致餘額或下單異常。",
+      "strategyName": "策略名稱",
+      "strategyNamePlaceholder": "自動生成",
+      "selectAccount": "選擇賬戶",
+      "selectMarket": "選擇市場",
+      "timeWindowStart": "區間開始",
+      "timeWindowEnd": "區間結束",
+      "minute": "分",
+      "second": "秒",
+      "minPrice": "最低價",
+      "maxPrice": "最高價",
+      "maxPricePlaceholder": "不填默認為 1",
+      "amountMode": "投入方式",
+      "ratioPercent": "比例 %",
+      "fixedUsdc": "固定金額 (USDC)",
+      "enabled": "啟用",
+      "create": "創建",
+      "update": "更新",
+      "timeWindowStartLEEnd": "時間區間開始不能大於結束",
+      "timeWindowExceed": "時間區間不能超過週期長度"
+    },
+    "redeemRequiredModal": {
+      "title": "請先配置自動贖回",
+      "description": "尾盤策略依賴自動贖回功能，請先在系統設置中配置 Builder API Key 並開啟自動贖回。",
+      "goToSettings": "去配置",
+      "cancel": "取消"
+    },
+    "triggerRecords": {
+      "title": "觸發記錄",
+      "triggerTime": "觸發時間",
+      "market": "市場",
+      "direction": "方向",
+      "up": "Up",
+      "down": "Down",
+      "triggerPrice": "觸發價格",
+      "amount": "投入金額",
+      "orderId": "訂單 ID",
+      "status": "狀態",
+      "success": "成功",
+      "fail": "失敗"
+    }
   }
 }

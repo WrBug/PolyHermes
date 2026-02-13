@@ -1034,3 +1034,53 @@ export interface BacktestTaskDto {
   executionStartedAt?: number
   executionFinishedAt?: number
 }
+
+/**
+ * 尾盘策略
+ */
+export interface CryptoTailStrategyDto {
+  id: number
+  accountId: number
+  name?: string
+  marketSlugPrefix: string
+  marketTitle?: string
+  intervalSeconds: number
+  windowStartSeconds: number
+  windowEndSeconds: number
+  minPrice: string
+  maxPrice: string
+  amountMode: string
+  amountValue: string
+  enabled: boolean
+  lastTriggerAt?: number
+  createdAt: number
+  updatedAt: number
+}
+
+/**
+ * 尾盘策略触发记录
+ */
+export interface CryptoTailStrategyTriggerDto {
+  id: number
+  strategyId: number
+  periodStartUnix: number
+  marketTitle?: string
+  outcomeIndex: number
+  triggerPrice: string
+  amountUsdc: string
+  orderId?: string
+  status: string
+  failReason?: string
+  createdAt: number
+}
+
+/**
+ * 尾盘策略市场选项
+ */
+export interface CryptoTailMarketOptionDto {
+  slug: string
+  title: string
+  intervalSeconds: number
+  periodStartUnix: number
+  endDate?: string
+}

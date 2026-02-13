@@ -266,6 +266,7 @@
     "leaders": "Leader Management",
     "templates": "Templates",
     "copyTradingConfig": "Copy Trading Config",
+    "cryptoTailStrategy": "Tail Strategy",
     "positions": "Position Management",
     "backtest": "Backtest",
     "statistics": "Statistics",
@@ -1399,5 +1400,70 @@
     "rerunTaskNamePlaceholder": "New task name (leave empty for \"Original name (copy)\")",
     "rerunSuccess": "New backtest task created",
     "rerunFailed": "Re-run failed"
+  },
+  "cryptoTailStrategy": {
+    "list": {
+      "title": "Crypto Tail Strategy",
+      "walletTip": "Use a dedicated wallet for tail strategy. Do not use it for manual trading or copy trading to avoid balance/position issues.",
+      "addStrategy": "Add Strategy",
+      "strategyName": "Strategy Name",
+      "market": "Market",
+      "timeWindow": "Time Window",
+      "priceRange": "Price Range",
+      "amountMode": "Amount Mode",
+      "ratio": "Ratio",
+      "fixed": "Fixed",
+      "recentTrigger": "Last Trigger",
+      "actions": "Actions",
+      "edit": "Edit",
+      "enable": "Enable",
+      "disable": "Disable",
+      "delete": "Delete",
+      "viewTriggers": "Trigger Records",
+      "deleteConfirm": "Delete this strategy?",
+      "fetchFailed": "Failed to fetch list"
+    },
+    "form": {
+      "walletTip": "Use a dedicated wallet to avoid balance or order issues.",
+      "strategyName": "Strategy Name",
+      "strategyNamePlaceholder": "Auto",
+      "selectAccount": "Select Account",
+      "selectMarket": "Select Market",
+      "timeWindowStart": "Window Start",
+      "timeWindowEnd": "Window End",
+      "minute": "min",
+      "second": "sec",
+      "minPrice": "Min Price",
+      "maxPrice": "Max Price",
+      "maxPricePlaceholder": "Default 1",
+      "amountMode": "Amount Mode",
+      "ratioPercent": "Ratio %",
+      "fixedUsdc": "Fixed (USDC)",
+      "enabled": "Enabled",
+      "create": "Create",
+      "update": "Update",
+      "timeWindowStartLEEnd": "Window start must not be greater than end",
+      "timeWindowExceed": "Time window must not exceed period length"
+    },
+    "redeemRequiredModal": {
+      "title": "Configure Auto Redeem First",
+      "description": "Tail strategy requires auto redeem. Please configure Builder API Key and enable auto redeem in System Settings.",
+      "goToSettings": "Go to Settings",
+      "cancel": "Cancel"
+    },
+    "triggerRecords": {
+      "title": "Trigger Records",
+      "triggerTime": "Time",
+      "market": "Market",
+      "direction": "Direction",
+      "up": "Up",
+      "down": "Down",
+      "triggerPrice": "Trigger Price",
+      "amount": "Amount",
+      "orderId": "Order ID",
+      "status": "Status",
+      "success": "Success",
+      "fail": "Fail"
+    }
   }
 }
