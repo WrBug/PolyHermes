@@ -1,14 +1,13 @@
 package com.wrbug.polymarketbot.service.cryptotail
 
 import com.wrbug.polymarketbot.api.GammaEventBySlugResponse
+import com.wrbug.polymarketbot.api.PolymarketDataApi
 import com.wrbug.polymarketbot.entity.CryptoTailStrategy
 import com.wrbug.polymarketbot.entity.CryptoTailStrategyTrigger
 import com.wrbug.polymarketbot.repository.AccountRepository
 import com.wrbug.polymarketbot.repository.CryptoTailStrategyRepository
 import com.wrbug.polymarketbot.repository.CryptoTailStrategyTriggerRepository
 import com.wrbug.polymarketbot.service.common.BlockchainService
-import com.wrbug.polymarketbot.service.common.PolymarketClobService
-import com.wrbug.polymarketbot.util.CryptoUtils
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.gt
 import com.wrbug.polymarketbot.util.multi
@@ -29,7 +28,7 @@ import java.math.RoundingMode
 /**
  * 尾盘策略结算轮询服务
  * 定时扫描「状态成功但未结算」的触发记录，通过 Gamma 获取 conditionId、链上查询结算结果，计算收益并回写。
- * 收益优先使用 CLOB API 订单详情的实际成交价（price）与成交量（size_matched）计算；API 失败时回退为触发时的 amountUsdc + 固定价 0.99。
+ * 实际成交价与成交量使用 Data API 的 activity 接口获取（getUserActivity），比 CLOB getOrder 更准确；失败时回退为触发时的 amountUsdc + 固定价 0.99。
  */
 @Service
 class CryptoTailSettlementService(
@@ -37,9 +36,7 @@ class CryptoTailSettlementService(
     private val strategyRepository: CryptoTailStrategyRepository,
     private val accountRepository: AccountRepository,
     private val retrofitFactory: RetrofitFactory,
-    private val blockchainService: BlockchainService,
-    private val clobService: PolymarketClobService,
-    private val cryptoUtils: CryptoUtils
+    private val blockchainService: BlockchainService
 ) {
 
     private val logger = LoggerFactory.getLogger(CryptoTailSettlementService::class.java)
@@ -103,22 +100,22 @@ class CryptoTailSettlementService(
 
     /**
      * 处理单条触发记录：解析 conditionId -> 查链上结算 -> 若已结算则计算 pnl 并更新。
-     * 通过 copy() 生成新实体再 save，不直接修改原实体；有订单信息时用实际成交价与投入金额更新 triggerPrice、amountUsdc。
+     * 通过 copy() 生成新实体再 save，不直接修改原实体；实际成交价与投入金额从 Data API activity 获取并更新 triggerPrice、amountUsdc。
      * @return true 表示本条已结算并更新
      */
     private suspend fun settleOne(trigger: CryptoTailStrategyTrigger): Boolean {
         if (trigger.resolved) return false
         val strategy = strategyRepository.findById(trigger.strategyId).orElse(null) ?: return false
-        val fill = fetchOrderFill(trigger, strategy)
-        val (newTriggerPrice, newAmountUsdc) = if (fill != null && fill.first.gt(BigDecimal.ZERO) && fill.second.gt(BigDecimal.ZERO)) {
-            val price = fill.first
-            val cost = price.multi(fill.second).setScale(pnlScale, RoundingMode.HALF_UP)
-            Pair(price, cost)
+        val conditionId = resolveConditionId(strategy, trigger) ?: return false
+        val fill = fetchActivityFill(trigger, strategy, conditionId)
+        val (newTriggerPrice, newAmountUsdc) = if (fill != null && fill.price.gt(BigDecimal.ZERO) && fill.size.gt(BigDecimal.ZERO)) {
+            val amountUsdc = fill.usdcSize?.takeIf { it.gt(BigDecimal.ZERO) }
+                ?: fill.price.multi(fill.size).setScale(pnlScale, RoundingMode.HALF_UP)
+            Pair(fill.price, amountUsdc)
         } else {
             Pair(trigger.triggerPrice, trigger.amountUsdc)
         }
 
-        val conditionId = resolveConditionId(strategy, trigger) ?: return false
         val (_, payouts) = blockchainService.getCondition(conditionId).getOrNull() ?: run {
             if (fill != null) {
                 val updated = trigger.copy(triggerPrice = newTriggerPrice, amountUsdc = newAmountUsdc)
@@ -137,7 +134,12 @@ class CryptoTailSettlementService(
         if (winnerIndex < 0) return false
 
         val won = trigger.outcomeIndex == winnerIndex
-        val pnl = computePnlFromApiOrFallback(trigger, strategy, won)
+        val pnl = if (fill != null && fill.price.gt(BigDecimal.ZERO) && fill.size.gt(BigDecimal.ZERO)) {
+            if (won) newAmountUsdc.let { fill.size.subtract(it).setScale(pnlScale, RoundingMode.HALF_UP) }
+            else newAmountUsdc.negate().setScale(pnlScale, RoundingMode.HALF_UP)
+        } else {
+            computePnlFallback(trigger.amountUsdc, won)
+        }
         val now = System.currentTimeMillis()
 
         val updated = trigger.copy(
@@ -179,82 +181,73 @@ class CryptoTailSettlementService(
     }
 
     /**
-     * 优先用 CLOB API 订单详情的实际成交价与成交量计算收益；失败则用触发时的 amountUsdc + 固定价 0.99。
+     * Activity 匹配到的一条 TRADE 的成交数据：价格、数量、实际投入 USDC（接口 usdcSize）。
      */
-    private suspend fun computePnlFromApiOrFallback(
-        trigger: CryptoTailStrategyTrigger,
-        strategy: CryptoTailStrategy,
-        won: Boolean
-    ): BigDecimal {
-        val fill = fetchOrderFill(trigger, strategy)
-        return if (fill != null) {
-            val (price, sizeMatched) = fill
-            if (price.gt(BigDecimal.ZERO) && sizeMatched.gt(BigDecimal.ZERO)) {
-                computePnlFromFill(price, sizeMatched, won)
-            } else {
-                computePnlFallback(trigger.amountUsdc, won)
-            }
-        } else {
-            computePnlFallback(trigger.amountUsdc, won)
-        }
-    }
+    private data class ActivityFill(
+        val price: BigDecimal,
+        val size: BigDecimal,
+        val usdcSize: BigDecimal?
+    )
 
     /**
-     * 通过 CLOB API 获取订单实际成交价与成交量；需 L2 认证（账户 API 凭证）。
-     * 只有此接口成功返回有效 price/sizeMatched 时，结算才会更新 triggerPrice、amountUsdc（表现）；
-     * 否则只更新结算字段（resolved、realizedPnl 等），表现仍为触发时的值。
+     * 通过 Data API activity 接口获取该触发对应的实际成交价、成交量与投入金额（比 CLOB getOrder 更准确）。
+     * 只有此接口返回匹配的 TRADE 且 price/size 有效时，结算才会更新 triggerPrice、amountUsdc（表现）；投入金额优先用 activity 的 usdcSize。
      */
-    private suspend fun fetchOrderFill(
+    private suspend fun fetchActivityFill(
         trigger: CryptoTailStrategyTrigger,
-        strategy: CryptoTailStrategy
-    ): Pair<BigDecimal, BigDecimal>? {
-        val orderId = trigger.orderId?.takeIf { it.isNotBlank() } ?: run {
-            logger.debug("尾盘结算未拉取订单: orderId 为空, triggerId=${trigger.id}")
-            return null
-        }
+        strategy: CryptoTailStrategy,
+        conditionId: String
+    ): ActivityFill? {
         val account = accountRepository.findById(strategy.accountId).orElse(null) ?: run {
-            logger.warn("尾盘结算未拉取订单: 账户不存在, triggerId=${trigger.id}, accountId=${strategy.accountId}")
+            logger.warn("尾盘结算未拉取 activity: 账户不存在, triggerId=${trigger.id}, accountId=${strategy.accountId}")
             return null
         }
-        if (account.apiKey == null || account.apiSecret == null || account.apiPassphrase == null) {
-            logger.warn("尾盘结算未拉取订单: 账户未配置 API 凭证, triggerId=${trigger.id}, accountId=${account.id}")
-            return null
-        }
-        val apiSecret = try {
-            account.apiSecret?.let { cryptoUtils.decrypt(it) } ?: ""
-        } catch (e: Exception) {
-            logger.debug("解密 apiSecret 失败: accountId=${account.id}", e)
-            return null
-        }
-        val apiPassphrase = try {
-            account.apiPassphrase?.let { cryptoUtils.decrypt(it) } ?: ""
-        } catch (e: Exception) {
-            logger.debug("解密 apiPassphrase 失败: accountId=${account.id}", e)
-            return null
-        }
-        val result = clobService.getOrder(
-            orderId = orderId,
-            apiKey = account.apiKey!!,
-            apiSecret = apiSecret,
-            apiPassphrase = apiPassphrase,
-            walletAddress = account.walletAddress
-        )
-        return result.fold(
-            onSuccess = { order ->
-                val price = order.price.toSafeBigDecimal()
-                val sizeMatched = order.sizeMatched.toSafeBigDecimal()
-                if (price.gt(BigDecimal.ZERO) && sizeMatched.gt(BigDecimal.ZERO)) {
-                    Pair(price, sizeMatched)
-                } else {
-                    logger.debug("尾盘结算订单无有效成交: triggerId=${trigger.id}, orderId=$orderId, price=$price, sizeMatched=$sizeMatched")
-                    null
-                }
-            },
-            onFailure = { e ->
-                logger.warn("尾盘结算拉取历史订单失败，触发价/投入金额不会更新: triggerId=${trigger.id}, orderId=$orderId, error=${e.message}")
+        val user = account.proxyAddress
+        val triggerTimeSeconds = trigger.createdAt / 1000
+        val start = triggerTimeSeconds - 120
+        val end = triggerTimeSeconds + 600
+        return try {
+            val dataApi = retrofitFactory.createDataApi()
+            val response = dataApi.getUserActivity(
+                user = user,
+                type = listOf("TRADE"),
+                start = start,
+                end = end,
+                limit = 50,
+                sortBy = "TIMESTAMP",
+                sortDirection = "DESC"
+            )
+            if (!response.isSuccessful || response.body() == null) {
+                logger.warn("尾盘结算拉取 activity 失败: triggerId=${trigger.id}, code=${response.code()}")
+                return null
+            }
+            val activities = response.body()!!
+            // 只匹配 TRADE：返回里可能混有 REDEEM（outcomeIndex=999、price=0）等，需排除
+            val match = activities.firstOrNull { a ->
+                a.type == "TRADE" &&
+                    a.conditionId == conditionId &&
+                    a.outcomeIndex != null && a.outcomeIndex!! in 0..1 &&
+                    a.outcomeIndex == trigger.outcomeIndex &&
+                    a.side?.uppercase() == "BUY" &&
+                    a.price != null && a.price!! > 0 &&
+                    a.size != null && a.size!! > 0
+            } ?: run {
+                logger.debug("尾盘结算 activity 无匹配成交: triggerId=${trigger.id}, conditionId=$conditionId, outcomeIndex=${trigger.outcomeIndex}, 条数=${activities.size}")
+                return null
+            }
+            val price = match.price!!.toSafeBigDecimal()
+            val size = match.size!!.toSafeBigDecimal()
+            val usdcSize = match.usdcSize?.toSafeBigDecimal()?.takeIf { it.gt(BigDecimal.ZERO) }
+            if (price.gt(BigDecimal.ZERO) && size.gt(BigDecimal.ZERO)) {
+                ActivityFill(price = price, size = size, usdcSize = usdcSize)
+            } else {
+                logger.debug("尾盘结算 activity 成交数据无效: triggerId=${trigger.id}, price=$price, size=$size")
                 null
             }
-        )
+        } catch (e: Exception) {
+            logger.warn("尾盘结算拉取 activity 异常，触发价/投入金额不会更新: triggerId=${trigger.id}, error=${e.message}")
+            null
+        }
     }
 
     /**
