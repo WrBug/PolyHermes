@@ -119,7 +119,6 @@ const CryptoTailStrategyList: React.FC = () => {
       accountId: record.accountId,
       name: record.name,
       marketSlugPrefix: record.marketSlugPrefix,
-      intervalSeconds: record.intervalSeconds,
       windowStartMinutes: Math.floor(record.windowStartSeconds / 60),
       windowStartSeconds: record.windowStartSeconds % 60,
       windowEndMinutes: Math.floor(record.windowEndSeconds / 60),
@@ -136,7 +135,8 @@ const CryptoTailStrategyList: React.FC = () => {
   const handleFormSubmit = async () => {
     try {
       const v = await form.validateFields()
-      const interval = (editingId ? v.intervalSeconds : marketOptions.find((m) => m.slug === v.marketSlugPrefix)?.intervalSeconds) ?? 300
+      // 新建与编辑均按当前选择的市场 slug 取周期，编辑时无 Form.Item 的 intervalSeconds 不会在 v 中
+      const interval = marketOptions.find((m) => m.slug === v.marketSlugPrefix)?.intervalSeconds ?? 300
       const windowStartSeconds = (v.windowStartMinutes ?? 0) * 60 + (v.windowStartSeconds ?? 0)
       const windowEndSeconds = (v.windowEndMinutes ?? 0) * 60 + (v.windowEndSeconds ?? 0)
       if (windowStartSeconds > windowEndSeconds) {
@@ -306,8 +306,8 @@ const CryptoTailStrategyList: React.FC = () => {
       key: 'amountMode',
       width: isMobile ? 90 : 120,
       render: (_: unknown, r: CryptoTailStrategyDto) =>
-        r.amountMode === 'RATIO'
-          ? `${t('cryptoTailStrategy.list.ratio')} ${r.amountValue}%`
+        (r.amountMode?.toUpperCase() ?? '') === 'RATIO'
+          ? `${t('cryptoTailStrategy.list.ratio')} ${formatNumber(r.amountValue, 2) || '0'}%`
           : `${t('cryptoTailStrategy.list.fixed')} ${formatUSDC(r.amountValue)} USDC`
     },
     {
@@ -446,7 +446,10 @@ const CryptoTailStrategyList: React.FC = () => {
                     {t('cryptoTailStrategy.list.priceRange')}: {formatPriceRange(item.minPrice, item.maxPrice)}
                   </div>
                   <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
-                    {item.amountMode === 'RATIO' ? `${item.amountValue}%` : `${formatUSDC(item.amountValue)} USDC`}
+                    {t('cryptoTailStrategy.list.amountMode')}:{' '}
+                    {(item.amountMode?.toUpperCase() ?? '') === 'RATIO'
+                      ? `${t('cryptoTailStrategy.list.ratio')} ${formatNumber(item.amountValue, 2) || '0'}%`
+                      : `${t('cryptoTailStrategy.list.fixed')} ${formatUSDC(item.amountValue)} USDC`}
                   </div>
                   <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>
                     {t('cryptoTailStrategy.list.totalRealizedPnl')}:{' '}
