@@ -3,6 +3,7 @@ package com.wrbug.polymarketbot.service.accounts
 import com.wrbug.polymarketbot.api.TradeResponse
 import com.wrbug.polymarketbot.dto.*
 import com.wrbug.polymarketbot.entity.Account
+import com.wrbug.polymarketbot.enums.WalletType
 import com.wrbug.polymarketbot.repository.AccountRepository
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.toSafeBigDecimal
@@ -105,7 +106,8 @@ class AccountService(
             // 5. 获取代理地址（必须成功，否则导入失败）
             // 根据用户选择的钱包类型计算代理地址
             val proxyAddress = runBlocking {
-                val proxyResult = blockchainService.getProxyAddress(request.walletAddress, request.walletType)
+                val walletTypeEnum = WalletType.fromStringOrDefault(request.walletType, WalletType.MAGIC)
+                val proxyResult = blockchainService.getProxyAddress(request.walletAddress, walletTypeEnum)
                 if (proxyResult.isSuccess) {
                     val address = proxyResult.getOrNull()
                     if (address != null) {
@@ -199,11 +201,11 @@ class AccountService(
                 coroutineScope {
                     val magicDeferred = async {
                         try {
-                            val proxyAddress = blockchainService.getProxyAddress(request.walletAddress, "magic").getOrNull()
+                            val proxyAddress = blockchainService.getProxyAddress(request.walletAddress, WalletType.MAGIC).getOrNull()
                             if (proxyAddress != null) {
                                 val balance = blockchainService.getWalletBalance(proxyAddress).getOrNull()
                                 ProxyOptionDto(
-                                    walletType = "magic",
+                                    walletType = WalletType.MAGIC.value,
                                     proxyAddress = proxyAddress,
                                     descriptionKey = "accountImport.proxyOption.magic.description",
                                     availableBalance = balance?.availableBalance ?: "0",
@@ -246,11 +248,11 @@ class AccountService(
 
                     val safeDeferred = async {
                         try {
-                            val proxyAddress = blockchainService.getProxyAddress(request.walletAddress, "safe").getOrNull()
+                            val proxyAddress = blockchainService.getProxyAddress(request.walletAddress, WalletType.SAFE).getOrNull()
                             if (proxyAddress != null) {
                                 val balance = blockchainService.getWalletBalance(proxyAddress).getOrNull()
                                 ProxyOptionDto(
-                                    walletType = "safe",
+                                    walletType = WalletType.SAFE.value,
                                     proxyAddress = proxyAddress,
                                     descriptionKey = "accountImport.proxyOption.safe.description",
                                     availableBalance = balance?.availableBalance ?: "0",
@@ -300,7 +302,7 @@ class AccountService(
             } else {
                 // 助记词导入：仅获取 Safe 代理地址及资产
                 try {
-                    val proxyAddress = blockchainService.getProxyAddress(request.walletAddress, "safe").getOrNull()
+                    val proxyAddress = blockchainService.getProxyAddress(request.walletAddress, WalletType.SAFE).getOrNull()
                     if (proxyAddress != null) {
                         val balance = blockchainService.getWalletBalance(proxyAddress).getOrNull()
                         options.add(
@@ -1398,7 +1400,9 @@ class AccountService(
             }
 
             // 4. 若涉及 Magic 账户，必须已配置 Builder API Key（提前判断，避免执行到深层再报错）
-            val hasMagicAccount = accounts.values.any { it.walletType.equals("magic", ignoreCase = true) }
+            val hasMagicAccount = accounts.values.any { 
+                WalletType.fromStringOrDefault(it.walletType, WalletType.SAFE) == WalletType.MAGIC 
+            }
             if (hasMagicAccount && !relayClientService.isBuilderApiKeyConfigured()) {
                 return Result.failure(
                     IllegalStateException("Builder API Key 未配置，无法执行 Magic 账户赎回（Gasless）。请前往系统设置页面配置 Builder API Key。")
@@ -1468,12 +1472,13 @@ class AccountService(
                     val decryptedPrivateKey = decryptPrivateKey(account)
 
                     // 调用区块链服务赎回仓位
+                    val walletTypeEnum = WalletType.fromStringOrDefault(account.walletType, WalletType.SAFE)
                     val redeemResult = blockchainService.redeemPositions(
                         privateKey = decryptedPrivateKey,
                         proxyAddress = account.proxyAddress,
                         conditionId = marketId,
                         indexSets = indexSets,
-                        walletType = account.walletType
+                        walletType = walletTypeEnum
                     )
 
                     redeemResult.fold(

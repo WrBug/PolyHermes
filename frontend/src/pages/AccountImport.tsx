@@ -35,8 +35,6 @@ const AccountImport: React.FC = () => {
           form={form}
           onSuccess={handleSuccess}
           onCancel={() => navigate('/accounts')}
-          showAlert={true}
-          showCancelButton={true}
         />
       </Card>
     </div>

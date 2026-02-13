@@ -10,6 +10,7 @@ import com.wrbug.polymarketbot.api.ValueResponse
 import com.wrbug.polymarketbot.constants.PolymarketConstants
 import com.wrbug.polymarketbot.dto.PositionDto
 import com.wrbug.polymarketbot.dto.WalletBalanceResponse
+import com.wrbug.polymarketbot.enums.WalletType
 import com.wrbug.polymarketbot.util.EthereumUtils
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.createClient
@@ -93,13 +94,13 @@ class BlockchainService(
      * 2. Safe Proxy（MetaMask 钱包用户）- 通过合约调用获取地址
      *
      * @param walletAddress 用户的钱包地址（EOA）
-     * @param walletType 钱包类型："magic"（默认）或 "safe"
+     * @param walletType 钱包类型：MAGIC（默认）或 SAFE
      * @return 代理钱包地址
      */
-    suspend fun getProxyAddress(walletAddress: String, walletType: String = "magic"): Result<String> {
+    suspend fun getProxyAddress(walletAddress: String, walletType: WalletType = WalletType.MAGIC): Result<String> {
         return try {
-            when (walletType.lowercase()) {
-                "safe" -> {
+            when (walletType) {
+                WalletType.SAFE -> {
                     // Safe Proxy（MetaMask 用户）
                     val safeProxyResult = getSafeProxyAddress(walletAddress)
                     if (safeProxyResult.isSuccess) {
@@ -110,7 +111,7 @@ class BlockchainService(
                         Result.failure(safeProxyResult.exceptionOrNull() ?: Exception("获取 Safe Proxy 地址失败"))
                     }
                 }
-                else -> {
+                WalletType.MAGIC -> {
                     // Magic Proxy（邮箱/OAuth 登录用户）- 默认
                     val magicProxyAddress = calculateMagicProxyAddress(walletAddress)
                     logger.debug("使用 Magic Proxy 地址: $magicProxyAddress")
@@ -586,7 +587,7 @@ class BlockchainService(
      * @param proxyAddress 代理地址（Safe 或 Magic 代理钱包地址）
      * @param conditionId 市场条件ID（bytes32，必须是 0x 开头的 66 位十六进制字符串）
      * @param indexSets 要赎回的索引集合列表（每个元素是 2^outcomeIndex）
-     * @param walletType 钱包类型："magic" 或 "safe"，用于选择执行路径
+     * @param walletType 钱包类型：MAGIC 或 SAFE，用于选择执行路径
      * @return 交易哈希
      */
     suspend fun redeemPositions(
@@ -594,7 +595,7 @@ class BlockchainService(
         proxyAddress: String,
         conditionId: String,
         indexSets: List<BigInteger>,
-        walletType: String = "safe"
+        walletType: WalletType = WalletType.SAFE
     ): Result<String> {
         return try {
             if (indexSets.isEmpty()) {

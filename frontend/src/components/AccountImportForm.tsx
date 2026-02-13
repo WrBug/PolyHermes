@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Form, Input, Button, Radio, Space, Alert, Card, Spin, message } from 'antd'
+import { Form, Input, Button, Radio, Space, Card, Spin, message, Alert } from 'antd'
 import { CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useAccountStore } from '../store/accountStore'
@@ -22,7 +22,6 @@ interface AccountImportFormProps {
   form: any
   onSuccess?: (accountId: number) => void
   onCancel?: () => void
-  showAlert?: boolean
   showCancelButton?: boolean
 }
 
@@ -30,7 +29,6 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
   form,
   onSuccess,
   onCancel,
-  showAlert = true,
   showCancelButton = true
 }) => {
   const { t } = useTranslation()
@@ -266,16 +264,6 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
   
   return (
     <>
-      {showAlert && (
-        <Alert
-          message={t('accountImport.securityTip')}
-          description={t('accountImport.securityTipDesc')}
-          type="warning"
-          showIcon
-          style={{ marginBottom: '24px' }}
-        />
-      )}
-      
       <Form
         form={form}
         layout="vertical"

@@ -4,6 +4,7 @@ import com.wrbug.polymarketbot.api.BuilderRelayerApi
 import com.wrbug.polymarketbot.api.EthereumRpcApi
 import com.wrbug.polymarketbot.api.JsonRpcRequest
 import com.wrbug.polymarketbot.constants.PolymarketConstants
+import com.wrbug.polymarketbot.enums.WalletType
 import com.wrbug.polymarketbot.util.EthereumUtils
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.createClient
@@ -44,6 +45,10 @@ class RelayClientService(
     private val proxyFactoryAddress = "0xaB45c5A4B0c941a2F231C04C3f49182e1A254052"
     private val relayHubAddress = "0xD216153c06E857cD7f72665E0aF1d7D82172F494"
     private val defaultProxyGasLimit = "10000000"
+    
+    // Builder Relayer API 交易类型常量
+    private val RELAYER_TYPE_PROXY = "PROXY"
+    private val RELAYER_TYPE_SAFE = "SAFE"
 
     private val polygonRpcApi: EthereumRpcApi by lazy {
         val rpcUrl = rpcNodeService.getHttpUrl()
@@ -212,14 +217,14 @@ class RelayClientService(
      * @param privateKey 私钥
      * @param proxyAddress 代理钱包地址
      * @param safeTx 交易对象（to/data/value）
-     * @param walletType 钱包类型："magic" 使用 PROXY Gasless，"safe" 使用 Safe 流程
+     * @param walletType 钱包类型：MAGIC 使用 PROXY Gasless，SAFE 使用 Safe 流程
      * @return 交易哈希
      */
     suspend fun execute(
         privateKey: String,
         proxyAddress: String,
         safeTx: SafeTransaction,
-        walletType: String = "safe"
+        walletType: WalletType = WalletType.SAFE
     ): Result<String> {
         return try {
             if (proxyAddress.isBlank() || !proxyAddress.startsWith("0x") || proxyAddress.length != 42) {
@@ -230,7 +235,7 @@ class RelayClientService(
             val builderSecret = systemConfigService.getBuilderSecret()
             val builderPassphrase = systemConfigService.getBuilderPassphrase()
 
-            if (walletType.lowercase() == "magic") {
+            if (walletType == WalletType.MAGIC) {
                 if (!isBuilderRelayerEnabled(builderApiKey, builderSecret, builderPassphrase)) {
                     return Result.failure(IllegalStateException("Magic 账户赎回必须配置 Builder API Key（Gasless）"))
                 }
@@ -289,7 +294,7 @@ class RelayClientService(
         val credentials = org.web3j.crypto.Credentials.create(privateKeyBigInt.toString(16))
         val fromAddress = credentials.address
 
-        val relayPayloadResponse = relayerApi.getRelayPayload(fromAddress, "PROXY")
+        val relayPayloadResponse = relayerApi.getRelayPayload(fromAddress, RELAYER_TYPE_PROXY)
         if (!relayPayloadResponse.isSuccessful || relayPayloadResponse.body() == null) {
             val errorBody = relayPayloadResponse.errorBody()?.string() ?: "未知错误"
             logger.error("获取 Relay Payload 失败: code=${relayPayloadResponse.code()}, body=$errorBody")
@@ -338,7 +343,7 @@ class RelayClientService(
                 String.format("%02x", (signature.v as ByteArray).getOrElse(0) { 0 }.toInt() and 0xff)
 
         val request = BuilderRelayerApi.TransactionRequest(
-            type = "PROXY",
+            type = RELAYER_TYPE_PROXY,
             from = fromAddress,
             to = proxyFactoryAddress,
             proxyWallet = proxyAddress,
@@ -520,7 +525,7 @@ class RelayClientService(
         val redeemCallData = safeTx.data
 
         // 获取 Proxy 的 nonce（通过 Builder Relayer API）
-        val nonceResponse = relayerApi.getNonce(fromAddress, "SAFE")
+        val nonceResponse = relayerApi.getNonce(fromAddress, RELAYER_TYPE_SAFE)
         if (!nonceResponse.isSuccessful || nonceResponse.body() == null) {
             val errorBody = nonceResponse.errorBody()?.string() ?: "未知错误"
             logger.error("获取 nonce 失败: code=${nonceResponse.code()}, body=$errorBody")
@@ -587,7 +592,7 @@ class RelayClientService(
         // 构建 TransactionRequest（参考 builder-relayer-client/src/builder/safe.ts）
         // 注意：根据 TypeScript 实现，data 和 signature 都应该带 0x 前缀
         val request = BuilderRelayerApi.TransactionRequest(
-            type = "SAFE",
+            type = RELAYER_TYPE_SAFE,
             from = fromAddress,
             to = safeTx.to,
             proxyWallet = proxyAddress,

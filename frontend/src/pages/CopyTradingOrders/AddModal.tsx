@@ -1120,8 +1120,6 @@ const AddModal: React.FC<AddModalProps> = ({
             setAccountImportModalVisible(false)
             accountImportForm.resetFields()
           }}
-          showAlert={true}
-          showCancelButton={true}
         />
       </Modal>
       
