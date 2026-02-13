@@ -161,10 +161,12 @@ deploy() {
         # 注意：这里需要手动修改 docker-compose.yml，或者使用环境变量
         warn "请确保 docker-compose.yml 中已配置使用 image: wrbug/polyhermes:latest"
     else
-        # 获取当前分支名作为版本号
-        CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "dev")
-        # 如果分支名包含 /，替换为 -（Docker tag 不支持 /）
-        DOCKER_VERSION=$(echo "$CURRENT_BRANCH" | tr '/' '-')
+        # 版本号：优先使用环境变量 DOCKER_VERSION，未设置时使用当前分支名
+        if [ -z "${DOCKER_VERSION}" ]; then
+            CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "dev")
+            DOCKER_VERSION=$(echo "$CURRENT_BRANCH" | tr '/' '-')
+        fi
+        export DOCKER_VERSION
         
         info "构建 Docker 镜像（本地构建，版本号: ${DOCKER_VERSION}）..."
         
@@ -216,9 +218,11 @@ main() {
     info "访问地址: http://localhost:${SERVER_PORT:-80}"
     echo ""
     if [ "$USE_DOCKER_HUB" != "true" ]; then
-        CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "dev")
-        DOCKER_VERSION=$(echo "$CURRENT_BRANCH" | tr '/' '-')
-        info "提示：本地构建的版本号为当前分支名: ${DOCKER_VERSION}"
+        if [ -z "${DOCKER_VERSION}" ]; then
+            CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "dev")
+            DOCKER_VERSION=$(echo "$CURRENT_BRANCH" | tr '/' '-')
+        fi
+        info "提示：本地构建的版本号: ${DOCKER_VERSION}（可通过环境变量 DOCKER_VERSION 指定）"
         info "生产环境推荐使用 Docker Hub 镜像："
         info "  ./deploy.sh --use-docker-hub"
         info "  或修改 docker-compose.yml 使用 image: wrbug/polyhermes:latest"

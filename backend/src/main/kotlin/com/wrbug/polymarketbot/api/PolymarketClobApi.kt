@@ -1,6 +1,7 @@
 package com.wrbug.polymarketbot.api
 
 import com.google.gson.annotations.SerializedName
+import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.*
 
@@ -164,10 +165,10 @@ interface PolymarketClobApi {
     
     /**
      * 获取服务器时间
-     * 端点: /time
+     * 端点: /time 返回纯数字（Unix 时间戳），非 JSON
      */
     @GET("/time")
-    suspend fun getServerTime(): Response<ServerTimeResponse>
+    suspend fun getServerTime(): Response<ResponseBody>
 }
 
 // 请求和响应数据类
@@ -361,13 +362,6 @@ data class ApiKeyResponse(
     val apiKey: String,
     val secret: String,
     val passphrase: String
-)
-
-/**
- * 服务器时间响应
- */
-data class ServerTimeResponse(
-    val timestamp: Long
 )
 
 /**
