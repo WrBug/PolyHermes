@@ -16,6 +16,10 @@
     "submit": "提交",
     "reset": "重置",
     "close": "關閉",
+    "create": "創建",
+    "copy": "複製",
+    "copySuccess": "複製成功",
+    "copyFailed": "複製失敗",
     "yes": "是",
     "no": "否",
     "actions": "操作",
@@ -49,6 +53,7 @@
     "accountId": "賬戶ID",
     "accountName": "賬戶名稱",
     "walletAddress": "錢包地址",
+    "walletType": "錢包類型",
     "balance": "賬戶餘額",
     "refreshBalance": "刷新餘額",
     "apiCredentials": "API 憑證配置",
@@ -118,6 +123,7 @@
     "importAccount": "導入賬戶",
     "accountName": "賬戶名稱",
     "walletAddress": "錢包地址",
+    "walletType": "錢包類型",
     "proxyAddress": "代理錢包地址",
     "apiCredentials": "API 憑證",
     "balance": "餘額",
@@ -174,8 +180,6 @@
   "accountImport": {
     "title": "導入賬戶",
     "back": "返回",
-    "securityTip": "安全提示",
-    "securityTipDesc": "私鑰將存儲在後端數據庫中，請確保數據庫訪問安全。建議使用 HTTPS 連接。",
     "importMethod": "導入方式",
     "privateKey": "私鑰",
     "mnemonic": "助記詞",
@@ -209,9 +213,29 @@
     "addressErrorMnemonic": "無法從助記詞推導地址",
     "walletType": "錢包類型",
     "walletTypeHelp": "Web3錢包：使用 MetaMask 等瀏覽器錢包連接的 Polymarket 帳戶\nMagic：透過郵箱或社群帳號（如 Google、Twitter）登入的 Polymarket 帳戶",
-    "walletTypeMagic": "Magic（郵箱/社群帳號登入）",
-    "walletTypeSafe": "Web3錢包",
-    "magicNotSupported": "（暫不支持）"
+    "loadingProxyOptions": "正在獲取代理地址和資產信息...",
+    "selectProxyOption": "請選擇帳戶類型",
+    "proxyOptionRequired": "請選擇一個代理地址",
+    "proxyOption": {
+      "magic": {
+        "description": "郵箱/社群帳號登入帳戶（Magic）",
+        "title": "Magic 代理地址"
+      },
+      "safe": {
+        "description": "MetaMask 等瀏覽器錢包帳戶（Safe）",
+        "title": "Safe 代理地址"
+      },
+      "proxyAddress": "代理地址",
+      "proxyAddressHelp": "代理地址是您在 Polymarket 上實際使用的錢包地址：Magic 為郵箱/社群登入帳戶，Safe 為瀏覽器錢包（如 MetaMask）帳戶。請選擇與您 Polymarket 登入方式一致的一項。",
+      "availableBalance": "可用餘額",
+      "positionBalance": "倉位餘額",
+      "totalBalance": "總餘額",
+      "positionCount": "持倉數量",
+      "noAssets": "無資產",
+      "hasAssets": "有資產",
+      "error": "獲取失敗",
+      "select": "選擇此代理地址"
+    }
   },
   "leader": {
     "title": "Leader 管理",
@@ -430,14 +454,20 @@
     "openWebsite": "打開網頁",
     "all": "全部",
     "copyTradingCount": "跟單數",
+    "backtestCount": "回測數",
     "copyTradingRelations": "{{count}} 個跟單關係",
+    "viewCopyTradings": "查看跟單配置",
+    "viewBacktests": "查看回測",
     "createdAt": "創建時間",
     "noData": "暫無 Leader 數據",
     "fetchFailed": "獲取 Leader 列表失敗",
     "deleteSuccess": "刪除 Leader 成功",
     "deleteFailed": "刪除 Leader 失敗",
     "deleteConfirm": "確定要刪除這個 Leader 嗎？",
-    "deleteConfirmDesc": "該 Leader 還有 {{count}} 個跟單關係，請先刪除跟單關係"
+    "deleteConfirmDesc": "該 Leader 還有 {{count}} 個跟單關係，請先刪除跟單關係",
+    "openDetailFailed": "打開詳情失敗",
+    "noCopyTradings": "暫無跟單配置",
+    "noBacktests": "暫無回測"
   },
   "leaderAdd": {
     "title": "添加 Leader",
@@ -510,6 +540,7 @@
     "totalBalance": "總餘額",
     "positions": "持倉列表",
     "noPositions": "暫無持倉",
+    "market": "市場",
     "marketId": "市場ID",
     "side": "方向",
     "quantity": "數量",
@@ -968,8 +999,10 @@
       "priceRange": "價格區間不符",
       "maxPositionValue": "超過最大倉位金額",
       "marketEndDate": "市場截止時間超出限制",
+      "keywordFilter": "關鍵字過濾",
       "unknown": "未知原因"
     },
+    "orderDetails": "訂單詳情",
     "noData": "暫無已過濾訂單",
     "noFilteredOrders": "暫無已過濾訂單"
   },
@@ -1350,11 +1383,21 @@
     "fixedAmountRequired": "請輸入固定金額",
     "fixedAmountInvalid": "固定金額必須大於 0",
     "priceFilters": "價格過濾",
+    "priceRange": "價格區間",
+    "priceRangeTooltip": "僅跟單 Leader 交易價格在指定區間內的訂單。不填寫表示不限制。示例：填寫 0.11 和 0.89 表示僅跟單價格在 0.11 到 0.89 之間的訂單；只填寫最高價 0.89 表示僅跟單價格在 0.89 以下的訂單；只填寫最低價 0.11 表示僅跟單價格在 0.11 以上的訂單。",
+    "minPricePlaceholder": "最低價（留空不限制）",
+    "maxPricePlaceholder": "最高價（留空不限制）",
     "keywordsPlaceholder": "請輸入關鍵字，按回車添加",
+    "maxPositionValuePlaceholder": "留空表示不啟用最大倉位限制",
     "delaySecondsHint": "延遲執行模擬真實跟單延遲",
     "supportSellHint": "是否跟隨 Leader 賣出",
     "sortBy": "排序欄位",
     "sortOrder": "排序順序",
-    "createdAt": "創建時間"
+    "createdAt": "創建時間",
+    "rerun": "重新測試",
+    "rerunConfirm": "將按當前配置創建新的回測任務，是否繼續？",
+    "rerunTaskNamePlaceholder": "新任務名稱（留空使用「原名稱 (副本)」）",
+    "rerunSuccess": "已創建新回測任務",
+    "rerunFailed": "重新測試失敗"
   }
 }

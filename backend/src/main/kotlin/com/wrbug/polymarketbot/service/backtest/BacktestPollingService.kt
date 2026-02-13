@@ -32,8 +32,6 @@ class BacktestPollingService(
     @Scheduled(fixedDelay = 10000) // 10 秒
     fun pollPendingTasks() {
         try {
-            logger.debug("开始轮询待执行的回测任务")
-
             // 1. 检查是否有长时间处于 RUNNING 状态的任务（可能是应用重启导致的）
             val runningTasks = backtestTaskRepository.findByStatus("RUNNING")
             if (runningTasks.isNotEmpty()) {
@@ -72,7 +70,6 @@ class BacktestPollingService(
                 .sortedBy { it.createdAt }
 
             if (pendingTasks.isEmpty()) {
-                logger.debug("没有待执行的回测任务")
                 return
             }
 
@@ -91,32 +88,9 @@ class BacktestPollingService(
                     }
 
                     runBlocking {
-                        // 支持恢复：如果有恢复点，计算从哪一页开始
-                        val pageSize = 100
-                        val page = if (currentTask.lastProcessedTradeIndex != null) {
-                            // 从第几页开始（页码从 0 开始）
-                            // 例如：已处理了99笔，lastProcessedTradeIndex=99，应从第1页开始（offset=100）
-                            val lastProcessedIndex = currentTask.lastProcessedTradeIndex!!
-                            // 计算已处理的页码（从 0 开始）
-                            val processedPage = lastProcessedIndex / pageSize
-
-                            // 特殊情况：如果lastProcessedTradeIndex刚好是100的倍数减1（比如99,199,299...）
-                            // 说明该页已经完全处理，应该从下一页开始
-                            val nextPage = if (lastProcessedIndex % pageSize == pageSize - 1) {
-                                processedPage + 1
-                            } else {
-                                processedPage
-                            }
-
-                            logger.info("恢复任务：已处理索引=$lastProcessedIndex, 计算页码=$nextPage, size=$pageSize")
-                            nextPage
-                        } else {
-                            logger.info("新任务：从第0页开始")
-                            0  // 从第0页开始（offset=0）
-                        }
-
-                        logger.info("执行回测任务: taskId=${currentTask.id}, page=$page, size=$pageSize")
-                        executionService.executeBacktest(currentTask, page = page, size = pageSize)
+                        // 使用 start 游标分页，恢复时由 lastProcessedTradeTime 决定从何时开始拉取
+                        logger.info("执行回测任务: taskId=${currentTask.id}（游标分页，limit=500）")
+                        executionService.executeBacktest(currentTask, page = 0, size = 500)
                     }
                 } catch (e: Exception) {
                     logger.error("回测任务执行失败: taskId=${taskToExecute.id}", e)

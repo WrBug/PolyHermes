@@ -29,5 +29,10 @@ interface AccountRepository : JpaRepository<Account, Long> {
      * 检查钱包地址是否存在
      */
     fun existsByWalletAddress(walletAddress: String): Boolean
+
+    /**
+     * 检查代理地址是否存在
+     */
+    fun existsByProxyAddress(proxyAddress: String): Boolean
 }
 

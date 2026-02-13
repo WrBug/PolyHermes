@@ -430,27 +430,20 @@ class PositionCheckService(
                             processedRedeemablePositions[positionKey] = now
                         }
                         
-                        // 赎回成功后，再查找订单并更新订单状态
+                        // 赎回成功后，按每个跟单配置分别查找未卖出订单并更新状态
+                        // 同一账户同一市场可能同时跟多个 Leader，需按 copyTradingId 分别生成自动卖出记录（如 leader1 对应 20 share，leader2 对应 16 share）
                         for (position in positionsToRedeem) {
-                            // 查找相同仓位的未卖出订单（remaining_quantity > 0）
-                            val unmatchedOrders = mutableListOf<CopyOrderTracking>()
-                            for (copyTrading in copyTradings) {
-                                if (position.outcomeIndex != null) {
-                                    val orders = copyOrderTrackingRepository.findUnmatchedBuyOrdersByOutcomeIndex(
-                                        copyTrading.id!!,
-                                        position.marketId,
-                                        position.outcomeIndex
-                                    )
-                                    unmatchedOrders.addAll(orders)
-                                }
+                            if (position.outcomeIndex == null) {
+                                continue
                             }
-                            
-                            // 如果有未卖出订单，更新订单状态
-                            if (unmatchedOrders.isNotEmpty()) {
-                                // 从订单中获取 copyTradingId（所有订单应该有相同的 copyTradingId）
-                                val copyTradingId = unmatchedOrders.firstOrNull()?.copyTradingId
-                                if (copyTradingId != null) {
-                                    updateOrdersAsSoldAfterRedeem(unmatchedOrders, position, copyTradingId)
+                            for (copyTrading in copyTradings) {
+                                val orders = copyOrderTrackingRepository.findUnmatchedBuyOrdersByOutcomeIndex(
+                                    copyTrading.id!!,
+                                    position.marketId,
+                                    position.outcomeIndex
+                                )
+                                if (orders.isNotEmpty()) {
+                                    updateOrdersAsSoldAfterRedeem(orders, position, copyTrading.id!!)
                                 }
                             }
                         }

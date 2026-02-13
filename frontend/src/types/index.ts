@@ -47,6 +47,37 @@ export interface AccountImportRequest {
 }
 
 /**
+ * 检查代理地址选项请求
+ */
+export interface CheckProxyOptionsRequest {
+  walletAddress: string  // EOA 地址
+  privateKey?: string  // 私钥（加密，私钥导入时提供）
+  mnemonic?: string  // 助记词（加密，助记词导入时提供）
+}
+
+/**
+ * 代理地址选项信息
+ */
+export interface ProxyOption {
+  walletType: string  // "magic" 或 "safe"
+  proxyAddress: string  // 代理地址
+  descriptionKey: string  // 说明文案的多语言 key
+  availableBalance: string  // 可用余额
+  positionBalance: string  // 仓位余额
+  totalBalance: string  // 总余额
+  positionCount: number  // 持仓数量
+  hasAssets: boolean  // 是否有资产
+  error?: string  // 获取失败时的错误信息
+}
+
+/**
+ * 检查代理地址选项响应
+ */
+export interface CheckProxyOptionsResponse {
+  options: ProxyOption[]  // 代理地址选项列表
+}
+
+/**
  * 账户更新请求
  */
 export interface AccountUpdateRequest {
@@ -65,6 +96,7 @@ export interface Leader {
   remark?: string  // Leader 备注（可选）
   website?: string  // Leader 网站（可选）
   copyTradingCount: number
+  backtestCount: number  // 回测数量
   totalOrders?: number
   totalPnl?: string
   createdAt: number
@@ -977,4 +1009,28 @@ export interface NodeCheckResult {
   checkTime: number
   responseTimeMs?: number
   blockNumber?: string
+}
+
+/**
+ * 回测任务 DTO
+ */
+export interface BacktestTaskDto {
+  id: number
+  taskName: string
+  leaderId: number
+  leaderName?: string
+  leaderAddress?: string
+  initialBalance: string
+  finalBalance?: string
+  profitAmount?: string
+  profitRate?: string
+  backtestDays: number
+  startTime: number
+  endTime?: number
+  status: string  // PENDING/RUNNING/COMPLETED/STOPPED/FAILED
+  progress: number
+  totalTrades: number
+  createdAt: number
+  executionStartedAt?: number
+  executionFinishedAt?: number
 }

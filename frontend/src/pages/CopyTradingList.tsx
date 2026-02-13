@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Card, Table, Button, Space, Tag, Popconfirm, Switch, message, Select, Dropdown, Divider, Spin } from 'antd'
 import { PlusOutlined, DeleteOutlined, BarChartOutlined, UnorderedListOutlined, ArrowUpOutlined, ArrowDownOutlined, EditOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
@@ -13,11 +14,13 @@ import StatisticsModal from './CopyTradingOrders/StatisticsModal'
 import FilteredOrdersModal from './CopyTradingOrders/FilteredOrdersModal'
 import EditModal from './CopyTradingOrders/EditModal'
 import AddModal from './CopyTradingOrders/AddModal'
+import LeaderSelect from '../components/LeaderSelect'
 
 const { Option } = Select
 
 const CopyTradingList: React.FC = () => {
   const { t } = useTranslation()
+  const [searchParams] = useSearchParams()
   const isMobile = useMediaQuery({ maxWidth: 768 })
   const { accounts, fetchAccounts } = useAccountStore()
   const [copyTradings, setCopyTradings] = useState<CopyTrading[]>([])
@@ -29,8 +32,15 @@ const CopyTradingList: React.FC = () => {
     accountId?: number
     leaderId?: number
     enabled?: boolean
-  }>({})
-  
+  }>(() => {
+    const leaderIdParam = searchParams.get('leaderId')
+    if (leaderIdParam) {
+      const leaderId = parseInt(leaderIdParam, 10)
+      if (!isNaN(leaderId)) return { leaderId }
+    }
+    return {}
+  })
+
   // Modal 状态
   const [ordersModalOpen, setOrdersModalOpen] = useState(false)
   const [ordersModalCopyTradingId, setOrdersModalCopyTradingId] = useState<string>('')
@@ -43,12 +53,23 @@ const CopyTradingList: React.FC = () => {
   const [editModalCopyTradingId, setEditModalCopyTradingId] = useState<string>('')
   const [addModalOpen, setAddModalOpen] = useState(false)
   
+  // 从 URL 读取 leaderId 并应用筛选（如从 Leader 管理页跳转过来）
+  useEffect(() => {
+    const leaderIdParam = searchParams.get('leaderId')
+    if (leaderIdParam) {
+      const leaderId = parseInt(leaderIdParam, 10)
+      if (!isNaN(leaderId)) {
+        setFilters(prev => ({ ...prev, leaderId }))
+      }
+    }
+  }, [searchParams])
+
   useEffect(() => {
     fetchAccounts()
     fetchLeaders()
     fetchCopyTradings()
   }, [])
-  
+
   useEffect(() => {
     fetchCopyTradings()
   }, [filters])
@@ -390,19 +411,14 @@ const CopyTradingList: React.FC = () => {
             ))}
           </Select>
           
-          <Select
+          <LeaderSelect
             placeholder={t('copyTradingList.filterLeader') || '筛选 Leader'}
             allowClear
             style={{ width: isMobile ? '100%' : 200 }}
             value={filters.leaderId}
             onChange={(value) => setFilters({ ...filters, leaderId: value || undefined })}
-          >
-            {leaders.map(leader => (
-              <Option key={leader.id} value={leader.id}>
-                {leader.leaderName || `Leader ${leader.id}`}
-              </Option>
-            ))}
-          </Select>
+            leaders={leaders}
+          />
           
           <Select
             placeholder="筛选状态"

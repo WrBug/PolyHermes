@@ -54,6 +54,7 @@ data class LeaderDto(
     val remark: String? = null,  // Leader 备注（可选）
     val website: String? = null,  // Leader 网站（可选）
     val copyTradingCount: Long = 0,  // 跟单关系数量
+    val backtestCount: Long = 0,  // 回测数量
     val totalOrders: Long? = null,  // 总订单数（可选）
     val totalPnl: String? = null,  // 总盈亏（可选）
     val createdAt: Long,

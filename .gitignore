@@ -19,7 +19,7 @@ backend/gradle-app.setting
 backend/.gradle
 # 注意：gradle-wrapper.jar 应该被提交，不要忽略
 # backend/gradle/wrapper/gradle-wrapper.jar
-
+polyhub/
 # Kotlin
 *.kt.bak
 *.class

@@ -221,5 +221,36 @@ class BacktestController(
             ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_BACKTEST_RETRY_FAILED, e.message, messageSource))
         }
     }
+
+    /**
+     * 按当前配置重新测试：基于已完成的回测任务创建相同配置的新任务（仅支持已完成任务）
+     */
+    @PostMapping("/tasks/rerun")
+    fun rerunBacktestTask(@RequestBody request: BacktestRerunRequest): ResponseEntity<ApiResponse<BacktestTaskDto>> {
+        return try {
+            logger.info("按配置重新测试: sourceTaskId=${request.id}, newTaskName=${request.taskName}")
+
+            val result = backtestService.rerunBacktestTask(request)
+
+            result.fold(
+                onSuccess = { dto ->
+                    logger.info("重新测试任务创建成功: newTaskId=${dto.id}")
+                    ResponseEntity.ok(ApiResponse.success(dto))
+                },
+                onFailure = { e ->
+                    logger.error("按配置重新测试失败", e)
+                    val errorCode = when (e) {
+                        is IllegalArgumentException -> ErrorCode.BACKTEST_TASK_NOT_FOUND
+                        is IllegalStateException -> ErrorCode.BACKTEST_TASK_NOT_COMPLETED
+                        else -> ErrorCode.SERVER_BACKTEST_RERUN_FAILED
+                    }
+                    ResponseEntity.ok(ApiResponse.error(errorCode, e.message, messageSource))
+                }
+            )
+        } catch (e: Exception) {
+            logger.error("按配置重新测试异常", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_BACKTEST_RERUN_FAILED, e.message, messageSource))
+        }
+    }
 }
 

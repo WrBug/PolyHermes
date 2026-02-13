@@ -207,6 +207,12 @@ export const apiService = {
    */
   accounts: {
     /**
+     * 检查代理地址选项（导入前选择代理类型）
+     */
+    checkProxyOptions: (data: any) =>
+      apiClient.post<ApiResponse<any>>('/accounts/check-proxy-options', data),
+    
+    /**
      * 导入账户
      */
     import: (data: any) => 
@@ -797,6 +803,11 @@ export const backtestService = {
   /**
    * 重试回测任务
    */
-  retry: (data: { id: number }) => apiClient.post('/backtest/tasks/retry', data)
+  retry: (data: { id: number }) => apiClient.post('/backtest/tasks/retry', data),
+
+  /**
+   * 按当前配置重新测试（仅支持已完成任务，创建同名配置的新任务）
+   */
+  rerun: (data: { id: number; taskName?: string }) => apiClient.post('/backtest/tasks/rerun', data)
 }
 

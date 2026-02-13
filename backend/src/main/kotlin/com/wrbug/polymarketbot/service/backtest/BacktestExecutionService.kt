@@ -8,7 +8,9 @@ import com.wrbug.polymarketbot.entity.CopyTrading
 import com.wrbug.polymarketbot.repository.BacktestTradeRepository
 import com.wrbug.polymarketbot.repository.BacktestTaskRepository
 import com.wrbug.polymarketbot.service.common.MarketPriceService
+import com.wrbug.polymarketbot.service.common.MarketService
 import com.wrbug.polymarketbot.service.copytrading.configs.CopyTradingFilterService
+import com.wrbug.polymarketbot.util.gt
 import com.wrbug.polymarketbot.util.toSafeBigDecimal
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -17,6 +19,7 @@ import java.math.BigDecimal
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.max
+import kotlin.math.min
 
 @Service
 class BacktestExecutionService(
@@ -24,12 +27,14 @@ class BacktestExecutionService(
     private val backtestTradeRepository: BacktestTradeRepository,
     private val backtestDataService: BacktestDataService,
     private val marketPriceService: MarketPriceService,
+    private val marketService: MarketService,
     private val copyTradingFilterService: CopyTradingFilterService
 ) {
     private val logger = LoggerFactory.getLogger(BacktestExecutionService::class.java)
 
     /**
      * 持仓数据结构
+     * @param marketEndDate 市场结束时间（毫秒），用于到期结算判断，null 表示未知
      */
     data class Position(
         val marketId: String,
@@ -37,7 +42,8 @@ class BacktestExecutionService(
         val outcomeIndex: Int?,
         var quantity: BigDecimal,
         val avgPrice: BigDecimal,
-        val leaderBuyQuantity: BigDecimal?
+        val leaderBuyQuantity: BigDecimal?,
+        val marketEndDate: Long? = null
     )
 
     /**
@@ -66,6 +72,9 @@ class BacktestExecutionService(
             supportSell = task.supportSell,
             minOrderDepth = null,  // 回测无实时订单簿数据
             maxSpread = null,  // 回测无实时价差数据
+            maxPositionValue = task.maxPositionValue,
+            minPrice = task.minPrice,  // 最低价格
+            maxPrice = task.maxPrice,  // 最高价格
             keywordFilterMode = task.keywordFilterMode,
             keywords = task.keywords,
             configName = null,
@@ -80,10 +89,13 @@ class BacktestExecutionService(
      * 执行回测任务（支持分页和恢复）
      * 自动处理所有页面的数据，支持中断恢复
      */
+    /** 每批请求 API 的条数（基于 start 游标分页，避免 offset 过大） */
+    private val backtestBatchLimit = 500
+
     @Transactional
     suspend fun executeBacktest(task: BacktestTask, page: Int = 1, size: Int = 100) {
         try {
-            logger.info("开始执行回测任务: taskId=${task.id}, taskName=${task.taskName}, startPage=$page, pageSize=$size")
+            logger.info("开始执行回测任务: taskId=${task.id}, taskName=${task.taskName}, batchLimit=$backtestBatchLimit")
 
             // 1. 更新任务状态为 RUNNING
             task.status = "RUNNING"
@@ -95,99 +107,89 @@ class BacktestExecutionService(
             var currentBalance = task.initialBalance
             val positions = mutableMapOf<String, Position>()
             val trades = mutableListOf<BacktestTrade>()
-            // 每日订单数缓存：key为日期字符串(yyyy-MM-dd)，value为当天的 BUY 订单数
             val dailyOrderCountCache = mutableMapOf<String, Int>()
-            // 每日亏损缓存：key为日期字符串(yyyy-MM-dd)，value为当天的累计亏损金额
             val dailyLossCache = mutableMapOf<String, BigDecimal>()
+            val seenTradeIds = mutableSetOf<String>()
 
-            // 3. 计算回测时间范围
+            // 3. 回测时间范围：首次执行以当前时间为基准取最近 backtestDays 天；断点续跑保留原 startTime，仅 endTime 延到当前
             val endTime = System.currentTimeMillis()
-            val startTime = task.startTime
+            val startTime = if (task.lastProcessedTradeTime == null) {
+                endTime - (task.backtestDays * 24L * 3600 * 1000)
+            } else {
+                task.startTime
+            }
 
-            logger.info("回测时间范围: ${formatTimestamp(startTime)} - ${formatTimestamp(endTime)}, " +
+            logger.info("回测时间范围: ${formatTimestamp(startTime)} - ${formatTimestamp(endTime)} (${task.backtestDays} 天), " +
                 "初始余额: ${task.initialBalance.toPlainString()}")
 
-            // 4. 恢复机制：如果有恢复点，计算从哪一页开始（页码从 0 开始）
-            val startPage = if (task.lastProcessedTradeIndex != null) {
-                val lastProcessedIndex = task.lastProcessedTradeIndex!!
-                // 计算已处理的页码（从 0 开始）
-                val processedPage = lastProcessedIndex / size
-
-                // 特殊情况：如果lastProcessedTradeIndex刚好是100的倍数减1（比如99,199,299...）
-                // 说明该页已经完全处理，应该从下一页开始
-                val nextPage = if (lastProcessedIndex % size == size - 1) {
-                    processedPage + 1
-                } else {
-                    processedPage
-                }
-
-                logger.info("恢复任务：已处理索引=$lastProcessedIndex, 计算页码=$nextPage, size=$size")
-                nextPage
+            // 4. 游标分页：恢复时也从 lastProcessedTradeTime 所在秒开始拉（不加 1），与分页规则一致；已处理的通过 timestamp 跳过，不依赖内存 seenTradeIds
+            var cursorSeconds = if (task.lastProcessedTradeTime != null) {
+                task.lastProcessedTradeTime!! / 1000
             } else {
-                logger.info("新任务：从第0页开始")
-                0
+                startTime / 1000
             }
+            val endSeconds = endTime / 1000
+            val resumeThresholdMs = task.lastProcessedTradeTime ?: 0L
 
-            // 5. 分页获取和处理交易数据
-            var currentPage = maxOf(startPage, page)
-            // 计算下一个要处理的全局索引（用于日志和统计）
-            val nextGlobalIndex = if (task.lastProcessedTradeIndex != null) {
-                task.lastProcessedTradeIndex!! + 1
-            } else {
-                0
-            }
+            logger.info("开始游标分页：cursorStart=$cursorSeconds（恢复则跳过 timestamp<=${resumeThresholdMs}ms）")
 
-            logger.info("开始分页处理：起始页=$currentPage, 下一个要处理的索引=$nextGlobalIndex")
-
+            var terminateBacktest = false
             while (true) {
-                // 定期从数据库重新加载任务状态，确保能及时响应停止操作
+                if (terminateBacktest) {
+                    logger.info("余额已为负或不足，终止回测循环")
+                    break
+                }
                 val currentTaskStatus = backtestTaskRepository.findById(task.id!!).orElse(null)
                 if (currentTaskStatus == null || currentTaskStatus.status != "RUNNING") {
                     logger.info("回测任务状态已变更: ${currentTaskStatus?.status}，停止执行")
                     break
                 }
 
-                logger.info("正在获取第 $currentPage 页数据...")
+                logger.info("正在获取批次数据 cursorStart=$cursorSeconds (${formatTimestamp(cursorSeconds * 1000)}) ...")
 
-                // 每页使用独立的交易列表，避免跨页重复保存
                 val currentPageTrades = mutableListOf<BacktestTrade>()
 
                 try {
-                    // 获取当前页的交易数据（支持重试5次）
-                    val pageTrades = backtestDataService.getLeaderHistoricalTradesForPage(
+                    val batch = backtestDataService.getLeaderHistoricalTradesBatch(
                         task.leaderId,
                         startTime,
                         endTime,
-                        currentPage,
-                        size
+                        cursorSeconds,
+                        backtestBatchLimit
                     )
+                    val pageTrades = batch.trades
 
                     if (pageTrades.isEmpty()) {
-                        logger.info("第 $currentPage 页无数据，所有数据处理完成")
+                        logger.info("本批无数据，所有数据处理完成")
                         break
                     }
 
-                    logger.info("第 $currentPage 页获取到 ${pageTrades.size} 条交易")
+                    logger.info("本批获取 ${pageTrades.size} 条交易，是否有下一页: ${batch.nextCursorSeconds != null}")
 
-                    // 处理当前页的交易
+                    val countAtBatchStart = task.processedTradeCount
                     var lastProcessedIndexInPage: Int? = null
+                    var processedInBatch = 0
                     for (localIndex in pageTrades.indices) {
                         val leaderTrade = pageTrades[localIndex]
-                        // 计算当前交易在全局数据中的索引（从 0 开始）
-                        val index = currentPage * size + localIndex
-
-                        // 如果是恢复任务，跳过已处理的条目
-                        if (task.lastProcessedTradeIndex != null && index <= task.lastProcessedTradeIndex!!) {
-                            logger.debug("跳过已处理的交易: index=$index, lastProcessedIndex=${task.lastProcessedTradeIndex}")
+                        if (leaderTrade.tradeId in seenTradeIds) {
+                            logger.debug("跳过重复交易: ${leaderTrade.tradeId}")
                             continue
                         }
+                        if (resumeThresholdMs > 0 && leaderTrade.timestamp <= resumeThresholdMs) {
+                            logger.debug("恢复时跳过已处理时间戳: tradeId=${leaderTrade.tradeId}, timestamp=${leaderTrade.timestamp}")
+                            continue
+                        }
+                        seenTradeIds.add(leaderTrade.tradeId)
 
-                        // 记录当前处理的索引
+                        val index = countAtBatchStart + processedInBatch
                         lastProcessedIndexInPage = index
+                        processedInBatch++
 
-                        // 更新进度
-                        val progress = if (pageTrades.size > 0) {
-                            (localIndex * 100) / pageTrades.size
+                        // 进度按时间比例：(当前订单时间 - 开始时间) / (结束时间 - 开始时间) * 100，运行中上限 99
+                        val timeRange = endTime - startTime
+                        val progress = if (timeRange > 0) {
+                            val elapsed = (leaderTrade.timestamp - startTime).coerceIn(0L, timeRange)
+                            min(99, ((elapsed * 100) / timeRange).toInt())
                         } else {
                             0
                         }
@@ -199,15 +201,15 @@ class BacktestExecutionService(
 
                         try {
                             // 5.1 实时检查并结算已到期的市场
-                            currentBalance = settleExpiredPositions(task, positions, currentBalance, trades, leaderTrade.timestamp)
+                            currentBalance = settleExpiredPositions(task, positions, currentBalance, trades, leaderTrade.timestamp, currentPageTrades)
 
                             // 5.2 检查余额和持仓状态
-                            if (currentBalance < BigDecimal.ZERO) {
-                                logger.info("余额已为负，直接终止回测: $currentBalance")
-                                break
-                            }
-                            if (currentBalance < BigDecimal.ONE && positions.isEmpty()) {
-                                logger.info("余额不足且无持仓，停止回测: $currentBalance")
+                            if (currentBalance <= BigDecimal.ONE) {
+                                logger.info(
+                                    if (currentBalance < BigDecimal.ZERO) "余额已为负，直接终止回测: $currentBalance"
+                                    else "余额<=1，停止回测: $currentBalance"
+                                )
+                                terminateBacktest = true
                                 break
                             }
 
@@ -262,21 +264,80 @@ class BacktestExecutionService(
 
                             // 5.7 处理买卖逻辑
                             if (leaderTrade.side == "BUY") {
-                                // 买入逻辑
-                                val quantity = finalFollowAmount.divide(leaderTrade.price, 8, java.math.RoundingMode.DOWN)
-                                val totalCost = finalFollowAmount
+                                // 余额不足时按最大可用余额交易，仍须满足最小订单金额
+                                val actualBuyAmount = if (currentBalance < finalFollowAmount) {
+                                    logger.debug("余额不足，按最大余额买入: balance=$currentBalance, 原需=$finalFollowAmount, marketId=${leaderTrade.marketId}")
+                                    currentBalance
+                                } else {
+                                    finalFollowAmount
+                                }
+                                if (actualBuyAmount < task.minOrderSize) {
+                                    logger.debug("可用金额低于最小订单限制跳过: actual=$actualBuyAmount, minOrderSize=${task.minOrderSize}")
+                                    continue
+                                }
+                                val quantity = actualBuyAmount.divide(leaderTrade.price, 8, java.math.RoundingMode.DOWN)
+                                if (quantity <= BigDecimal.ZERO) {
+                                    logger.debug("计算数量为0跳过: actualBuyAmount=$actualBuyAmount, price=${leaderTrade.price}")
+                                    continue
+                                }
+                                val totalCost = actualBuyAmount
 
-                                // 更新余额和持仓
+                                // 5.6.3 检查最大仓位限制（如果配置了）
+                                if (task.maxPositionValue != null) {
+                                    val positionKey = "${leaderTrade.marketId}:${leaderTrade.outcomeIndex ?: 0}"
+                                    val currentPosition = positions[positionKey]
+                                    val currentPositionValue = if (currentPosition != null) {
+                                        currentPosition.quantity.multiply(currentPosition.avgPrice)
+                                    } else {
+                                        BigDecimal.ZERO
+                                    }
+                                    val totalValueAfterOrder = currentPositionValue.add(actualBuyAmount)
+                                    
+                                    if (totalValueAfterOrder.gt(task.maxPositionValue)) {
+                                        val currentPositionValueStr = currentPositionValue.stripTrailingZeros().toPlainString()
+                                        val totalValueStr = totalValueAfterOrder.stripTrailingZeros().toPlainString()
+                                        val maxValueStr = task.maxPositionValue.stripTrailingZeros().toPlainString()
+                                        logger.info("超过最大仓位金额限制: 市场=${leaderTrade.marketId}, 方向=${leaderTrade.outcomeIndex}, 当前仓位=${currentPositionValueStr} USDC, 买入金额=${actualBuyAmount} USDC, 总计=${totalValueStr} USDC > 最大限制=${maxValueStr} USDC")
+                                        continue
+                                    }
+                                }
+
+                                // 更新余额和持仓（同市场同 outcome 多次买入合并：数量相加、加权均价、leaderBuyQuantity 相加）
                                 currentBalance -= totalCost
                                 val positionKey = "${leaderTrade.marketId}:${leaderTrade.outcomeIndex ?: 0}"
-                                positions[positionKey] = Position(
-                                    marketId = leaderTrade.marketId,
-                                    outcome = leaderTrade.outcome ?: "",
-                                    outcomeIndex = leaderTrade.outcomeIndex,
-                                    quantity = quantity,
-                                    avgPrice = leaderTrade.price.toSafeBigDecimal(),
-                                    leaderBuyQuantity = leaderTrade.size.toSafeBigDecimal()
-                                )
+                                val price = leaderTrade.price.toSafeBigDecimal()
+                                val leaderSize = leaderTrade.size.toSafeBigDecimal()
+                                val existing = positions[positionKey]
+                                positions[positionKey] = if (existing != null) {
+                                    val newQuantity = existing.quantity.add(quantity)
+                                    val newAvgPrice = if (newQuantity > BigDecimal.ZERO) {
+                                        existing.quantity.multiply(existing.avgPrice).add(quantity.multiply(price))
+                                            .divide(newQuantity, 8, java.math.RoundingMode.HALF_UP)
+                                    } else {
+                                        price
+                                    }
+                                    val newLeaderBuyQuantity = (existing.leaderBuyQuantity ?: BigDecimal.ZERO).add(leaderSize)
+                                    Position(
+                                        marketId = leaderTrade.marketId,
+                                        outcome = leaderTrade.outcome ?: "",
+                                        outcomeIndex = leaderTrade.outcomeIndex,
+                                        quantity = newQuantity,
+                                        avgPrice = newAvgPrice,
+                                        leaderBuyQuantity = newLeaderBuyQuantity,
+                                        marketEndDate = existing.marketEndDate
+                                    )
+                                } else {
+                                    val market = marketService.getMarket(leaderTrade.marketId)
+                                    Position(
+                                        marketId = leaderTrade.marketId,
+                                        outcome = leaderTrade.outcome ?: "",
+                                        outcomeIndex = leaderTrade.outcomeIndex,
+                                        quantity = quantity,
+                                        avgPrice = price,
+                                        leaderBuyQuantity = leaderSize,
+                                        marketEndDate = market?.endDate
+                                    )
+                                }
 
                                 // 记录交易到当前页列表
                                 currentPageTrades.add(BacktestTrade(
@@ -289,7 +350,7 @@ class BacktestExecutionService(
                                     outcomeIndex = leaderTrade.outcomeIndex,
                                     quantity = quantity,
                                     price = leaderTrade.price.toSafeBigDecimal(),
-                                    amount = finalFollowAmount,
+                                    amount = actualBuyAmount,
                                     fee = BigDecimal.ZERO,
                                     profitLoss = null,
                                     balanceAfter = currentBalance,
@@ -384,14 +445,11 @@ class BacktestExecutionService(
                         }
                     }
 
-                    // 保存当前页的所有交易（每页处理完成后保存，避免重复插入）
+                    // 保存本批交易
                     if (currentPageTrades.isNotEmpty()) {
-                        logger.info("保存第 $currentPage 页的交易数据，共 ${currentPageTrades.size} 笔")
-                        
-                        // 批量保存当前页的交易
+                        logger.info("保存本批交易，共 ${currentPageTrades.size} 笔")
                         backtestTradeRepository.saveAll(currentPageTrades)
 
-                        // 更新当前页的最后处理信息
                         val lastTradeInPage = currentPageTrades.lastOrNull()
                         if (lastTradeInPage != null && lastProcessedIndexInPage != null) {
                             task.lastProcessedTradeTime = lastTradeInPage.tradeTime
@@ -399,28 +457,34 @@ class BacktestExecutionService(
                             task.processedTradeCount = lastProcessedIndexInPage + 1
                             task.finalBalance = currentBalance
                             backtestTaskRepository.save(task)
-
-                            logger.info("第 $currentPage 页处理完成，更新索引: ${task.lastProcessedTradeIndex}, 总处理数: ${task.processedTradeCount}")
+                            logger.info("本批处理完成，lastProcessedTradeIndex=${task.lastProcessedTradeIndex}, 总处理数=${task.processedTradeCount}")
                         }
                     } else {
-                        logger.info("第 $currentPage 页没有交易需要保存")
+                        logger.info("本批没有交易需要保存")
                     }
 
-                    // 将当前页交易添加到全局列表（用于最终统计）
                     trades.addAll(currentPageTrades)
 
-                    // 准备处理下一页
-                    currentPage++
+                    if (batch.nextCursorSeconds == null) {
+                        logger.info("本批不足 $backtestBatchLimit 条，已是最后一页")
+                        break
+                    }
+                    cursorSeconds = batch.nextCursorSeconds!!
 
                 } catch (e: Exception) {
-                    logger.error("获取或处理第 $currentPage 页数据失败: ${e.message}", e)
+                    logger.error("获取或处理本批数据失败: ${e.message}", e)
                     // 重试失败，标记任务为 FAILED
                     throw e
                 }
             }
 
             // 6. 处理回测结束时仍未到期的持仓
-            currentBalance = settleRemainingPositions(task, positions, currentBalance, trades, endTime)
+            val remainingSettlements = mutableListOf<BacktestTrade>()
+            currentBalance = settleRemainingPositions(task, positions, currentBalance, trades, endTime, remainingSettlements)
+            if (remainingSettlements.isNotEmpty()) {
+                backtestTradeRepository.saveAll(remainingSettlements)
+                logger.info("回测结束结算剩余持仓，持久化 ${remainingSettlements.size} 笔 SETTLEMENT(CLOSED)")
+            }
 
             // 7. 计算最终统计数据
             val statistics = calculateStatistics(trades)
@@ -475,18 +539,25 @@ class BacktestExecutionService(
 
     /**
      * 结算已到期的市场
+     * @param batchTradesToSave 本批要持久化的交易列表，到期结算（赎回/输）会追加到此列表并随本批一起落库
      */
     private suspend fun settleExpiredPositions(
         task: BacktestTask,
         positions: MutableMap<String, Position>,
         currentBalance: BigDecimal,
         trades: MutableList<BacktestTrade>,
-        currentTime: Long
+        currentTime: Long,
+        batchTradesToSave: MutableList<BacktestTrade>
     ): BigDecimal {
         var balance = currentBalance
 
         for ((positionKey, position) in positions.toList()) {
             try {
+                // 仅当市场已到期（结束时间 <= 当前回测时间）时才结算，避免未到期持仓被误结算
+                if (position.marketEndDate == null || position.marketEndDate!! > currentTime) {
+                    logger.debug("持仓未到期跳过结算: marketId=${position.marketId}, endDate=${position.marketEndDate}, currentTime=$currentTime")
+                    continue
+                }
                 // 获取市场当前价格
                 val marketPrice = marketPriceService.getCurrentMarketPrice(
                     position.marketId,
@@ -507,12 +578,12 @@ class BacktestExecutionService(
 
                 balance += settlementValue
 
-                // 记录结算交易
-                trades.add(BacktestTrade(
+                val marketTitle = marketService.getMarket(position.marketId)?.title ?: ""
+                val settlementTrade = BacktestTrade(
                     backtestTaskId = task.id!!,
                     tradeTime = currentTime,
                     marketId = position.marketId,
-                    marketTitle = "",
+                    marketTitle = marketTitle,
                     side = "SETTLEMENT",
                     outcome = when {
                         settlementPrice == BigDecimal.ONE -> "WIN"
@@ -527,7 +598,9 @@ class BacktestExecutionService(
                     profitLoss = profitLoss,
                     balanceAfter = balance,
                     leaderTradeId = null
-                ))
+                )
+                trades.add(settlementTrade)
+                batchTradesToSave.add(settlementTrade)
 
                 // 移除已结算的持仓
                 positions.remove(positionKey)
@@ -540,14 +613,16 @@ class BacktestExecutionService(
     }
 
     /**
-     * 结算未到期持仓
+     * 结算未到期持仓（回测结束时剩余持仓按均价平仓）
+     * @param settlementsToSave 本批结算记录会追加到此列表，调用方需落库
      */
     private suspend fun settleRemainingPositions(
         task: BacktestTask,
         positions: MutableMap<String, Position>,
         currentBalance: BigDecimal,
         trades: MutableList<BacktestTrade>,
-        currentTime: Long
+        currentTime: Long,
+        settlementsToSave: MutableList<BacktestTrade>
     ): BigDecimal {
         var balance = currentBalance
 
@@ -561,12 +636,12 @@ class BacktestExecutionService(
 
             balance += settlementValue
 
-            // 记录平仓交易
-            trades.add(BacktestTrade(
+            val marketTitle = marketService.getMarket(position.marketId)?.title ?: ""
+            val closedTrade = BacktestTrade(
                 backtestTaskId = task.id!!,
                 tradeTime = currentTime,
                 marketId = position.marketId,
-                marketTitle = "",
+                marketTitle = marketTitle,
                 side = "SETTLEMENT",
                 outcome = "CLOSED",
                 outcomeIndex = position.outcomeIndex,
@@ -577,7 +652,9 @@ class BacktestExecutionService(
                 profitLoss = profitLoss,
                 balanceAfter = balance,
                 leaderTradeId = null
-            ))
+            )
+            trades.add(closedTrade)
+            settlementsToSave.add(closedTrade)
         }
 
         positions.clear()

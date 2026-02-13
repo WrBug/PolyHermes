@@ -570,7 +570,8 @@ open class CopyOrderTrackingService(
                         owner = account.apiKey,
                         copyTradingId = copyTrading.id!!,
                         tradeId = trade.id,
-                        feeRateBps = feeRateBps
+                        feeRateBps = feeRateBps,
+                        signatureType = orderSigningService.getSignatureTypeForWalletType(account.walletType)
                     )
 
                     // 处理订单创建失败
@@ -994,7 +995,7 @@ open class CopyOrderTrackingService(
             "0"
         }
 
-        // 9. 创建并签名卖出订单
+        // 9. 创建并签名卖出订单（按账户钱包类型使用对应 signatureType）
         val signedOrder = try {
             orderSigningService.createAndSignOrder(
                 privateKey = decryptedPrivateKey,
@@ -1003,7 +1004,7 @@ open class CopyOrderTrackingService(
                 side = "SELL",
                 price = sellPrice.toString(),
                 size = totalMatched.toString(),
-                signatureType = 2,  // Browser Wallet
+                signatureType = orderSigningService.getSignatureTypeForWalletType(account.walletType),
                 nonce = "0",
                 feeRateBps = feeRateBps,  // 使用动态获取的费率
                 expiration = "0"
@@ -1044,7 +1045,8 @@ open class CopyOrderTrackingService(
             owner = account.apiKey,
             copyTradingId = copyTrading.id,
             tradeId = leaderSellTrade.id,
-            feeRateBps = feeRateBps
+            feeRateBps = feeRateBps,
+            signatureType = orderSigningService.getSignatureTypeForWalletType(account.walletType)
         )
 
         if (createOrderResult.isFailure) {
@@ -1137,6 +1139,7 @@ open class CopyOrderTrackingService(
      * @param copyTradingId 跟单配置ID（用于日志）
      * @param tradeId Leader 交易ID（用于日志）
      * @param feeRateBps 费率基点（从API动态获取）
+     * @param signatureType 签名类型（1=Magic, 2=Safe）
      * @return 成功返回订单ID，失败返回异常
      */
     private suspend fun createOrderWithRetry(
@@ -1150,7 +1153,8 @@ open class CopyOrderTrackingService(
         owner: String,
         copyTradingId: Long,
         tradeId: String,
-        feeRateBps: String
+        feeRateBps: String,
+        signatureType: Int
     ): Result<String> {
         var lastError: Exception? = null
 
@@ -1165,7 +1169,7 @@ open class CopyOrderTrackingService(
                     side = side,
                     price = price,
                     size = size,
-                    signatureType = 2,  // Browser Wallet
+                    signatureType = signatureType,
                     nonce = "0",
                     feeRateBps = feeRateBps,  // 使用动态获取的费率
                     expiration = "0"

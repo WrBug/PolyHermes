@@ -181,6 +181,13 @@ const AccountDetail: React.FC = () => {
           <Descriptions.Item label={t('account.accountName')}>
             {account.accountName || '-'}
           </Descriptions.Item>
+          {account.walletType && (
+            <Descriptions.Item label={t('account.walletType')}>
+              <Tag color={account.walletType.toLowerCase() === 'magic' ? 'purple' : 'blue'}>
+                {account.walletType.toLowerCase() === 'magic' ? 'Magic' : 'Safe'}
+              </Tag>
+            </Descriptions.Item>
+          )}
           <Descriptions.Item label={t('account.walletAddress')} span={isMobile ? 1 : 2}>
             <span style={{ 
               fontFamily: 'monospace', 

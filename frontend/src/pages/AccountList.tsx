@@ -304,6 +304,20 @@ const AccountList: React.FC = () => {
       }
     },
     {
+      title: t('accountList.walletType'),
+      dataIndex: 'walletType',
+      key: 'walletType',
+      render: (walletType: string) => {
+        if (!walletType) return '-'
+        const type = walletType.toLowerCase()
+        return (
+          <Tag color={type === 'magic' ? 'purple' : 'blue'}>
+            {type === 'magic' ? 'Magic' : 'Safe'}
+          </Tag>
+        )
+      }
+    },
+    {
       title: t('accountList.balance'),
       dataIndex: 'balance',
       key: 'balance',
@@ -392,7 +406,7 @@ const AccountList: React.FC = () => {
                   style={{ marginLeft: '4px', padding: '0 4px' }}
                 />
               </div>
-              <div>
+              <div style={{ marginBottom: '4px' }}>
                 <strong>{t('accountList.proxyAddress')}:</strong> {record.proxyAddress ? `${record.proxyAddress.slice(0, 6)}...${record.proxyAddress.slice(-4)}` : '-'}
                 <Button
                   type="text"
@@ -405,6 +419,14 @@ const AccountList: React.FC = () => {
                   style={{ marginLeft: '4px', padding: '0 4px' }}
                 />
               </div>
+              {record.walletType && (
+                <div style={{ marginBottom: '4px' }}>
+                  <strong>{t('accountList.walletType')}:</strong>{' '}
+                  <Tag color={record.walletType.toLowerCase() === 'magic' ? 'purple' : 'blue'} style={{ marginLeft: '4px' }}>
+                    {record.walletType.toLowerCase() === 'magic' ? 'Magic' : 'Safe'}
+                  </Tag>
+                </div>
+              )}
             </div>
             <div style={{
               fontSize: '14px',
@@ -654,6 +676,13 @@ const AccountList: React.FC = () => {
                   />
                 </Space>
               </Descriptions.Item>
+              {detailAccount.walletType && (
+                <Descriptions.Item label={t('accountList.walletType')}>
+                  <Tag color={detailAccount.walletType.toLowerCase() === 'magic' ? 'purple' : 'blue'}>
+                    {detailAccount.walletType.toLowerCase() === 'magic' ? 'Magic' : 'Safe'}
+                  </Tag>
+                </Descriptions.Item>
+              )}
               <Descriptions.Item label={t('accountList.totalBalance')} span={isMobile ? 1 : 2}>
                 {detailBalanceLoading ? (
                   <Spin size="small" />
@@ -854,9 +883,9 @@ const AccountList: React.FC = () => {
           accountImportForm.resetFields()
         }}
         footer={null}
-        width={isMobile ? '95%' : 600}
+        width={isMobile ? '95%' : 640}
         style={{ top: isMobile ? 20 : 50 }}
-        bodyStyle={{ padding: '24px', maxHeight: 'calc(100vh - 150px)', overflow: 'auto' }}
+        bodyStyle={{ padding: isMobile ? '16px 20px' : '24px 28px', maxHeight: 'calc(100vh - 140px)', overflow: 'auto' }}
         destroyOnClose
         maskClosable
         closable
@@ -868,8 +897,6 @@ const AccountList: React.FC = () => {
             setAccountImportModalVisible(false)
             accountImportForm.resetFields()
           }}
-          showAlert={true}
-          showCancelButton={true}
         />
       </Modal>
     </div>

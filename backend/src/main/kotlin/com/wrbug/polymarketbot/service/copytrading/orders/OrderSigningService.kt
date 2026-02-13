@@ -19,9 +19,19 @@ import java.math.RoundingMode
  */
 @Service
 class OrderSigningService {
-    
+
     private val logger = LoggerFactory.getLogger(OrderSigningService::class.java)
-    
+
+    /**
+     * 根据钱包类型返回 CLOB 订单签名类型
+     * @param walletType Magic=邮箱/社交登录, Safe=Web3 钱包
+     * @return 1=POLY_PROXY(Magic), 2=POLY_GNOSIS_SAFE(Safe), 默认 2
+     */
+    fun getSignatureTypeForWalletType(walletType: String?): Int {
+        val walletTypeEnum = com.wrbug.polymarketbot.enums.WalletType.fromStringOrDefault(walletType, com.wrbug.polymarketbot.enums.WalletType.SAFE)
+        return if (walletTypeEnum == com.wrbug.polymarketbot.enums.WalletType.MAGIC) 1 else 2
+    }
+
     // Polygon 主网合约地址
     private val EXCHANGE_CONTRACT = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E"
     private val CHAIN_ID = 137L

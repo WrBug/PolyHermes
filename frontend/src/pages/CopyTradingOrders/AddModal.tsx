@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next'
 import { useMediaQuery } from 'react-responsive'
 import AccountImportForm from '../../components/AccountImportForm'
 import LeaderAddForm from '../../components/LeaderAddForm'
+import LeaderSelect from '../../components/LeaderSelect'
 
 const { Option } = Select
 
@@ -28,6 +29,7 @@ interface AddModalProps {
     supportSell?: boolean
     keywordFilterMode?: string
     keywords?: string[]
+    maxPositionValue?: number
     configName?: string
   }
 }
@@ -124,7 +126,8 @@ const AddModal: React.FC<AddModalProps> = ({
       maxDailyLoss: config.maxDailyLoss,
       maxDailyOrders: config.maxDailyOrders,
       supportSell: config.supportSell,
-      keywordFilterMode: config.keywordFilterMode || 'DISABLED'
+      keywordFilterMode: config.keywordFilterMode || 'DISABLED',
+      maxPositionValue: config.maxPositionValue
     }
     console.log('[AddModal] fillPreFilledConfig: setting form values:', formValues)
     
@@ -467,8 +470,10 @@ const AddModal: React.FC<AddModalProps> = ({
             name="leaderId"
             rules={[{ required: true, message: t('copyTradingAdd.leaderRequired') || '请选择 Leader' }]}
           >
-            <Select 
+            <LeaderSelect
+              leaders={leaders}
               placeholder={t('copyTradingAdd.selectLeaderPlaceholder') || '请选择 Leader'}
+              onSelectChange={(value) => value !== undefined && fetchLeaderAssetInfo(value)}
               notFoundContent={
                 leaders.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '12px' }}>
@@ -484,14 +489,7 @@ const AddModal: React.FC<AddModalProps> = ({
                   </div>
                 ) : null
               }
-              onChange={(value) => fetchLeaderAssetInfo(value)}
-            >
-              {leaders.map(leader => (
-                <Option key={leader.id} value={leader.id}>
-                  {leader.leaderName || `Leader ${leader.id}`} ({leader.leaderAddress.slice(0, 6)}...{leader.leaderAddress.slice(-4)})
-                </Option>
-              ))}
-            </Select>
+            />
           </Form.Item>
           
           {/* Leader 资产信息 */}
@@ -1108,9 +1106,9 @@ const AddModal: React.FC<AddModalProps> = ({
           accountImportForm.resetFields()
         }}
         footer={null}
-        width={isMobile ? '95%' : 600}
+        width={isMobile ? '95%' : 640}
         style={{ top: isMobile ? 20 : 50 }}
-        bodyStyle={{ padding: '24px', maxHeight: 'calc(100vh - 150px)', overflow: 'auto' }}
+        bodyStyle={{ padding: isMobile ? '16px 20px' : '24px 28px', maxHeight: 'calc(100vh - 140px)', overflow: 'auto' }}
         destroyOnClose
         maskClosable
         closable
@@ -1122,8 +1120,6 @@ const AddModal: React.FC<AddModalProps> = ({
             setAccountImportModalVisible(false)
             accountImportForm.resetFields()
           }}
-          showAlert={true}
-          showCancelButton={true}
         />
       </Modal>
       

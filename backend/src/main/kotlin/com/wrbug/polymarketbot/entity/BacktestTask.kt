@@ -37,7 +37,7 @@ data class BacktestTask(
     val backtestDays: Int,
 
     @Column(name = "start_time", nullable = false)
-    val startTime: Long,  // 回测开始时间(历史时间)
+    val startTime: Long,  // 回测开始时间(历史时间)，创建时计算；执行时以当前时间为基准用局部变量重算窗口
 
     @Column(name = "end_time")
     var endTime: Long? = null,  // 回测结束时间(历史时间)
@@ -72,6 +72,15 @@ data class BacktestTask(
 
     @Column(name = "keywords", columnDefinition = "JSON")
     val keywords: String? = null,
+
+    @Column(name = "max_position_value", precision = 20, scale = 8)
+    val maxPositionValue: BigDecimal? = null,  // 最大仓位金额（USDC），NULL表示不启用
+
+    @Column(name = "min_price", precision = 20, scale = 8)
+    val minPrice: BigDecimal? = null,  // 最低价格（可选），NULL表示不限制最低价
+
+    @Column(name = "max_price", precision = 20, scale = 8)
+    val maxPrice: BigDecimal? = null,  // 最高价格（可选），NULL表示不限制最高价
 
     // 统计字段
     @Column(name = "avg_holding_time")

@@ -35,6 +35,10 @@
     "success": "成功",
     "failed": "失败",
     "close": "关闭",
+    "create": "创建",
+    "copy": "复制",
+    "copySuccess": "复制成功",
+    "copyFailed": "复制失败",
     "ascending": "升序",
     "descending": "降序",
     "day": "天"
@@ -117,6 +121,7 @@
     "importAccount": "导入账户",
     "accountName": "账户名称",
     "walletAddress": "钱包地址",
+    "walletType": "钱包类型",
     "proxyAddress": "代理钱包地址",
     "apiCredentials": "API 凭证",
     "balance": "余额",
@@ -174,8 +179,6 @@
   "accountImport": {
     "title": "导入账户",
     "back": "返回",
-    "securityTip": "安全提示",
-    "securityTipDesc": "私钥将存储在后端数据库中，请确保数据库访问安全。建议使用 HTTPS 连接。",
     "importMethod": "导入方式",
     "privateKey": "私钥",
     "mnemonic": "助记词",
@@ -209,9 +212,29 @@
     "addressErrorMnemonic": "无法从助记词推导地址",
     "walletType": "钱包类型",
     "walletTypeHelp": "Web3钱包：使用 MetaMask 等浏览器钱包连接的 Polymarket 账户\nMagic：通过邮箱或社交账号（如 Google、Twitter）登录的 Polymarket 账户",
-    "walletTypeMagic": "Magic（邮箱/社交账号登录）",
-    "walletTypeSafe": "Web3钱包",
-    "magicNotSupported": "（暂不支持）"
+    "loadingProxyOptions": "正在获取代理地址和资产信息...",
+    "selectProxyOption": "请选择账户类型",
+    "proxyOptionRequired": "请选择一个代理地址",
+    "proxyOption": {
+      "magic": {
+        "description": "邮箱/社交账号登录账户（Magic）",
+        "title": "Magic 代理地址"
+      },
+      "safe": {
+        "description": "MetaMask 等浏览器钱包账户（Safe）",
+        "title": "Safe 代理地址"
+      },
+      "proxyAddress": "代理地址",
+      "proxyAddressHelp": "代理地址是您在 Polymarket 上实际使用的钱包地址：Magic 为邮箱/社交登录账户，Safe 为浏览器钱包（如 MetaMask）账户。请选择与您 Polymarket 登录方式一致的一项。",
+      "availableBalance": "可用余额",
+      "positionBalance": "仓位余额",
+      "totalBalance": "总余额",
+      "positionCount": "持仓数量",
+      "noAssets": "无资产",
+      "hasAssets": "有资产",
+      "error": "获取失败",
+      "select": "选择此代理地址"
+    }
   },
   "leader": {
     "title": "Leader 管理",
@@ -430,14 +453,20 @@
     "openWebsite": "打开网页",
     "all": "全部",
     "copyTradingCount": "跟单数",
+    "backtestCount": "回测数",
     "copyTradingRelations": "{{count}} 个跟单关系",
+    "viewCopyTradings": "查看跟单配置",
+    "viewBacktests": "查看回测",
     "createdAt": "创建时间",
     "noData": "暂无 Leader 数据",
     "fetchFailed": "获取 Leader 列表失败",
     "deleteSuccess": "删除 Leader 成功",
     "deleteFailed": "删除 Leader 失败",
     "deleteConfirm": "确定要删除这个 Leader 吗？",
-    "deleteConfirmDesc": "该 Leader 还有 {{count}} 个跟单关系，请先删除跟单关系"
+    "deleteConfirmDesc": "该 Leader 还有 {{count}} 个跟单关系，请先删除跟单关系",
+    "openDetailFailed": "打开详情失败",
+    "noCopyTradings": "暂无跟单配置",
+    "noBacktests": "暂无回测"
   },
   "leaderAdd": {
     "title": "添加 Leader",
@@ -510,6 +539,7 @@
     "totalBalance": "总余额",
     "positions": "持仓列表",
     "noPositions": "暂无持仓",
+    "market": "市场",
     "marketId": "市场ID",
     "side": "方向",
     "quantity": "数量",
@@ -968,8 +998,10 @@
       "priceRange": "价格区间不符",
       "maxPositionValue": "超过最大仓位金额",
       "marketEndDate": "市场截止时间超出限制",
+      "keywordFilter": "关键字过滤",
       "unknown": "未知原因"
     },
+    "orderDetails": "订单详情",
     "noData": "暂无已过滤订单",
     "noFilteredOrders": "暂无已过滤订单"
   },
@@ -1350,11 +1382,21 @@
     "fixedAmountRequired": "请输入固定金额",
     "fixedAmountInvalid": "固定金额必须大于 0",
     "priceFilters": "价格过滤",
+    "priceRange": "价格区间",
+    "priceRangeTooltip": "仅跟单 Leader 交易价格在指定区间内的订单。不填写表示不限制。示例：填写 0.11 和 0.89 表示仅跟单价格在 0.11 到 0.89 之间的订单；只填写最高价 0.89 表示仅跟单价格在 0.89 以下的订单；只填写最低价 0.11 表示仅跟单价格在 0.11 以上的订单。",
+    "minPricePlaceholder": "最低价（留空不限制）",
+    "maxPricePlaceholder": "最高价（留空不限制）",
     "keywordsPlaceholder": "请输入关键字，按回车添加",
+    "maxPositionValuePlaceholder": "留空表示不启用最大仓位限制",
     "delaySecondsHint": "延迟执行模拟真实跟单延迟",
     "supportSellHint": "是否跟随 Leader 卖出",
     "sortBy": "排序字段",
     "sortOrder": "排序顺序",
-    "createdAt": "创建时间"
+    "createdAt": "创建时间",
+    "rerun": "重新测试",
+    "rerunConfirm": "将按当前配置创建新的回测任务，是否继续？",
+    "rerunTaskNamePlaceholder": "新任务名称（留空使用「原名称 (副本)」）",
+    "rerunSuccess": "已创建新回测任务",
+    "rerunFailed": "重新测试失败"
   }
 }

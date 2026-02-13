@@ -10,6 +10,7 @@ import com.wrbug.polymarketbot.api.ValueResponse
 import com.wrbug.polymarketbot.constants.PolymarketConstants
 import com.wrbug.polymarketbot.dto.PositionDto
 import com.wrbug.polymarketbot.dto.WalletBalanceResponse
+import com.wrbug.polymarketbot.enums.WalletType
 import com.wrbug.polymarketbot.util.EthereumUtils
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.createClient
@@ -93,13 +94,13 @@ class BlockchainService(
      * 2. Safe Proxy（MetaMask 钱包用户）- 通过合约调用获取地址
      *
      * @param walletAddress 用户的钱包地址（EOA）
-     * @param walletType 钱包类型："magic"（默认）或 "safe"
+     * @param walletType 钱包类型：MAGIC（默认）或 SAFE
      * @return 代理钱包地址
      */
-    suspend fun getProxyAddress(walletAddress: String, walletType: String = "magic"): Result<String> {
+    suspend fun getProxyAddress(walletAddress: String, walletType: WalletType = WalletType.MAGIC): Result<String> {
         return try {
-            when (walletType.lowercase()) {
-                "safe" -> {
+            when (walletType) {
+                WalletType.SAFE -> {
                     // Safe Proxy（MetaMask 用户）
                     val safeProxyResult = getSafeProxyAddress(walletAddress)
                     if (safeProxyResult.isSuccess) {
@@ -110,7 +111,7 @@ class BlockchainService(
                         Result.failure(safeProxyResult.exceptionOrNull() ?: Exception("获取 Safe Proxy 地址失败"))
                     }
                 }
-                else -> {
+                WalletType.MAGIC -> {
                     // Magic Proxy（邮箱/OAuth 登录用户）- 默认
                     val magicProxyAddress = calculateMagicProxyAddress(walletAddress)
                     logger.debug("使用 Magic Proxy 地址: $magicProxyAddress")
@@ -580,39 +581,35 @@ class BlockchainService(
     
     /**
      * 赎回仓位
-     * 通过代理钱包的 execTransaction 调用 ConditionalTokens 合约的 redeemPositions 函数
-     * 
-     * 使用 RelayClientService 实现，完全参考 TypeScript 项目的实现方式
-     * 
+     * Safe 账户通过代理 execTransaction 调用，Magic 账户通过 Builder Relayer PROXY（Gasless）执行
+     *
      * @param privateKey 私钥（原始钱包的私钥，用于签名交易）
-     * @param proxyAddress 代理地址（Gnosis Safe 代理钱包地址）
+     * @param proxyAddress 代理地址（Safe 或 Magic 代理钱包地址）
      * @param conditionId 市场条件ID（bytes32，必须是 0x 开头的 66 位十六进制字符串）
-     * @param indexSets 要赎回的索引集合列表（每个元素是 2^outcomeIndex，例如 [1] 表示 outcome 0，[2] 表示 outcome 1）
+     * @param indexSets 要赎回的索引集合列表（每个元素是 2^outcomeIndex）
+     * @param walletType 钱包类型：MAGIC 或 SAFE，用于选择执行路径
      * @return 交易哈希
      */
     suspend fun redeemPositions(
         privateKey: String,
         proxyAddress: String,
         conditionId: String,
-        indexSets: List<BigInteger>
+        indexSets: List<BigInteger>,
+        walletType: WalletType = WalletType.SAFE
     ): Result<String> {
         return try {
-            // 验证参数
             if (indexSets.isEmpty()) {
                 return Result.failure(IllegalArgumentException("indexSets 不能为空"))
             }
-            
             if (conditionId.isBlank() || !conditionId.startsWith("0x") || conditionId.length != 66) {
                 return Result.failure(IllegalArgumentException("conditionId 格式错误，必须是 0x 开头的 66 位十六进制字符串"))
             }
-            
             if (proxyAddress.isBlank() || !proxyAddress.startsWith("0x") || proxyAddress.length != 42) {
                 return Result.failure(IllegalArgumentException("proxyAddress 格式错误，必须是有效的以太坊地址"))
             }
 
-            // 使用 RelayClientService 创建赎回交易并执行
             val redeemTx = relayClientService.createRedeemTx(conditionId, indexSets)
-            relayClientService.execute(privateKey, proxyAddress, redeemTx)
+            relayClientService.execute(privateKey, proxyAddress, redeemTx, walletType)
         } catch (e: Exception) {
             logger.error("赎回仓位失败: ${e.message}", e)
             Result.failure(e)

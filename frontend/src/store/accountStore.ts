@@ -60,8 +60,10 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
       if (response.data.code === 0) {
         await get().fetchAccounts()
       } else {
+        const err = new Error(response.data.msg || '导入账户失败')
+        ;(err as Error & { code?: number }).code = response.data.code
         set({ error: response.data.msg || '导入账户失败', loading: false })
-        throw new Error(response.data.msg || '导入账户失败')
+        throw err
       }
     } catch (error: any) {
       set({ error: error.message || '导入账户失败', loading: false })

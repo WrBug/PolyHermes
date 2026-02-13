@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Table, Card, Button, Select, Tag, Space, Modal, message, Row, Col, Form, Input, InputNumber, Switch, Statistic, Descriptions } from 'antd'
 import { useTranslation } from 'react-i18next'
-import { PlusOutlined, ReloadOutlined, DeleteOutlined, StopOutlined, EyeOutlined, RedoOutlined, CopyOutlined } from '@ant-design/icons'
+import { PlusOutlined, ReloadOutlined, DeleteOutlined, StopOutlined, EyeOutlined, RedoOutlined, CopyOutlined, SyncOutlined } from '@ant-design/icons'
 import { formatUSDC } from '../utils'
 import { backtestService, apiService } from '../services/api'
 import type { BacktestTaskDto, BacktestListRequest, BacktestCreateRequest, BacktestTradeDto } from '../types/backtest'
@@ -9,11 +10,11 @@ import type { Leader } from '../types'
 import { useMediaQuery } from 'react-responsive'
 import AddCopyTradingModal from './CopyTradingOrders/AddModal'
 import BacktestChart from './BacktestChart'
-
-const { Option } = Select
+import LeaderSelect from '../components/LeaderSelect'
 
 const BacktestList: React.FC = () => {
   const { t } = useTranslation()
+  const [searchParams] = useSearchParams()
   const isMobile = useMediaQuery({ maxWidth: 768 })
   const [loading, setLoading] = useState(false)
   const [tasks, setTasks] = useState<BacktestTaskDto[]>([])
@@ -21,7 +22,14 @@ const BacktestList: React.FC = () => {
   const [page, setPage] = useState(1)
   const [size] = useState(10)
   const [statusFilter, setStatusFilter] = useState<string | undefined>()
-  const [leaderIdFilter] = useState<number | undefined>()
+  const [leaderIdFilter, setLeaderIdFilter] = useState<number | undefined>(() => {
+    const leaderIdParam = searchParams.get('leaderId')
+    if (leaderIdParam) {
+      const id = parseInt(leaderIdParam, 10)
+      return isNaN(id) ? undefined : id
+    }
+    return undefined
+  })
   const [sortBy, setSortBy] = useState<'profitAmount' | 'profitRate' | 'createdAt'>('createdAt')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
 
@@ -36,6 +44,12 @@ const BacktestList: React.FC = () => {
   const [addCopyTradingModalVisible, setAddCopyTradingModalVisible] = useState(false)
   const [preFilledConfig, setPreFilledConfig] = useState<any>(null)
 
+  // 重新测试 Modal 相关状态
+  const [rerunModalVisible, setRerunModalVisible] = useState(false)
+  const [rerunTask, setRerunTask] = useState<BacktestTaskDto | null>(null)
+  const [rerunTaskName, setRerunTaskName] = useState('')
+  const [rerunLoading, setRerunLoading] = useState(false)
+
   // 任务详情 Modal 相关状态
   const [detailModalVisible, setDetailModalVisible] = useState(false)
   const [detailTask, setDetailTask] = useState<BacktestTaskDto | null>(null)
@@ -48,9 +62,9 @@ const BacktestList: React.FC = () => {
   const [detailTradesPage, setDetailTradesPage] = useState(1)
   const [detailTradesSize] = useState(20)
 
-  // 获取回测任务列表
-  const fetchTasks = async () => {
-    setLoading(true)
+  // 获取回测任务列表（silent 为 true 时不显示 loading，用于轮询刷新）
+  const fetchTasks = async (silent = false) => {
+    if (!silent) setLoading(true)
     try {
       const request: BacktestListRequest = {
         leaderId: leaderIdFilter,
@@ -64,20 +78,39 @@ const BacktestList: React.FC = () => {
       if (response.data.code === 0 && response.data.data) {
         setTasks(response.data.data.list)
         setTotal(response.data.data.total)
-      } else {
+      } else if (!silent) {
         message.error(response.data.msg || t('backtest.fetchTasksFailed'))
       }
     } catch (error) {
       console.error('Failed to fetch backtest tasks:', error)
-      message.error(t('backtest.fetchTasksFailed'))
+      if (!silent) message.error(t('backtest.fetchTasksFailed'))
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
+
+  // 从 URL 读取 leaderId 并应用筛选（如从 Leader 管理页跳转过来）
+  useEffect(() => {
+    const leaderIdParam = searchParams.get('leaderId')
+    if (leaderIdParam) {
+      const id = parseInt(leaderIdParam, 10)
+      setLeaderIdFilter(isNaN(id) ? undefined : id)
+    }
+  }, [searchParams])
 
   useEffect(() => {
     fetchTasks()
   }, [page, statusFilter, leaderIdFilter, sortBy, sortOrder])
+
+  // 存在非终态任务（PENDING/RUNNING）时每 3s 轮询刷新进度
+  const hasNonTerminalTask = tasks.some(
+    (task) => task.status === 'PENDING' || task.status === 'RUNNING'
+  )
+  useEffect(() => {
+    if (!hasNonTerminalTask) return
+    const timer = setInterval(() => fetchTasks(true), 3000)
+    return () => clearInterval(timer)
+  }, [hasNonTerminalTask, page, statusFilter, leaderIdFilter, sortBy, sortOrder])
 
   // 刷新
   const handleRefresh = () => {
@@ -130,6 +163,38 @@ const BacktestList: React.FC = () => {
     })
   }
 
+  // 按配置重新测试（仅已完成任务）
+  const handleRerun = (task: BacktestTaskDto) => {
+    setRerunTask(task)
+    setRerunTaskName(`${task.taskName} (副本)`)
+    setRerunModalVisible(true)
+  }
+
+  const handleRerunSubmit = async () => {
+    if (!rerunTask) return
+    setRerunLoading(true)
+    try {
+      const response = await backtestService.rerun({
+        id: rerunTask.id,
+        taskName: rerunTaskName.trim() || undefined
+      })
+      if (response.data.code === 0) {
+        message.success(t('backtest.rerunSuccess'))
+        setRerunModalVisible(false)
+        setRerunTask(null)
+        setRerunTaskName('')
+        fetchTasks()
+      } else {
+        message.error(response.data.msg || t('backtest.rerunFailed'))
+      }
+    } catch (error) {
+      console.error('Rerun backtest failed:', error)
+      message.error(t('backtest.rerunFailed'))
+    } finally {
+      setRerunLoading(false)
+    }
+  }
+
   // 重试任务
   const handleRetry = (id: number) => {
     Modal.confirm({
@@ -153,22 +218,20 @@ const BacktestList: React.FC = () => {
     })
   }
 
-  // 获取 Leader 列表
+  // 获取 Leader 列表（页面加载时请求，供筛选和创建任务使用）
   useEffect(() => {
-    if (createModalVisible) {
-      const fetchLeaders = async () => {
-        try {
-          const response = await apiService.leaders.list({})
-          if (response.data.code === 0 && response.data.data) {
-            setLeaders(response.data.data.list || [])
-          }
-        } catch (error) {
-          console.error('Failed to fetch leaders:', error)
+    const fetchLeaders = async () => {
+      try {
+        const response = await apiService.leaders.list({})
+        if (response.data.code === 0 && response.data.data) {
+          setLeaders(response.data.data.list || [])
         }
+      } catch (error) {
+        console.error('Failed to fetch leaders:', error)
       }
-      fetchLeaders()
     }
-  }, [createModalVisible])
+    fetchLeaders()
+  }, [])
 
   // 打开创建 modal
   const handleCreate = () => {
@@ -208,7 +271,10 @@ const BacktestList: React.FC = () => {
         maxDailyOrders: values.maxDailyOrders,
         supportSell: values.supportSell,
         keywordFilterMode: values.keywordFilterMode,
-        keywords: values.keywords
+        keywords: values.keywords,
+        maxPositionValue: values.maxPositionValue,
+        minPrice: values.minPrice,
+        maxPrice: values.maxPrice
       }
 
       const response = await backtestService.create(request)
@@ -259,6 +325,9 @@ const BacktestList: React.FC = () => {
           supportSell: taskConfig.supportSell,
           keywordFilterMode: taskConfig.keywordFilterMode || 'DISABLED',
           keywords: taskConfig.keywords || [],
+          maxPositionValue: taskConfig.maxPositionValue,
+          minPrice: taskConfig.minPrice,
+          maxPrice: taskConfig.maxPrice,
           configName: `回测任务-${taskDetail.taskName}`
         }
 
@@ -440,7 +509,7 @@ const BacktestList: React.FC = () => {
       dataIndex: 'leaderName',
       key: 'leaderName',
       width: isMobile ? 100 : 150,
-      render: (_: any, record: BacktestTaskDto) => record.leaderName || record.leaderAddress?.substring(0, 8) + '...' || '-'
+      render: (_: any, record: BacktestTaskDto) => record.leaderName || `Leader ${record.leaderId}`
     },
     {
       title: t('backtest.initialBalance'),
@@ -545,14 +614,24 @@ const BacktestList: React.FC = () => {
             {t('common.viewDetail')}
           </Button>
           {record.status === 'COMPLETED' && (
-            <Button
-              type="link"
-              size="small"
-              icon={<CopyOutlined />}
-              onClick={() => handleCreateCopyTrading(record)}
-            >
-              {t('backtest.createCopyTrading')}
-            </Button>
+            <>
+              <Button
+                type="link"
+                size="small"
+                icon={<SyncOutlined />}
+                onClick={() => handleRerun(record)}
+              >
+                {t('backtest.rerun')}
+              </Button>
+              <Button
+                type="link"
+                size="small"
+                icon={<CopyOutlined />}
+                onClick={() => handleCreateCopyTrading(record)}
+              >
+                {t('backtest.createCopyTrading')}
+              </Button>
+            </>
           )}
           {record.status === 'RUNNING' && (
             <Button
@@ -575,7 +654,7 @@ const BacktestList: React.FC = () => {
               {t('backtest.retry')}
             </Button>
           )}
-          {(record.status === 'PENDING' || record.status === 'COMPLETED') && (
+          {(record.status === 'PENDING' || record.status === 'COMPLETED' || record.status === 'STOPPED' || record.status === 'FAILED') && (
             <Button
               type="link"
               size="small"
@@ -599,6 +678,14 @@ const BacktestList: React.FC = () => {
           <Row justify="space-between" align="middle" gutter={[16, 16]}>
             <Col xs={24} sm={24} md={12} lg={16}>
               <Space size="middle" direction={isMobile ? 'vertical' : 'horizontal'} style={{ width: isMobile ? '100%' : 'auto' }}>
+                <LeaderSelect
+                  style={{ width: isMobile ? '100%' : 180 }}
+                  placeholder={t('backtest.leader')}
+                  allowClear
+                  value={leaderIdFilter}
+                  onChange={(value) => setLeaderIdFilter(value)}
+                  leaders={leaders}
+                />
                 <Select
                   style={{ width: isMobile ? '100%' : 150 }}
                   placeholder={t('backtest.status')}
@@ -675,6 +762,30 @@ const BacktestList: React.FC = () => {
         </Space>
       </Card>
 
+      {/* 重新测试 Modal */}
+      <Modal
+        title={t('backtest.rerun')}
+        open={rerunModalVisible}
+        onCancel={() => {
+          setRerunModalVisible(false)
+          setRerunTask(null)
+          setRerunTaskName('')
+        }}
+        onOk={handleRerunSubmit}
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
+        confirmLoading={rerunLoading}
+        destroyOnClose
+      >
+        <p style={{ marginBottom: 8 }}>{t('backtest.rerunConfirm')}</p>
+        <Input
+          value={rerunTaskName}
+          onChange={(e) => setRerunTaskName(e.target.value)}
+          placeholder={t('backtest.rerunTaskNamePlaceholder')}
+          maxLength={100}
+        />
+      </Modal>
+
       {/* 创建回测任务 Modal */}
       <Modal
         title={t('backtest.createTask')}
@@ -697,7 +808,7 @@ const BacktestList: React.FC = () => {
           layout="vertical"
           initialValues={{
             maxDailyLoss: 500,
-            maxDailyOrders: 50,
+            maxDailyOrders: 100,
             supportSell: true,
             keywordFilterMode: 'DISABLED',
             backtestDays: 7
@@ -719,13 +830,10 @@ const BacktestList: React.FC = () => {
                 name="leaderId"
                 rules={[{ required: true, message: t('backtest.leaderRequired') || '请选择 Leader' }]}
               >
-                <Select placeholder={t('backtest.leader')} showSearch>
-                  {leaders.map((leader) => (
-                    <Option key={leader.id} value={leader.id}>
-                      {leader.leaderName || leader.leaderAddress}
-                    </Option>
-                  ))}
-                </Select>
+                <LeaderSelect
+                  leaders={leaders}
+                  placeholder={t('backtest.leader')}
+                />
               </Form.Item>
             </Col>
           </Row>
@@ -777,8 +885,8 @@ const BacktestList: React.FC = () => {
               name="copyMode"
             >
               <Select onChange={(value) => setCopyMode(value)}>
-                <Option value="RATIO">{t('backtest.copyModeRatio')}</Option>
-                <Option value="FIXED">{t('backtest.copyModeFixed')}</Option>
+                <Select.Option value="RATIO">{t('backtest.copyModeRatio')}</Select.Option>
+                <Select.Option value="FIXED">{t('backtest.copyModeFixed')}</Select.Option>
               </Select>
             </Form.Item>
 
@@ -877,6 +985,62 @@ const BacktestList: React.FC = () => {
             </Row>
 
             <Form.Item
+              label={t('backtest.maxPositionValue') + ' (USDC)'}
+              name="maxPositionValue"
+            >
+              <InputNumber
+                style={{ width: '100%' }}
+                placeholder={t('backtest.maxPositionValuePlaceholder') || '留空表示不启用最大仓位限制'}
+                precision={2}
+                min={0}
+              />
+            </Form.Item>
+
+            <Form.Item
+              label={t('backtest.priceRange')}
+              tooltip={t('backtest.priceRangeTooltip')}
+            >
+              <Row gutter={12}>
+                <Col span={12}>
+                  <Form.Item name="minPrice" noStyle>
+                    <InputNumber
+                      style={{ width: '100%' }}
+                      placeholder={t('backtest.minPricePlaceholder') || '最低价（留空不限制）'}
+                      min={0.01}
+                      max={0.99}
+                      step={0.0001}
+                      precision={4}
+                      formatter={(value) => {
+                        if (!value && value !== 0) return ''
+                        const num = parseFloat(value.toString())
+                        if (isNaN(num)) return ''
+                        return num.toString().replace(/\.0+$/, '')
+                      }}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item name="maxPrice" noStyle>
+                    <InputNumber
+                      style={{ width: '100%' }}
+                      placeholder={t('backtest.maxPricePlaceholder') || '最高价（留空不限制）'}
+                      min={0.01}
+                      max={0.99}
+                      step={0.0001}
+                      precision={4}
+                      formatter={(value) => {
+                        if (!value && value !== 0) return ''
+                        const num = parseFloat(value.toString())
+                        if (isNaN(num)) return ''
+                        return num.toString().replace(/\.0+$/, '')
+                      }}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </Form.Item>
+
+            <Form.Item
               label={t('backtest.supportSell')}
               name="supportSell"
               valuePropName="checked"
@@ -890,9 +1054,9 @@ const BacktestList: React.FC = () => {
               name="keywordFilterMode"
             >
               <Select>
-                <Option value="DISABLED">{t('backtest.keywordFilterModeDisabled')}</Option>
-                <Option value="WHITELIST">{t('backtest.keywordFilterModeWhitelist')}</Option>
-                <Option value="BLACKLIST">{t('backtest.keywordFilterModeBlacklist')}</Option>
+                <Select.Option value="DISABLED">{t('backtest.keywordFilterModeDisabled')}</Select.Option>
+                <Select.Option value="WHITELIST">{t('backtest.keywordFilterModeWhitelist')}</Select.Option>
+                <Select.Option value="BLACKLIST">{t('backtest.keywordFilterModeBlacklist')}</Select.Option>
               </Select>
             </Form.Item>
 
@@ -942,6 +1106,12 @@ const BacktestList: React.FC = () => {
         footer={
           detailTask && detailTask.status === 'COMPLETED' && detailConfig ? (
             <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+              <Button icon={<SyncOutlined />} onClick={() => {
+                setDetailModalVisible(false)
+                handleRerun(detailTask)
+              }}>
+                {t('backtest.rerun')}
+              </Button>
               <Button type="primary" icon={<CopyOutlined />} onClick={() => {
                 const preFilled = {
                   leaderId: detailTask.leaderId,
@@ -955,6 +1125,9 @@ const BacktestList: React.FC = () => {
                   supportSell: detailConfig.supportSell,
                   keywordFilterMode: detailConfig.keywordFilterMode,
                   keywords: detailConfig.keywords || [],
+                  maxPositionValue: detailConfig.maxPositionValue,
+                  minPrice: detailConfig.minPrice,
+                  maxPrice: detailConfig.maxPrice,
                   configName: `回测任务-${detailTask.taskName}`
                 }
                 setPreFilledConfig(preFilled)
@@ -984,7 +1157,7 @@ const BacktestList: React.FC = () => {
               <Descriptions column={isMobile ? 1 : 2} bordered size="small">
                 <Descriptions.Item label={t('backtest.taskName')}>{detailTask.taskName}</Descriptions.Item>
                 <Descriptions.Item label={t('backtest.leader')}>
-                  {detailTask.leaderName || detailTask.leaderAddress}
+                  {detailTask.leaderName || `Leader ${detailTask.leaderId}`}
                 </Descriptions.Item>
                 <Descriptions.Item label={t('backtest.initialBalance')}>
                   {formatUSDC(detailTask.initialBalance)} USDC
@@ -1138,6 +1311,25 @@ const BacktestList: React.FC = () => {
                   {detailConfig.keywords && detailConfig.keywords.length > 0 && (
                     <Descriptions.Item label={t('backtest.keywords')}>
                       {detailConfig.keywords.join(', ')}
+                    </Descriptions.Item>
+                  )}
+                  {detailConfig.maxPositionValue && (
+                    <Descriptions.Item label={t('backtest.maxPositionValue')}>
+                      {formatUSDC(detailConfig.maxPositionValue)} USDC
+                    </Descriptions.Item>
+                  )}
+                  {(detailConfig.minPrice || detailConfig.maxPrice) && (
+                    <Descriptions.Item label={t('backtest.priceRange')}>
+                      {detailConfig.minPrice !== undefined && detailConfig.minPrice !== null && detailConfig.minPrice !== '' 
+                        ? `≥ ${parseFloat(detailConfig.minPrice).toFixed(4)}` 
+                        : ''}
+                      {(detailConfig.minPrice !== undefined && detailConfig.minPrice !== null && detailConfig.minPrice !== '') && 
+                       (detailConfig.maxPrice !== undefined && detailConfig.maxPrice !== null && detailConfig.maxPrice !== '') 
+                        ? ' ~ ' 
+                        : ''}
+                      {detailConfig.maxPrice !== undefined && detailConfig.maxPrice !== null && detailConfig.maxPrice !== '' 
+                        ? `≤ ${parseFloat(detailConfig.maxPrice).toFixed(4)}` 
+                        : ''}
                     </Descriptions.Item>
                   )}
                 </Descriptions>
