@@ -380,13 +380,9 @@ class PositionCheckService(
             val positionsByAccount = redeemablePositions.groupBy { it.accountId }
             
             for ((accountId, positions) in positionsByAccount) {
-                // 查找该账户下所有启用的跟单配置
+                // 查找该账户下所有启用的跟单配置（仅用于赎回成功后更新跟单订单状态；无跟单配置的账户如尾盘策略账户也会执行赎回）
                 val copyTradings = copyTradingRepository.findByAccountId(accountId)
                     .filter { it.enabled }
-                
-                if (copyTradings.isEmpty()) {
-                    continue
-                }
                 
                 // 过滤掉已经处理过的仓位（去重，避免重复赎回）
                 val now = System.currentTimeMillis()
