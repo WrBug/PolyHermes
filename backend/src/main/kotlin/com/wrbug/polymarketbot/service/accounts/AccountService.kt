@@ -1376,13 +1376,6 @@ class AccountService(
      */
     suspend fun redeemPositions(request: PositionRedeemRequest): Result<PositionRedeemResponse> {
         return try {
-            // 检查 Builder API Key 是否已配置
-            if (!relayClientService.isBuilderApiKeyConfigured()) {
-                return Result.failure(
-                    IllegalStateException("Builder API Key 未配置，无法执行 Gasless 交易。请前往系统设置页面配置 Builder API Key。")
-                )
-            }
-            
             if (request.positions.isEmpty()) {
                 return Result.failure(IllegalArgumentException("赎回仓位列表不能为空"))
             }
@@ -1404,7 +1397,15 @@ class AccountService(
                 accounts[accountId] = account
             }
 
-            // 4. 验证并收集要赎回的仓位信息（按账户分组）
+            // 4. 若涉及 Magic 账户，必须已配置 Builder API Key（提前判断，避免执行到深层再报错）
+            val hasMagicAccount = accounts.values.any { it.walletType.equals("magic", ignoreCase = true) }
+            if (hasMagicAccount && !relayClientService.isBuilderApiKeyConfigured()) {
+                return Result.failure(
+                    IllegalStateException("Builder API Key 未配置，无法执行 Magic 账户赎回（Gasless）。请前往系统设置页面配置 Builder API Key。")
+                )
+            }
+
+            // 5. 验证并收集要赎回的仓位信息（按账户分组）
             val accountRedeemData = mutableMapOf<Long, MutableList<Pair<AccountPositionDto, BigInteger>>>()
             val accountRedeemedInfo =
                 mutableMapOf<Long, MutableList<com.wrbug.polymarketbot.dto.RedeemedPositionInfo>>()
@@ -1447,7 +1448,7 @@ class AccountService(
                 accountRedeemedInfo[accountId] = accountInfo
             }
 
-            // 5. 对每个账户执行赎回（Safe 与 Magic 均支持，Magic 通过 Builder Relayer PROXY Gasless 执行）
+            // 6. 对每个账户执行赎回（Safe 与 Magic 均支持，Magic 通过 Builder Relayer PROXY Gasless 执行）
             val accountTransactions = mutableListOf<com.wrbug.polymarketbot.dto.AccountRedeemTransaction>()
             var totalRedeemedValue = BigDecimal.ZERO
 
@@ -1503,7 +1504,7 @@ class AccountService(
                 )
             }
 
-            // 6. 发送赎回推送通知（异步，不阻塞）
+            // 7. 发送赎回推送通知（异步，不阻塞）
             notificationScope.launch {
                 try {
                     // 获取当前语言设置

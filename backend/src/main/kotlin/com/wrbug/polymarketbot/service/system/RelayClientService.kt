@@ -300,7 +300,14 @@ class RelayClientService(
         val nonce = relayPayload.nonce
 
         val proxyCallData = encodeProxyTransactionData(safeTx)
-        val gasLimit = defaultProxyGasLimit
+        
+        // 估算 gas limit（参考 builder-relayer-client builder/proxy.ts getGasLimit）
+        val gasLimit = try {
+            estimateProxyGasLimit(fromAddress, proxyFactoryAddress, proxyCallData)
+        } catch (e: Exception) {
+            logger.warn("估算 PROXY gas limit 失败，使用默认值: ${e.message}", e)
+            defaultProxyGasLimit
+        }
 
         val structHash = createProxyStructHash(
             from = fromAddress,
@@ -365,6 +372,20 @@ class RelayClientService(
     /**
      * 编码 ProxyFactory.proxy(calls) 调用数据
      * 参考: builder-relayer-client encode/proxy.ts, abis proxyFactory proxy((uint8,address,uint256,bytes)[])
+     * 
+     * ABI 编码规则：当 tuple 数组中的 tuple 包含动态类型（bytes）时，需要先存储 tuple offset
+     * 结构：
+     * - selector (4 bytes)
+     * - array offset (32 bytes) = 32
+     * - array length (32 bytes) = 1
+     * - tuple[0] offset (32 bytes) = 32 (指向 tuple 数据开始，从 array length 之后计算)
+     * - tuple[0] 数据：
+     *   - typeCode (32 bytes) = 1
+     *   - to (32 bytes)
+     *   - value (32 bytes) = 0
+     *   - data offset (32 bytes) = 128 (从 tuple 数据开始计算)
+     *   - data length (32 bytes)
+     *   - data (padded to 32-byte boundary)
      */
     private fun encodeProxyTransactionData(safeTx: SafeTransaction): String {
         val selector = EthereumUtils.getFunctionSelector("proxy((uint8,address,uint256,bytes)[])")
@@ -373,17 +394,70 @@ class RelayClientService(
         val dataLenPadded = (dataLen + 31) / 32 * 32 * 2
         val dataPadded = callData.padEnd(dataLenPadded, '0')
 
+        // ABI 编码：tuple 数组，tuple 包含动态类型 bytes
+        // 1. array offset: 32 (指向 array length)
         val arrayOffset = EthereumUtils.encodeUint256(BigInteger.valueOf(32))
+        // 2. array length: 1
         val arrayLength = EthereumUtils.encodeUint256(BigInteger.ONE)
+        // 3. tuple[0] offset: 32 (指向 tuple 数据开始，从 array length 之后计算)
+        val tupleOffset = EthereumUtils.encodeUint256(BigInteger.valueOf(32))
+        // 4. tuple[0] 数据：
+        //    - typeCode: 1
         val typeCode = EthereumUtils.encodeUint256(BigInteger.ONE)
+        //    - to: address
         val toEncoded = EthereumUtils.encodeAddress(safeTx.to)
+        //    - value: 0
         val valueEncoded = EthereumUtils.encodeUint256(BigInteger.ZERO)
-        val dataOffsetInTuple = BigInteger.valueOf(192)
+        //    - data offset: 128 (从 tuple 数据开始计算，typeCode+to+value = 3*32 = 96，加上 offset 字段 = 128)
+        val dataOffsetInTuple = BigInteger.valueOf(128)
         val dataOffsetEncoded = EthereumUtils.encodeUint256(dataOffsetInTuple)
+        //    - data length
         val dataLengthEncoded = EthereumUtils.encodeUint256(BigInteger.valueOf(dataLen.toLong()))
+        //    - data (padded)
+        
         return "0x" + selector.removePrefix("0x") + arrayOffset + arrayLength +
-                typeCode + toEncoded + valueEncoded + dataOffsetEncoded +
+                tupleOffset + typeCode + toEncoded + valueEncoded + dataOffsetEncoded +
                 dataLengthEncoded + dataPadded
+    }
+
+    /**
+     * 估算 PROXY 交易的 gas limit
+     * 参考: builder-relayer-client builder/proxy.ts getGasLimit
+     */
+    private suspend fun estimateProxyGasLimit(
+        from: String,
+        to: String,
+        data: String
+    ): String {
+        val rpcApi = polygonRpcApi
+        
+        val rpcRequest = JsonRpcRequest(
+            method = "eth_estimateGas",
+            params = listOf(
+                mapOf(
+                    "from" to from,
+                    "to" to to,
+                    "data" to data
+                )
+            )
+        )
+        
+        val response = rpcApi.call(rpcRequest)
+        if (!response.isSuccessful || response.body() == null) {
+            throw Exception("eth_estimateGas 调用失败: ${response.code()} ${response.message()}")
+        }
+        
+        val rpcResponse = response.body()!!
+        if (rpcResponse.error != null) {
+            throw Exception("eth_estimateGas 返回错误: ${rpcResponse.error.message}")
+        }
+        
+        val hexGasLimit = rpcResponse.result?.asString
+            ?: throw Exception("eth_estimateGas 结果为空")
+        
+        // 将十六进制转换为十进制字符串
+        val gasLimitBigInt = BigInteger(hexGasLimit.removePrefix("0x"), 16)
+        return gasLimitBigInt.toString()
     }
 
     /**
