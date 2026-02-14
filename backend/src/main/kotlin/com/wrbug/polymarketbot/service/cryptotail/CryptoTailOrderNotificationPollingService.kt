@@ -75,6 +75,12 @@ class CryptoTailOrderNotificationPollingService(
         if (pending.isEmpty()) return
         for (trigger in pending) {
             try {
+                if (trigger.resolved) {
+                    trigger.notificationSent = true
+                    triggerRepository.save(trigger)
+                    logger.debug("触发已结算，跳过请求并标记已通知: triggerId=${trigger.id}, orderId=${trigger.orderId}")
+                    continue
+                }
                 if (sendNotificationForTrigger(trigger)) {
                     trigger.notificationSent = true
                     triggerRepository.save(trigger)
