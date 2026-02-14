@@ -1402,6 +1402,11 @@
     "rerunFailed": "Re-run failed"
   },
   "cryptoTailStrategy": {
+    "binanceApiAlert": {
+      "title": "Cannot connect to Binance API — strategy cannot run for now",
+      "description": "Tail strategy needs Binance market data to work. The connection failed; this may be a network issue or Binance outage. Try again later by clicking the button below.",
+      "recheck": "Re-check"
+    },
     "list": {
       "title": "Crypto Tail Strategy",
       "walletTip": "Use a dedicated wallet for tail strategy. Do not use it for manual trading or copy trading to avoid balance/position issues.",

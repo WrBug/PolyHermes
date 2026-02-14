@@ -130,7 +130,7 @@ class BinanceKlineService {
     private fun scheduleReconnect() {
         if (reconnectJob?.isActive == true) return
         reconnectJob = scope.launch {
-            delay(10_000)
+            delay(3_000)
             reconnectJob = null
             ws5m?.close(1000, "reconnect")
             ws15m?.close(1000, "reconnect")

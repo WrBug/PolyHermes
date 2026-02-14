@@ -19,7 +19,7 @@ import {
   Spin,
   Tooltip
 } from 'antd'
-import { PlusOutlined, EditOutlined, UnorderedListOutlined, InfoCircleOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, UnorderedListOutlined, InfoCircleOutlined, WarningOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useMediaQuery } from 'react-responsive'
 import { apiService } from '../services/api'
@@ -47,10 +47,39 @@ const CryptoTailStrategyList: React.FC = () => {
   const [triggersLoading, setTriggersLoading] = useState(false)
   const [form] = Form.useForm()
 
+  /** 币安 API 健康状态：仅保留「不可用」的项，用于强提醒 */
+  const [binanceUnhealthy, setBinanceUnhealthy] = useState<Array<{ name: string; message: string }>>([])
+  const [binanceCheckLoading, setBinanceCheckLoading] = useState(false)
+
+  const BINANCE_API_NAMES = ['币安 API', '币安 WebSocket']
+
+  const fetchBinanceApiStatus = async () => {
+    setBinanceCheckLoading(true)
+    try {
+      const res = await apiService.proxyConfig.checkApiHealth()
+      if (res.data.code === 0 && res.data.data?.apis) {
+        const unhealthy = res.data.data.apis.filter(
+          (api) => BINANCE_API_NAMES.includes(api.name) && api.status !== 'success'
+        )
+        setBinanceUnhealthy(unhealthy.map((api) => ({ name: api.name, message: api.message })))
+      } else {
+        setBinanceUnhealthy([])
+      }
+    } catch {
+      setBinanceUnhealthy([{ name: '币安 API', message: '' }, { name: '币安 WebSocket', message: '' }])
+    } finally {
+      setBinanceCheckLoading(false)
+    }
+  }
+
   useEffect(() => {
     fetchAccounts()
     fetchSystemConfig()
     fetchMarketOptions()
+  }, [])
+
+  useEffect(() => {
+    fetchBinanceApiStatus()
   }, [])
 
   useEffect(() => {
@@ -411,6 +440,37 @@ const CryptoTailStrategyList: React.FC = () => {
   return (
     <div style={{ padding: isMobile ? 12 : 24 }}>
       <h1 style={{ marginBottom: 16, fontSize: isMobile ? 20 : 24 }}>{t('cryptoTailStrategy.list.title')}</h1>
+      {binanceUnhealthy.length > 0 && (
+        <Alert
+          type="error"
+          showIcon
+          icon={<WarningOutlined />}
+          message={t('cryptoTailStrategy.binanceApiAlert.title')}
+          description={
+            <div>
+              <p style={{ marginBottom: 8 }}>{t('cryptoTailStrategy.binanceApiAlert.description')}</p>
+              <ul style={{ marginBottom: 8, paddingLeft: 20 }}>
+                {binanceUnhealthy.map((item, i) => (
+                  <li key={i}>
+                    <strong>{item.name}</strong>
+                    {item.message ? `: ${item.message}` : ''}
+                  </li>
+                ))}
+              </ul>
+              <Button
+                type="primary"
+                danger
+                size="small"
+                loading={binanceCheckLoading}
+                onClick={fetchBinanceApiStatus}
+              >
+                {t('cryptoTailStrategy.binanceApiAlert.recheck')}
+              </Button>
+            </div>
+          }
+          style={{ marginBottom: 16 }}
+        />
+      )}
       <Alert
         type="warning"
         showIcon
