@@ -14,6 +14,9 @@ import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @Service
 class CryptoTailStrategyService(
@@ -60,9 +63,12 @@ class CryptoTailStrategyService(
                 return Result.failure(IllegalArgumentException(ErrorCode.PARAM_ERROR.messageKey))
             }
 
+            val nameToSave = request.name?.takeIf { it.isNotBlank() }
+                ?: generateStrategyName(request.marketSlugPrefix.trim())
+
             val entity = CryptoTailStrategy(
                 accountId = request.accountId,
-                name = request.name?.takeIf { it.isNotBlank() },
+                name = nameToSave,
                 marketSlugPrefix = request.marketSlugPrefix.trim(),
                 intervalSeconds = interval,
                 windowStartSeconds = request.windowStartSeconds,
@@ -101,8 +107,12 @@ class CryptoTailStrategyService(
             request.windowStartSeconds?.let { if (it > (request.windowEndSeconds ?: existing.windowEndSeconds)) return Result.failure(IllegalArgumentException(ErrorCode.CRYPTO_TAIL_STRATEGY_WINDOW_INVALID.messageKey)) }
             request.windowEndSeconds?.let { if (it > maxWindow) return Result.failure(IllegalArgumentException(ErrorCode.CRYPTO_TAIL_STRATEGY_WINDOW_EXCEED.messageKey)) }
 
+            val nameToSave = request.name?.takeIf { it.isNotBlank() }
+                ?: existing.name?.takeIf { it.isNotBlank() }
+                ?: generateStrategyName(existing.marketSlugPrefix)
+
             val updated = existing.copy(
-                name = request.name?.takeIf { it.isNotBlank() } ?: existing.name,
+                name = nameToSave,
                 windowStartSeconds = request.windowStartSeconds ?: existing.windowStartSeconds,
                 windowEndSeconds = request.windowEndSeconds ?: existing.windowEndSeconds,
                 minPrice = request.minPrice?.toSafeBigDecimal() ?: existing.minPrice,
@@ -186,6 +196,12 @@ class CryptoTailStrategyService(
     }
 
     fun getStrategy(strategyId: Long): CryptoTailStrategy? = strategyRepository.findById(strategyId).orElse(null)
+
+    private fun generateStrategyName(marketSlugPrefix: String): String {
+        val suffix = Instant.now().atZone(ZoneId.systemDefault())
+            .format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
+        return "尾盘策略-${marketSlugPrefix}-$suffix"
+    }
 
     private fun entityToDto(e: CryptoTailStrategy, lastTriggerAt: Long?): CryptoTailStrategyDto {
         val strategyId = e.id ?: 0L
