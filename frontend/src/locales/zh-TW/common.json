@@ -1447,7 +1447,7 @@
       "timeWindowStartLEEnd": "時間區間開始不能大於結束",
       "timeWindowExceed": "時間區間不能超過週期長度",
       "minSpreadMode": "最小價差",
-      "minSpreadModeTip": "依當前週期開盤價與收盤價的價差決定是否下單。自動：系統依歷史 30 根 K 線計算建議價差（每週期更新）；固定：您輸入一個數值（如 30），僅當價差 ≥ 該值時才下單；無：不校驗價差，滿足價格區間即下單。",
+      "minSpreadModeTip": "依當前週期開盤價與收盤價的價差決定是否下單。自動：系統依歷史 20 根 K 線計算建議價差（每週期更新）；固定：您輸入一個數值（如 30），僅當價差 ≥ 該值時才下單；無：不校驗價差，滿足價格區間即下單。",
       "minSpreadModeNone": "無",
       "minSpreadModeFixed": "固定",
       "minSpreadModeAuto": "自動",

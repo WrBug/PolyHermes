@@ -127,7 +127,8 @@ class CryptoTailOrderbookWsService(
             "book" -> {
                 val assetId = (json.get("asset_id") as? com.google.gson.JsonPrimitive)?.asString ?: return
                 val bids = json.get("bids") as? com.google.gson.JsonArray
-                val firstBid = bids?.get(0) as? com.google.gson.JsonObject
+                if (bids == null || bids.isEmpty) return
+                val firstBid = bids.get(0) as? com.google.gson.JsonObject
                 val bestBid = (firstBid?.get("price") as? com.google.gson.JsonPrimitive)?.asString?.toSafeBigDecimal()
                 if (bestBid != null) onBestBid(assetId, bestBid)
             }

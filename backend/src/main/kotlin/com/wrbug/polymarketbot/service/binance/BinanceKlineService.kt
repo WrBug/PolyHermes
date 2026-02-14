@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service
 import java.math.BigDecimal
 import jakarta.annotation.PreDestroy
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * 币安 K 线 WebSocket：订阅 BTCUSDC 5m/15m，维护当前周期 (open, close)，供尾盘策略价差校验使用。
@@ -34,6 +35,8 @@ class BinanceKlineService {
     private var ws5m: WebSocket? = null
     private var ws15m: WebSocket? = null
     private var reconnectJob: Job? = null
+    private val connected5m = AtomicBoolean(false)
+    private val connected15m = AtomicBoolean(false)
 
     init {
         connectAll()
@@ -44,6 +47,12 @@ class BinanceKlineService {
     fun getCurrentOpenClose(intervalSeconds: Int, periodStartUnix: Long): Pair<BigDecimal, BigDecimal>? {
         return openCloseByPeriod[key(intervalSeconds, periodStartUnix)]
     }
+
+    /** 供 API 健康检查使用：5m / 15m 连接是否正常 */
+    fun getConnectionStatuses(): Map<String, Boolean> = mapOf(
+        "5m" to connected5m.get(),
+        "15m" to connected15m.get()
+    )
 
     private fun connectAll() {
         if (ws5m != null && ws15m != null) return
@@ -68,7 +77,16 @@ class BinanceKlineService {
             else -> 300
         }
         val request = Request.Builder().url(url).build()
+        val connectedFlag = when {
+            streamName.contains("kline_5m") -> connected5m
+            streamName.contains("kline_15m") -> connected15m
+            else -> null
+        }
         val ws = client.newWebSocket(request, object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: okhttp3.Response) {
+                connectedFlag?.set(true)
+            }
+
             override fun onMessage(webSocket: WebSocket, text: String) {
                 parseKlineMessage(text, intervalSeconds)?.let { (tMs, o, c) ->
                     onKline(intervalSeconds, tMs, o, c)
@@ -76,12 +94,18 @@ class BinanceKlineService {
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: okhttp3.Response?) {
+                connectedFlag?.set(false)
                 logger.warn("币安 K 线 WS 异常 $streamName: ${t.message}")
                 scheduleReconnect()
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                connectedFlag?.set(false)
                 if (code != 1000) scheduleReconnect()
+            }
+
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                connectedFlag?.set(false)
             }
         })
         logger.info("币安 K 线 WS 已连接: $streamName")
@@ -112,6 +136,8 @@ class BinanceKlineService {
             ws15m?.close(1000, "reconnect")
             ws5m = null
             ws15m = null
+            connected5m.set(false)
+            connected15m.set(false)
             logger.info("币安 K 线 WS 尝试重连")
             connectAll()
         }

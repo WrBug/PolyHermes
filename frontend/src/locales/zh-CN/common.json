@@ -1446,7 +1446,7 @@
       "timeWindowStartLEEnd": "时间区间开始不能大于结束",
       "timeWindowExceed": "时间区间不能超过周期长度",
       "minSpreadMode": "最小价差",
-      "minSpreadModeTip": "根据当前周期开盘价与收盘价的价差决定是否下单。自动：系统按历史 30 根 K 线计算建议价差（每周期更新）；固定：您输入一个数值（如 30），仅当价差 ≥ 该值时才下单；无：不校验价差，满足价格区间即下单。",
+      "minSpreadModeTip": "根据当前周期开盘价与收盘价的价差决定是否下单。自动：系统按历史 20 根 K 线计算建议价差（每周期更新）；固定：您输入一个数值（如 30），仅当价差 ≥ 该值时才下单；无：不校验价差，满足价格区间即下单。",
       "minSpreadModeNone": "无",
       "minSpreadModeFixed": "固定",
       "minSpreadModeAuto": "自动",

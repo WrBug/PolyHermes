@@ -19,11 +19,11 @@
 
 ### 自动模式计算逻辑
 
-- 通过币安 API 获取**历史 30 根** K 线（与策略周期一致：5m 取 5m K 线，15m 取 15m K 线）。
+- 通过币安 API 获取**历史 20 根** K 线（与策略周期一致：5m 取 5m K 线，15m 取 15m K 线）。
 - **下单方向 = Down**（outcomeIndex = 1）：只取「收盘价 < 开盘价」的 K 线，得到价差序列（开盘价 − 收盘价）。
 - **下单方向 = Up**（outcomeIndex = 0）：只取「收盘价 > 开盘价」的 K 线，得到价差序列（收盘价 − 开盘价）。
 - **异常值剔除**：对上述价差序列做异常值过滤（见下文「异常值剔除」），再用**剩余样本**求平均价差，乘以系数 **80%** 得到最小价差；后续用该值做 \|收盘价 − 开盘价\| ≥ 该值 的校验。
-- **历史数据获取时机**：**在该周期开始时就拉取并计算**，不在保存策略时计算。订单簿 WS 在周期开始时刷新订阅（含每 25 秒或周期切换时的 refreshAndSubscribe），此时对当前周期内所有启用且为 AUTO 的策略，按 (intervalSeconds, periodStartUnix) 预拉该周期前 30 根已收盘 K 线并计算 minSpreadUp/minSpreadDown 写入缓存；该周期内触发时直接用缓存，无需在触发时再调 REST。
+- **历史数据获取时机**：**在该周期开始时就拉取并计算**，不在保存策略时计算。订单簿 WS 在周期开始时刷新订阅（含每 25 秒或周期切换时的 refreshAndSubscribe），此时对当前周期内所有启用且为 AUTO 的策略，按 (intervalSeconds, periodStartUnix) 预拉该周期前 20 根已收盘 K 线并计算 minSpreadUp/minSpreadDown 写入缓存；该周期内触发时直接用缓存，无需在触发时再调 REST。
 
 ### 异常值剔除
 
@@ -35,7 +35,7 @@
   - 示例：15 组价差，14 组在 50 以内、1 组为 200 → 200 会超出上界被剔除，只用 14 组参与平均。
 - **边界与降级**
   - 若剔除后剩余样本数过少（如 &lt; 3），则**不剔除**：用全部价差样本求平均 × 0.8。
-  - 若无满足方向的 K 线（如 30 根里没有 close &lt; open），仍按原文档降级处理（全量 \|close−open\| 或返回 0）。
+  - 若无满足方向的 K 线（如 20 根里没有 close &lt; open），仍按原文档降级处理（全量 \|close−open\| 或返回 0）。
 
 ---
 
@@ -73,7 +73,7 @@
 │     • 计算 effectiveMinSpread：                                                  │
 │         - FIXED：effectiveMinSpread = 策略.minSpreadValue（用户填的固定值）        │
 │         - AUTO：effectiveMinSpread = 按当前下单方向（outcomeIndex）取「自动计算    │
-│           的最小价差」（见下节；若尚未计算则先拉 30 根历史 K 线并计算、缓存）。     │
+│           的最小价差」（见下节；若尚未计算则先拉 20 根历史 K 线并计算、缓存）。     │
 │     • 若 |close − open| < effectiveMinSpread → 本轮不下单，等待价差满足。         │
 │     • 若 |close − open| >= effectiveMinSpread → 通过价差校验，进入               │
 │       placeOrderForTrigger（与现有逻辑一致：预签/签名、提交 CLOB 订单、写触发记录）。│
@@ -87,18 +87,18 @@
 
 ## 四、自动模式：何时拉历史、如何算、如何用
 
-- **何时拉 30 根历史 K 线并计算**  
+- **何时拉 20 根历史 K 线并计算**  
   - **在该周期开始时就预计算**，不在保存策略时计算。  
-  - 订单簿 WS 在**周期开始时**会刷新订阅（`refreshAndSubscribe`：每 25 秒或检测到周期切换时），此时对当前周期内所有启用且 minSpreadMode=AUTO 的策略，按 `(intervalSeconds, periodStartUnix)` 异步拉取该周期前 30 根已收盘 K 线（REST `endTime = periodStartUnix * 1000`），按 Up/Down 分别算 avgSpread × 0.8（含 IQR 剔除）并写入缓存。该周期内后续触发时直接用缓存，**不在触发时再调 REST**。  
+  - 订单簿 WS 在**周期开始时**会刷新订阅（`refreshAndSubscribe`：每 25 秒或检测到周期切换时），此时对当前周期内所有启用且 minSpreadMode=AUTO 的策略，按 `(intervalSeconds, periodStartUnix)` 异步拉取该周期前 20 根已收盘 K 线（REST `endTime = periodStartUnix * 1000`），按 Up/Down 分别算 avgSpread × 0.8（含 IQR 剔除）并写入缓存。该周期内后续触发时直接用缓存，**不在触发时再调 REST**。  
   - 若某周期未做预计算（如服务刚启动且尚未到刷新时机），触发时仍会按需调用 `computeAndCache` 并缓存，保证逻辑正确。  
   - 前端「自动最小价差」接口仅作**预览**，实际下单校验不依赖该接口。
 
 - **计算细节**  
-  - 历史 30 根：币安 REST `GET /api/v3/klines?symbol=BTCUSDC&interval=5m|15m&limit=30`（或 31 取前 30 根已收盘），每根格式为 [openTime, open, high, low, close, ...]。  
+  - 历史 20 根：币安 REST `GET /api/v3/klines?symbol=BTCUSDC&interval=5m|15m&limit=20`（或 21 取前 20 根已收盘），每根格式为 [openTime, open, high, low, close, ...]。  
   - **Down（outcomeIndex=1）**：筛选 close < open，价差 = open − close，得到价差序列 → **异常值剔除（IQR）** → 对剩余价差求平均，再 × 0.8 → minSpreadDown。  
   - **Up（outcomeIndex=0）**：筛选 close > open，价差 = close − open，得到价差序列 → **异常值剔除（IQR）** → 对剩余价差求平均，再 × 0.8 → minSpreadUp。  
   - **异常值剔除**：见上文「异常值剔除」；剔除后再平均。若剔除后剩余样本 &lt; 3，则不剔除，用全部价差样本求平均。  
-  - 若无满足方向的 K 线（例如 30 根里没有一根 close < open），可降级：用全部 30 根的 |close−open| 平均 × 0.8，或返回 0/不校验，具体产品可定。
+  - 若无满足方向的 K 线（例如 20 根里没有一根 close < open），可降级：用全部 20 根的 |close−open| 平均 × 0.8，或返回 0/不校验，具体产品可定。
 
 - **触发时使用**  
   - 当前要下单的是 outcomeIndex（0=Up, 1=Down），取对应的 minSpreadUp 或 minSpreadDown 作为 effectiveMinSpread，再与 |close − open| 比较。
@@ -110,7 +110,7 @@
 | 模块 | 职责 |
 |------|------|
 | **BinanceKlineService（新）** | 1）订阅币安 WS：BTCUSDC 的 5m、15m K 线流（可按需只订阅有策略使用的周期）。<br>2）维护「当前周期」数据：以 periodStartUnix（或 K 线 t 对齐）为 key，存 (open, close)；K 线 WS 推送时更新 close，新周期首条推送时更新 open。<br>3）提供 getCurrentOpenClose(symbol, intervalSeconds, periodStartUnix) → (open, close)?，供执行层价差校验使用。 |
-| **BinanceKlineAutoSpreadService 或合入上者（新）** | 1）按**周期**拉取：以 periodStartUnix 为界，REST 拉取该周期前的 30 根已收盘 K 线。<br>2）按 Up/Down 得到价差序列 → **IQR 异常值剔除** → 对剩余价差求平均 × 0.8，缓存 (intervalSeconds, periodStartUnix) → (minSpreadUp, minSpreadDown)。<br>3）提供 getAutoMinSpread(intervalSeconds, periodStartUnix, outcomeIndex) 与 computeAndCache(intervalSeconds, periodStartUnix)。**周期开始时**由 CryptoTailOrderbookWsService 在 refreshAndSubscribe 后对当前周期内 AUTO 策略预调 computeAndCache；触发时直接用缓存，未命中时再按需计算。 |
+| **BinanceKlineAutoSpreadService 或合入上者（新）** | 1）按**周期**拉取：以 periodStartUnix 为界，REST 拉取该周期前的 20 根已收盘 K 线。<br>2）按 Up/Down 得到价差序列 → **IQR 异常值剔除** → 对剩余价差求平均 × 0.8，缓存 (intervalSeconds, periodStartUnix) → (minSpreadUp, minSpreadDown)。<br>3）提供 getAutoMinSpread(intervalSeconds, periodStartUnix, outcomeIndex) 与 computeAndCache(intervalSeconds, periodStartUnix)。**周期开始时**由 CryptoTailOrderbookWsService 在 refreshAndSubscribe 后对当前周期内 AUTO 策略预调 computeAndCache；触发时直接用缓存，未命中时再按需计算。 |
 | **CryptoTailStrategy（实体）** | 新增字段建议：minSpreadMode（NONE/FIXED/AUTO）、minSpreadValue（固定时使用；AUTO 时可为空或存上次计算值用于展示）。 |
 | **CryptoTailStrategyExecutionService（现有）** | 在 tryTriggerWithPriceFromWs 与 runCycle 分支中，在调用 placeOrderForTrigger 前：若 minSpreadMode != NONE，则取 open/close 与 effectiveMinSpread，校验 \|close−open\| >= effectiveMinSpread；不通过则 return，不调用 placeOrderForTrigger。 |
 | **CryptoTailOrderbookWsService（现有）** | 仍只根据 CLOB bestBid 触发；价差校验在执行层统一做。**新增**：refreshAndSubscribe 完成后，对当前周期内所有启用且 minSpreadMode=AUTO 的策略，异步调用 BinanceKlineAutoSpreadService.computeAndCache，在周期开始即预计算最小价差。 |
@@ -169,7 +169,7 @@ sequenceDiagram
 
 ### 6.2 自动（AUTO）时序图
 
-自动模式：不在保存策略时计算。**在该周期开始时就预计算**（订单簿 WS 刷新订阅时对该周期内 AUTO 策略异步拉 30 根历史 K 线并计算、缓存）；触发时直接用缓存，同一周期内复用。
+自动模式：不在保存策略时计算。**在该周期开始时就预计算**（订单簿 WS 刷新订阅时对该周期内 AUTO 策略异步拉 20 根历史 K 线并计算、缓存）；触发时直接用缓存，同一周期内复用。
 
 ```mermaid
 sequenceDiagram
@@ -213,8 +213,8 @@ sequenceDiagram
     Orderbook->>Orderbook: refreshAndSubscribe() → buildSubscriptionMap() → newMap
     Orderbook->>Orderbook: precomputeAutoMinSpreadForCurrentPeriods(newMap)
     Orderbook->>AutoSpread: computeAndCache(intervalSeconds, periodStartUnix) [异步]
-    AutoSpread->>BinanceREST: GET /api/v3/klines?symbol=BTCUSDC&interval=15m&limit=30&endTime=periodStart*1000
-    BinanceREST-->>AutoSpread: 30 根已收盘 K 线
+    AutoSpread->>BinanceREST: GET /api/v3/klines?symbol=BTCUSDC&interval=15m&limit=20&endTime=periodStart*1000
+    BinanceREST-->>AutoSpread: 20 根已收盘 K 线
     AutoSpread->>AutoSpread: 按 Up/Down 拆价差 → IQR 剔除 → 平均×0.8 → 缓存
 
     Note over CLOB_WS,Exec: 同一周期内再次触发（如另一 outcome 或再次 bestBid）

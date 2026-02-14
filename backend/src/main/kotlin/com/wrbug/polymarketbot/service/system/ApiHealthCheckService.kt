@@ -15,6 +15,7 @@ import org.springframework.context.ApplicationContextAware
 import com.wrbug.polymarketbot.service.copytrading.orders.OrderPushService
 import com.wrbug.polymarketbot.service.copytrading.monitor.PolymarketActivityWsService
 import com.wrbug.polymarketbot.service.copytrading.monitor.UnifiedOnChainWsService
+import com.wrbug.polymarketbot.service.binance.BinanceKlineService
 import org.springframework.stereotype.Service
 import java.util.concurrent.TimeUnit
 
@@ -76,6 +77,17 @@ class ApiHealthCheckService(
         }
     }
 
+    /**
+     * 获取 BinanceKlineService（通过 ApplicationContext 避免循环依赖）
+     */
+    private fun getBinanceKlineService(): BinanceKlineService? {
+        return try {
+            applicationContext?.getBean(BinanceKlineService::class.java)
+        } catch (e: BeansException) {
+            null
+        }
+    }
+
     private val logger = LoggerFactory.getLogger(ApiHealthCheckService::class.java)
 
     /**
@@ -91,6 +103,8 @@ class ApiHealthCheckService(
                 async { checkDataApi() },
                 async { checkGammaApi() },
                 async { checkPolygonRpc() },
+                async { checkBinanceApi() },
+                async { checkBinanceWebSocket() },
                 async { checkPolymarketRtdsWebSocket() },
                 async { checkPolymarketActivityWebSocket() },
                 async { checkUnifiedOnChainWebSocket() },
@@ -195,6 +209,67 @@ class ApiHealthCheckService(
         // 使用 RpcNodeService 获取可用节点（总是返回有效值，包括默认节点）
         val rpcUrl = rpcNodeService.getHttpUrl()
         checkJsonRpcApi("Polygon RPC", rpcUrl)
+    }
+
+    /**
+     * 检查币安 API（用于 K 线等）
+     * 使用 /api/v3/ping 端点
+     */
+    private suspend fun checkBinanceApi(): ApiHealthCheckDto = withContext(Dispatchers.IO) {
+        val url = "https://api.binance.com/api/v3/ping"
+        checkApi("币安 API", url)
+    }
+
+    /**
+     * 检查币安 K 线 WebSocket 连接状态（5m / 15m）
+     */
+    private suspend fun checkBinanceWebSocket(): ApiHealthCheckDto = withContext(Dispatchers.Default) {
+        val binanceWsUrl = "wss://stream.binance.com:9443"
+        try {
+            val binanceKlineService = getBinanceKlineService()
+            if (binanceKlineService == null) {
+                return@withContext ApiHealthCheckDto(
+                    name = "币安 WebSocket",
+                    url = binanceWsUrl,
+                    status = "error",
+                    message = "服务未初始化"
+                )
+            }
+            val statuses = binanceKlineService.getConnectionStatuses()
+            val total = statuses.size
+            val connected = statuses.values.count { it }
+            if (connected == total && total > 0) {
+                ApiHealthCheckDto(
+                    name = "币安 WebSocket",
+                    url = binanceWsUrl,
+                    status = "success",
+                    message = "连接正常 (5m、15m)"
+                )
+            } else if (connected > 0) {
+                val which = statuses.filter { it.value }.keys.joinToString("、")
+                ApiHealthCheckDto(
+                    name = "币安 WebSocket",
+                    url = binanceWsUrl,
+                    status = "error",
+                    message = "部分连接正常 ($which)"
+                )
+            } else {
+                ApiHealthCheckDto(
+                    name = "币安 WebSocket",
+                    url = binanceWsUrl,
+                    status = "error",
+                    message = "连接断开"
+                )
+            }
+        } catch (e: Exception) {
+            logger.warn("检查币安 WebSocket 状态失败", e)
+            ApiHealthCheckDto(
+                name = "币安 WebSocket",
+                url = binanceWsUrl,
+                status = "error",
+                message = "检查失败：${e.message}"
+            )
+        }
     }
 
     /**
