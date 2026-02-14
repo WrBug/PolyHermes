@@ -188,19 +188,37 @@ class CryptoTailStrategyExecutionService(
             ?: return false
         val (openP, closeP) = oc
         val spreadAbs = closeP.subtract(openP).abs()
-        val effectiveMinSpread = when (mode) {
-            "FIXED" -> strategy.minSpreadValue?.takeIf { it > BigDecimal.ZERO }
-            "AUTO" -> computeAutoEffectiveMinSpread(strategy, periodStartUnix, outcomeIndex)
-            else -> null
+        when (mode) {
+            "FIXED" -> {
+                val effectiveMinSpread = strategy.minSpreadValue?.takeIf { it > BigDecimal.ZERO }
+                if (effectiveMinSpread == null || effectiveMinSpread <= BigDecimal.ZERO) return true
+                return spreadAbs >= effectiveMinSpread
+            }
+            "AUTO" -> {
+                val result = computeAutoEffectiveMinSpread(strategy, periodStartUnix, outcomeIndex) ?: return true
+                val effectiveMinSpread = result.effectiveMinSpread
+                if (effectiveMinSpread <= BigDecimal.ZERO) return true
+                val passed = spreadAbs >= effectiveMinSpread
+                logger.info(
+                    "尾盘价差校验: 初始价差(100%基准)=${result.baseSpread.toPlainString()} 系数=${result.coefficient.toPlainString()} " +
+                        "有效最小价差=${effectiveMinSpread.toPlainString()} 当前K线价差=${spreadAbs.toPlainString()} 通过=$passed"
+                )
+                return passed
+            }
+            else -> return true
         }
-        if (effectiveMinSpread == null || effectiveMinSpread <= BigDecimal.ZERO) return true
-        return spreadAbs >= effectiveMinSpread
     }
 
     /**
      * AUTO 模式：取 100% 基准价差，按窗口内毫秒进度计算动态系数（100%→50%）得到有效最小价差。
      */
-    private fun computeAutoEffectiveMinSpread(strategy: CryptoTailStrategy, periodStartUnix: Long, outcomeIndex: Int): BigDecimal? {
+    private data class AutoSpreadResult(
+        val baseSpread: BigDecimal,
+        val coefficient: BigDecimal,
+        val effectiveMinSpread: BigDecimal
+    )
+
+    private fun computeAutoEffectiveMinSpread(strategy: CryptoTailStrategy, periodStartUnix: Long, outcomeIndex: Int): AutoSpreadResult? {
         val baseSpread = binanceKlineAutoSpreadService.getAutoMinSpreadBase(strategy.intervalSeconds, periodStartUnix, outcomeIndex)
             ?: binanceKlineAutoSpreadService.computeAndCache(strategy.intervalSeconds, periodStartUnix)?.let { if (outcomeIndex == 0) it.first else it.second }
             ?: return null
@@ -217,7 +235,8 @@ class CryptoTailStrategyExecutionService(
                 .let { p -> maxOf(BigDecimal.ZERO, minOf(BigDecimal.ONE, p)) }
             BigDecimal.ONE.subtract(progress.multi("0.5"))
         }
-        return baseSpread.multi(coefficient).setScale(8, RoundingMode.HALF_UP)
+        val effectiveMinSpread = baseSpread.multi(coefficient).setScale(8, RoundingMode.HALF_UP)
+        return AutoSpreadResult(baseSpread, coefficient, effectiveMinSpread)
     }
 
     private suspend fun placeOrderForTrigger(

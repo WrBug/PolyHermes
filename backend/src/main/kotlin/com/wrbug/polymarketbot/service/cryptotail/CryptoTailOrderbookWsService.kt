@@ -236,7 +236,13 @@ class CryptoTailOrderbookWsService(
         scope.launch {
             for ((intervalSeconds, periodStartUnix) in autoPeriods) {
                 try {
-                    binanceKlineAutoSpreadService.computeAndCache(intervalSeconds, periodStartUnix)
+                    val pair = binanceKlineAutoSpreadService.computeAndCache(intervalSeconds, periodStartUnix)
+                    if (pair != null) {
+                        logger.info(
+                            "周期开始初始价差: interval=${intervalSeconds}s periodStartUnix=$periodStartUnix " +
+                                "baseSpreadUp=${pair.first.toPlainString()} baseSpreadDown=${pair.second.toPlainString()}"
+                        )
+                    }
                 } catch (e: Exception) {
                     logger.warn("周期开始预计算 AUTO 价差失败: interval=$intervalSeconds periodStartUnix=$periodStartUnix ${e.message}")
                 }
