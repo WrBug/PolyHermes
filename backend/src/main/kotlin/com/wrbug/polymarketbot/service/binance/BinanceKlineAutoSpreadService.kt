@@ -9,7 +9,7 @@ import java.math.RoundingMode
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * 自动最小价差：按周期计算。每个周期首次需要时，拉取该周期前的 20 根已收盘 K 线，按方向筛选、IQR 剔除后求平均 × 0.8，缓存 (interval, period)。
+ * 自动最小价差：按周期计算。每个周期首次需要时，拉取该周期前的 20 根已收盘 K 线，按方向筛选、IQR 剔除后求平均 × 0.7，缓存 (interval, period)。
  * 不在保存策略时计算。
  */
 @Service
@@ -21,7 +21,7 @@ class BinanceKlineAutoSpreadService(
 
     private val symbol = "BTCUSDC"
     private val historyLimit = 20
-    private val autoSpreadCoefficient = BigDecimal("0.8")
+    private val autoSpreadCoefficient = BigDecimal("0.7")
     private val minSamplesAfterIqr = 3
 
     /** (intervalSeconds, periodStartUnix) -> (minSpreadUp, minSpreadDown) */

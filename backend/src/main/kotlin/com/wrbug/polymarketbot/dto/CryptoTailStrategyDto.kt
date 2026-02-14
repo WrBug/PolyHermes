@@ -134,7 +134,7 @@ data class CryptoTailStrategyTriggerListResponse(
 )
 
 /**
- * 自动最小价差计算响应（按 30 根历史 K 线 + IQR 剔除后 × 0.8）
+ * 自动最小价差计算响应（按 30 根历史 K 线 + IQR 剔除后 × 0.7）
  */
 data class CryptoTailAutoMinSpreadResponse(
     val minSpreadUp: String = "0",
