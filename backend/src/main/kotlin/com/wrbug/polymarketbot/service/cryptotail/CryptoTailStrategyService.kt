@@ -167,6 +167,7 @@ class CryptoTailStrategyService(
                 return Result.failure(IllegalArgumentException(ErrorCode.CRYPTO_TAIL_STRATEGY_NOT_FOUND.messageKey))
             }
             strategyRepository.deleteById(strategyId)
+            eventPublisher.publishEvent(CryptoTailStrategyChangedEvent(this))
             Result.success(Unit)
         } catch (e: Exception) {
             logger.error("删除尾盘策略失败: ${e.message}", e)

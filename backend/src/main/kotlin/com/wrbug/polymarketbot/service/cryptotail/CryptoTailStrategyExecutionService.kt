@@ -198,12 +198,7 @@ class CryptoTailStrategyExecutionService(
                 val result = computeAutoEffectiveMinSpread(strategy, periodStartUnix, outcomeIndex) ?: return true
                 val effectiveMinSpread = result.effectiveMinSpread
                 if (effectiveMinSpread <= BigDecimal.ZERO) return true
-                val passed = spreadAbs >= effectiveMinSpread
-                logger.info(
-                    "尾盘价差校验: 初始价差(100%基准)=${result.baseSpread.toPlainString()} 系数=${result.coefficient.toPlainString()} " +
-                        "有效最小价差=${effectiveMinSpread.toPlainString()} 当前K线价差=${spreadAbs.toPlainString()} 通过=$passed"
-                )
-                return passed
+                return spreadAbs >= effectiveMinSpread
             }
             else -> return true
         }

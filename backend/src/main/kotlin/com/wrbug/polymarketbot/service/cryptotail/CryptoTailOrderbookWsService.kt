@@ -56,10 +56,13 @@ class CryptoTailOrderbookWsService(
     private var periodEndCountdownJob: Job? = null
 
     /** 重连延迟（毫秒） */
-    private val reconnectDelayMs = 10_000L
+    private val reconnectDelayMs = 3_000L
 
     /** 因无启用策略而主动关闭 WS 时置为 true，onClosing 中不触发重连 */
     private val closedForNoStrategies = AtomicBoolean(false)
+
+    /** 保护 connect() 的互斥锁，避免多线程并发创建连接 */
+    private val connectLock = Any()
 
     data class WsBookEntry(
         val strategy: CryptoTailStrategy,
@@ -75,33 +78,35 @@ class CryptoTailOrderbookWsService(
     }
 
     private fun connect() {
-        if (webSocket != null) return
-        try {
-            val request = Request.Builder().url(wsUrl).build()
-            webSocket = client.newWebSocket(request, object : WebSocketListener() {
-                override fun onOpen(webSocket: WebSocket, response: okhttp3.Response) {
-                    logger.info("尾盘策略订单簿 WebSocket 已连接")
-                    refreshAndSubscribe()
-                }
+        synchronized(connectLock) {
+            if (webSocket != null) return
+            try {
+                val request = Request.Builder().url(wsUrl).build()
+                webSocket = client.newWebSocket(request, object : WebSocketListener() {
+                    override fun onOpen(webSocket: WebSocket, response: okhttp3.Response) {
+                        logger.info("尾盘策略订单簿 WebSocket 已连接")
+                        refreshAndSubscribe(fromConnect = true)
+                    }
 
-                override fun onMessage(webSocket: WebSocket, text: String) {
-                    handleMessage(text)
-                }
+                    override fun onMessage(webSocket: WebSocket, text: String) {
+                        handleMessage(text)
+                    }
 
-                override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                    this@CryptoTailOrderbookWsService.webSocket = null
-                    if (!closedForNoStrategies.getAndSet(false)) scheduleReconnect()
-                }
+                    override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                        this@CryptoTailOrderbookWsService.webSocket = null
+                        if (!closedForNoStrategies.getAndSet(false)) scheduleReconnect()
+                    }
 
-                override fun onFailure(webSocket: WebSocket, t: Throwable, response: okhttp3.Response?) {
-                    logger.warn("尾盘策略订单簿 WebSocket 异常: ${t.message}")
-                    this@CryptoTailOrderbookWsService.webSocket = null
-                    scheduleReconnect()
-                }
-            })
-        } catch (e: Exception) {
-            logger.error("尾盘策略订单簿 WebSocket 连接失败: ${e.message}", e)
-            scheduleReconnect()
+                    override fun onFailure(webSocket: WebSocket, t: Throwable, response: okhttp3.Response?) {
+                        logger.warn("尾盘策略订单簿 WebSocket 异常: ${t.message}")
+                        this@CryptoTailOrderbookWsService.webSocket = null
+                        scheduleReconnect()
+                    }
+                })
+            } catch (e: Exception) {
+                logger.error("尾盘策略订单簿 WebSocket 连接失败: ${e.message}", e)
+                scheduleReconnect()
+            }
         }
     }
 
@@ -112,6 +117,7 @@ class CryptoTailOrderbookWsService(
         reconnectJob = scope.launch {
             delay(reconnectDelayMs)
             reconnectJob = null
+            if (strategyRepository.findAllByEnabledTrue().isEmpty()) return@launch
             logger.info("尾盘策略订单簿 WebSocket 尝试重连")
             connect()
         }
@@ -119,6 +125,7 @@ class CryptoTailOrderbookWsService(
 
     private fun handleMessage(text: String) {
         if (text == "pong" || text.isEmpty()) return
+        if (closedForNoStrategies.get()) return
         maybeRefreshSubscriptionIfPeriodChanged()
         val json = text.fromJson<com.google.gson.JsonObject>() ?: return
         val eventType = (json.get("event_type") as? com.google.gson.JsonPrimitive)?.asString ?: return
@@ -132,6 +139,7 @@ class CryptoTailOrderbookWsService(
                 val bestBid = (firstBid?.get("price") as? com.google.gson.JsonPrimitive)?.asString?.toSafeBigDecimal()
                 if (bestBid != null) onBestBid(assetId, bestBid)
             }
+
             "price_change" -> {
                 val priceChanges = json.get("price_changes") as? com.google.gson.JsonArray ?: return
                 for (i in 0 until priceChanges.size()) {
@@ -146,7 +154,12 @@ class CryptoTailOrderbookWsService(
     }
 
     private fun onBestBid(tokenId: String, bestBid: BigDecimal) {
-        val entries = tokenToEntries.get()[tokenId] ?: return
+        if (closedForNoStrategies.get()) return
+        val entries = tokenToEntries.get()[tokenId]
+        if (entries == null) {
+            logger.debug("tokenToEntries null: $tokenId")
+            return
+        }
         val nowSeconds = System.currentTimeMillis() / 1000
         for (e in entries) {
             val windowStart = e.periodStartUnix + e.strategy.windowStartSeconds
@@ -175,7 +188,8 @@ class CryptoTailOrderbookWsService(
      * 事件驱动：仅在收到 WS 消息时检查当前周期是否变化，若变化则刷新订阅，无需定时轮询。
      */
     private fun maybeRefreshSubscriptionIfPeriodChanged() {
-        val subscribed = tokenToEntries.get().values.flatten().distinctBy { it.strategy.id }.associate { it.strategy.id!! to it.periodStartUnix }
+        val subscribed = tokenToEntries.get().values.flatten().distinctBy { it.strategy.id }
+            .associate { it.strategy.id!! to it.periodStartUnix }
         if (subscribed.isEmpty()) return
         val strategies = strategyRepository.findAllByEnabledTrue()
         val nowSeconds = System.currentTimeMillis() / 1000
@@ -194,17 +208,27 @@ class CryptoTailOrderbookWsService(
         }
     }
 
-    private fun refreshAndSubscribe() {
+    private fun refreshAndSubscribe(fromConnect: Boolean = false) {
         periodEndCountdownJob?.cancel()
         periodEndCountdownJob = null
+        val oldTokenIds = tokenToEntries.get().keys.toSet()
         val (tokenIds, newMap) = buildSubscriptionMap()
         tokenToEntries.set(newMap)
         if (tokenIds.isEmpty()) {
             closeWebSocketForNoStrategies()
             return
         }
-        if (webSocket == null) {
-            connect()
+        if (!fromConnect) {
+            if (webSocket == null) {
+                connect()
+                return
+            }
+            if (oldTokenIds == tokenIds.toSet()) {
+                scheduleRefreshAtPeriodEnd(newMap)
+                precomputeAutoMinSpreadForCurrentPeriods(newMap)
+                return
+            }
+            closeWebSocketAndReconnect()
             return
         }
         val marketSlugs = newMap.values.asSequence().flatten()
@@ -224,6 +248,22 @@ class CryptoTailOrderbookWsService(
     }
 
     /**
+     * 订阅更新时关闭当前 WebSocket，由 onClosing 触发重连，重连后 onOpen 会重新订阅。
+     */
+    private fun closeWebSocketAndReconnect() {
+        val ws = webSocket
+        if (ws != null) {
+            webSocket = null
+            try {
+                ws.close(1000, "subscription_change")
+            } catch (e: Exception) {
+                logger.debug("关闭尾盘策略 WebSocket 时异常: ${e.message}")
+            }
+            logger.info("尾盘策略订单簿 WebSocket 已关闭（订阅更新，将重连）")
+        }
+    }
+
+    /**
      * AUTO 模式：在周期开始（刷新订阅）时预拉历史 30 根 K 线并计算该周期最小价差，触发时直接用缓存。
      */
     private fun precomputeAutoMinSpreadForCurrentPeriods(newMap: Map<String, List<WsBookEntry>>) {
@@ -240,7 +280,7 @@ class CryptoTailOrderbookWsService(
                     if (pair != null) {
                         logger.info(
                             "周期开始初始价差: interval=${intervalSeconds}s periodStartUnix=$periodStartUnix " +
-                                "baseSpreadUp=${pair.first.toPlainString()} baseSpreadDown=${pair.second.toPlainString()}"
+                                    "baseSpreadUp=${pair.first.toPlainString()} baseSpreadDown=${pair.second.toPlainString()}"
                         )
                     }
                 } catch (e: Exception) {
