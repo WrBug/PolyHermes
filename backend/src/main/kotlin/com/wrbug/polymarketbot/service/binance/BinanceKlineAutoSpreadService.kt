@@ -9,8 +9,8 @@ import java.math.RoundingMode
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * 自动最小价差：按周期计算。每个周期首次需要时，拉取该周期前的 20 根已收盘 K 线，按方向筛选、IQR 剔除后求平均 × 0.7，缓存 (interval, period)。
- * 不在保存策略时计算。
+ * 自动最小价差：按周期计算。每个周期首次需要时，拉取该周期前的 20 根已收盘 K 线，按方向筛选、IQR 剔除后求平均，缓存 100% 基准值 (interval, period)。
+ * 触发时由调用方按窗口进度计算动态系数（100%→50%）后得到有效最小价差。不在保存策略时计算。
  */
 @Service
 class BinanceKlineAutoSpreadService(
@@ -21,15 +21,15 @@ class BinanceKlineAutoSpreadService(
 
     private val symbol = "BTCUSDC"
     private val historyLimit = 20
-    private val autoSpreadCoefficient = BigDecimal("0.7")
     private val minSamplesAfterIqr = 3
 
-    /** (intervalSeconds, periodStartUnix) -> (minSpreadUp, minSpreadDown) */
+    /** (intervalSeconds, periodStartUnix) -> (baseSpreadUp, baseSpreadDown)，100% 基准价差 */
     private val cache = ConcurrentHashMap<String, Pair<BigDecimal, BigDecimal>>()
 
     private fun cacheKey(intervalSeconds: Int, periodStartUnix: Long): String = "$intervalSeconds-$periodStartUnix"
 
-    fun getAutoMinSpread(intervalSeconds: Int, periodStartUnix: Long, outcomeIndex: Int): BigDecimal? {
+    /** 返回该周期、该方向的 100% 基准价差，供调用方按窗口进度应用动态系数。 */
+    fun getAutoMinSpreadBase(intervalSeconds: Int, periodStartUnix: Long, outcomeIndex: Int): BigDecimal? {
         val key = cacheKey(intervalSeconds, periodStartUnix)
         val (up, down) = cache[key] ?: run {
             computeAndCache(intervalSeconds, periodStartUnix) ?: return null
@@ -37,6 +37,7 @@ class BinanceKlineAutoSpreadService(
         return if (outcomeIndex == 0) up else down
     }
 
+    /** 计算并缓存 100% 基准价差（IQR 平均，不乘系数）。预加载与触发时共用此缓存。 */
     fun computeAndCache(intervalSeconds: Int, periodStartUnix: Long): Pair<BigDecimal, BigDecimal>? {
         val intervalStr = if (intervalSeconds == 300) "5m" else "15m"
         val endTimeMs = periodStartUnix * 1000L
@@ -50,15 +51,15 @@ class BinanceKlineAutoSpreadService(
             if (closeP > openP) spreadsUp.add(closeP.subtract(openP))
             if (closeP < openP) spreadsDown.add(openP.subtract(closeP))
         }
-        val avgUp = averageAfterIqr(spreadsUp).multiply(autoSpreadCoefficient).setScale(8, RoundingMode.HALF_UP)
-        val avgDown = averageAfterIqr(spreadsDown).multiply(autoSpreadCoefficient).setScale(8, RoundingMode.HALF_UP)
-        cache[cacheKey(intervalSeconds, periodStartUnix)] = avgUp to avgDown
+        val baseUp = averageAfterIqr(spreadsUp).setScale(8, RoundingMode.HALF_UP)
+        val baseDown = averageAfterIqr(spreadsDown).setScale(8, RoundingMode.HALF_UP)
+        cache[cacheKey(intervalSeconds, periodStartUnix)] = baseUp to baseDown
         logger.info(
-            "尾盘自动价差已计算并缓存(按周期): interval=${intervalSeconds}s periodStartUnix=$periodStartUnix | " +
-                "Up方向: 样本数=${spreadsUp.size}, minSpreadUp=${avgUp.toPlainString()} | " +
-                "Down方向: 样本数=${spreadsDown.size}, minSpreadDown=${avgDown.toPlainString()}"
+            "尾盘自动价差已计算并缓存(100%基准): interval=${intervalSeconds}s periodStartUnix=$periodStartUnix | " +
+                "Up方向: 样本数=${spreadsUp.size}, baseSpreadUp=${baseUp.toPlainString()} | " +
+                "Down方向: 样本数=${spreadsDown.size}, baseSpreadDown=${baseDown.toPlainString()}"
         )
-        return avgUp to avgDown
+        return baseUp to baseDown
     }
 
     private fun fetchKlines(interval: String, limit: Int, endTime: Long? = null): List<List<Any>>? {

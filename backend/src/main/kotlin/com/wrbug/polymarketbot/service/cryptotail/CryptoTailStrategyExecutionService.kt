@@ -16,7 +16,9 @@ import com.wrbug.polymarketbot.service.common.PolymarketClobService
 import com.wrbug.polymarketbot.service.copytrading.orders.OrderSigningService
 import com.wrbug.polymarketbot.util.CryptoUtils
 import com.wrbug.polymarketbot.util.RetrofitFactory
+import com.wrbug.polymarketbot.util.div
 import com.wrbug.polymarketbot.util.fromJson
+import com.wrbug.polymarketbot.util.multi
 import com.wrbug.polymarketbot.util.toSafeBigDecimal
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -188,12 +190,34 @@ class CryptoTailStrategyExecutionService(
         val spreadAbs = closeP.subtract(openP).abs()
         val effectiveMinSpread = when (mode) {
             "FIXED" -> strategy.minSpreadValue?.takeIf { it > BigDecimal.ZERO }
-            "AUTO" -> binanceKlineAutoSpreadService.getAutoMinSpread(strategy.intervalSeconds, periodStartUnix, outcomeIndex)
-                ?: binanceKlineAutoSpreadService.computeAndCache(strategy.intervalSeconds, periodStartUnix)?.let { if (outcomeIndex == 0) it.first else it.second }
+            "AUTO" -> computeAutoEffectiveMinSpread(strategy, periodStartUnix, outcomeIndex)
             else -> null
         }
         if (effectiveMinSpread == null || effectiveMinSpread <= BigDecimal.ZERO) return true
         return spreadAbs >= effectiveMinSpread
+    }
+
+    /**
+     * AUTO 模式：取 100% 基准价差，按窗口内毫秒进度计算动态系数（100%→50%）得到有效最小价差。
+     */
+    private fun computeAutoEffectiveMinSpread(strategy: CryptoTailStrategy, periodStartUnix: Long, outcomeIndex: Int): BigDecimal? {
+        val baseSpread = binanceKlineAutoSpreadService.getAutoMinSpreadBase(strategy.intervalSeconds, periodStartUnix, outcomeIndex)
+            ?: binanceKlineAutoSpreadService.computeAndCache(strategy.intervalSeconds, periodStartUnix)?.let { if (outcomeIndex == 0) it.first else it.second }
+            ?: return null
+        if (baseSpread <= BigDecimal.ZERO) return null
+        val windowStartMs = (periodStartUnix + strategy.windowStartSeconds) * 1000L
+        val windowEndMs = (periodStartUnix + strategy.windowEndSeconds) * 1000L
+        val windowLenMs = windowEndMs - windowStartMs
+        val coefficient = if (windowLenMs <= 0) {
+            BigDecimal.ONE
+        } else {
+            val nowMs = System.currentTimeMillis()
+            val elapsedMs = (nowMs - windowStartMs).toBigDecimal()
+            val progress = elapsedMs.div(windowLenMs.toBigDecimal(), 18, RoundingMode.HALF_UP)
+                .let { p -> maxOf(BigDecimal.ZERO, minOf(BigDecimal.ONE, p)) }
+            BigDecimal.ONE.subtract(progress.multi("0.5"))
+        }
+        return baseSpread.multi(coefficient).setScale(8, RoundingMode.HALF_UP)
     }
 
     private suspend fun placeOrderForTrigger(
