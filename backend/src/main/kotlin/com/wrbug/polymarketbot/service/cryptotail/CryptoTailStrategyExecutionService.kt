@@ -26,6 +26,7 @@ import org.springframework.stereotype.Service
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.util.concurrent.ConcurrentHashMap
+import java.util.regex.Pattern
 
 /** 尾盘策略固定下单价格（最高价 0.99），不再在触发时拉取最优价 */
 private const val TRIGGER_FIXED_PRICE = "0.99"
@@ -34,8 +35,8 @@ private const val TRIGGER_FIXED_PRICE = "0.99"
 private const val SIZE_DECIMAL_SCALE = 2
 
 /**
- * 周期内预置上下文：账户、解密凭证、费率、签名类型、CLOB 客户端；FIXED 模式含预签订单。
- * 触发时 RATIO 仅算 size 并签名提交，FIXED 直接提交预签订单。
+ * 周期内预置上下文：账户、解密凭证、费率、签名类型、CLOB 客户端；不含预签订单。
+ * 触发时 FIXED/RATIO 均按 outcomeIndex 计算 size 并签名提交。
  */
 private data class PeriodContext(
     val strategy: CryptoTailStrategy,
@@ -48,13 +49,12 @@ private data class PeriodContext(
     val feeRateByTokenId: Map<String, String>,
     val signatureType: Int,
     val tokenIds: List<String>,
-    val marketTitle: String?,
-    val preSignedOrderByOutcome: Map<Int, NewOrderRequest>?
+    val marketTitle: String?
 )
 
 /**
  * 尾盘策略执行服务：按周期与时间窗口检查价格并下单，每周期最多触发一次。
- * 周期开始预置账户、解密、费率、签名类型、CLOB 客户端；FIXED 模式预签两张订单，触发时仅提交；RATIO 模式触发时再算 size 并签名提交。
+ * 周期开始预置账户、解密、费率、签名类型、CLOB 客户端；触发时按 outcomeIndex 计算 size 并签名提交。
  */
 @Service
 class CryptoTailStrategyExecutionService(
@@ -88,7 +88,7 @@ class CryptoTailStrategyExecutionService(
 
     /**
      * 在周期内首次需要时构建并缓存预置上下文；失败返回 null，触发流程将走完整路径。
-     * 预置：账户、解密、费率、签名类型、CLOB 客户端；FIXED 时预签两个 outcome 的订单。
+     * 预置：账户、解密、费率、签名类型、CLOB 客户端；不预签订单，触发时再签名。
      */
     private suspend fun ensurePeriodContext(
         strategy: CryptoTailStrategy,
@@ -121,45 +121,7 @@ class CryptoTailStrategyExecutionService(
         }
         val signatureType = orderSigningService.getSignatureTypeForWalletType(account.walletType)
 
-        val preSignedOrderByOutcome: Map<Int, NewOrderRequest>? = when (strategy.amountMode.uppercase()) {
-            "RATIO" -> null
-            else -> {
-                val amountUsdc = strategy.amountValue
-                if (amountUsdc < BigDecimal("1")) return null
-                val price = BigDecimal(TRIGGER_FIXED_PRICE)
-                val size = computeSize(amountUsdc, price)
-                val orders = mutableMapOf<Int, NewOrderRequest>()
-                for (i in 0..1) {
-                    if (i >= tokenIds.size) break
-                    val tokenId = tokenIds[i]
-                    val feeRateBps = feeRateByTokenId[tokenId] ?: "0"
-                    try {
-                        val signedOrder = orderSigningService.createAndSignOrder(
-                            privateKey = decryptedKey,
-                            makerAddress = account.proxyAddress,
-                            tokenId = tokenId,
-                            side = "BUY",
-                            price = TRIGGER_FIXED_PRICE,
-                            size = size,
-                            signatureType = signatureType,
-                            nonce = "0",
-                            feeRateBps = feeRateBps,
-                            expiration = "0"
-                        )
-                        orders[i] = NewOrderRequest(
-                            order = signedOrder,
-                            owner = account.apiKey!!,
-                            orderType = "FAK",
-                            deferExec = false
-                        )
-                    } catch (e: Exception) {
-                        logger.warn("尾盘策略预签订单失败: strategyId=${strategy.id}, outcomeIndex=$i", e)
-                        return null
-                    }
-                }
-                orders.ifEmpty { null }
-            }
-        }
+        if (strategy.amountMode.uppercase() != "RATIO" && strategy.amountValue < BigDecimal("1")) return null
 
         val ctx = PeriodContext(
             strategy = strategy,
@@ -172,8 +134,7 @@ class CryptoTailStrategyExecutionService(
             feeRateByTokenId = feeRateByTokenId,
             signatureType = signatureType,
             tokenIds = tokenIds,
-            marketTitle = marketTitle,
-            preSignedOrderByOutcome = preSignedOrderByOutcome
+            marketTitle = marketTitle
         )
         periodContextCache[key] = ctx
         return ctx
@@ -268,40 +229,29 @@ class CryptoTailStrategyExecutionService(
                 return
             }
 
-            when {
-                ctx.preSignedOrderByOutcome != null -> {
-                    val orderRequest = ctx.preSignedOrderByOutcome[outcomeIndex]
-                    if (orderRequest != null) {
-                        submitOrderAndSaveRecord(ctx.clobApi, strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, amountUsdc, orderRequest)
-                        return
-                    }
-                }
-                strategy.amountMode.uppercase() == "RATIO" -> {
-                    val price = BigDecimal(TRIGGER_FIXED_PRICE)
-                    val size = computeSize(amountUsdc, price)
-                    val feeRateBps = ctx.feeRateByTokenId[tokenId] ?: "0"
-                    val signedOrder = orderSigningService.createAndSignOrder(
-                        privateKey = ctx.decryptedPrivateKey,
-                        makerAddress = ctx.account.proxyAddress,
-                        tokenId = tokenId,
-                        side = "BUY",
-                        price = TRIGGER_FIXED_PRICE,
-                        size = size,
-                        signatureType = ctx.signatureType,
-                        nonce = "0",
-                        feeRateBps = feeRateBps,
-                        expiration = "0"
-                    )
-                    val orderRequest = NewOrderRequest(
-                        order = signedOrder,
-                        owner = ctx.account.apiKey!!,
-                        orderType = "FAK",
-                        deferExec = false
-                    )
-                    submitOrderAndSaveRecord(ctx.clobApi, strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, amountUsdc, orderRequest)
-                    return
-                }
-            }
+            val price = BigDecimal(TRIGGER_FIXED_PRICE)
+            val size = computeSize(amountUsdc, price)
+            val feeRateBps = ctx.feeRateByTokenId[tokenId] ?: "0"
+            val signedOrder = orderSigningService.createAndSignOrder(
+                privateKey = ctx.decryptedPrivateKey,
+                makerAddress = ctx.account.proxyAddress,
+                tokenId = tokenId,
+                side = "BUY",
+                price = TRIGGER_FIXED_PRICE,
+                size = size,
+                signatureType = ctx.signatureType,
+                nonce = "0",
+                feeRateBps = feeRateBps,
+                expiration = "0"
+            )
+            val orderRequest = NewOrderRequest(
+                order = signedOrder,
+                owner = ctx.account.apiKey!!,
+                orderType = "FAK",
+                deferExec = false
+            )
+            submitOrderAndSaveRecord(ctx.clobApi, strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, amountUsdc, orderRequest)
+            return
         }
 
         placeOrderForTriggerSlowPath(strategy, periodStartUnix, marketTitle, tokenIds, outcomeIndex, triggerPrice)
