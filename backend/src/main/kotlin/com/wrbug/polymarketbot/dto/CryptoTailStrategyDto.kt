@@ -93,12 +93,16 @@ data class CryptoTailStrategyDeleteRequest(
 
 /**
  * 触发记录列表请求
+ * @param startDate 开始日期（当天 00:00:00.000 的时间戳毫秒），为 null 表示不限制
+ * @param endDate 结束日期（当天 23:59:59.999 的时间戳毫秒），为 null 表示不限制
  */
 data class CryptoTailStrategyTriggerListRequest(
     val strategyId: Long = 0L,
     val page: Int = 1,
     val pageSize: Int = 20,
-    val status: String? = null
+    val status: String? = null,
+    val startDate: Long? = null,
+    val endDate: Long? = null
 )
 
 /**

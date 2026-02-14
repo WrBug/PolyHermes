@@ -1411,13 +1411,13 @@
       "walletTip": "请使用单独的钱包运行尾盘策略，避免该钱包用于手动交易、跟单等其他操作，否则可能导致余额或仓位变化，造成策略执行异常。",
       "addStrategy": "新增策略",
       "strategyName": "策略名称",
+      "account": "账户",
       "market": "关联市场",
       "timeWindow": "时间区间",
       "priceRange": "价格区间",
       "amountMode": "投入方式",
       "ratio": "比例",
       "fixed": "固定金额",
-      "recentTrigger": "最近触发",
       "totalRealizedPnl": "总收益",
       "winRate": "胜率",
       "actions": "操作",
@@ -1425,14 +1425,14 @@
       "enable": "启用",
       "disable": "停用",
       "delete": "删除",
-      "viewTriggers": "查看触发记录",
+      "viewTriggers": "订单",
       "deleteConfirm": "确定删除该策略？",
       "fetchFailed": "获取列表失败"
     },
     "form": {
       "walletTip": "建议使用专用钱包，避免手动操作等导致余额或下单异常。",
       "strategyName": "策略名称",
-      "strategyNamePlaceholder": "自动生成",
+      "strategyNamePlaceholder": "选填，留空将自动生成",
       "selectAccount": "选择账户",
       "selectMarket": "选择市场",
       "timeWindowStart": "区间开始",
@@ -1466,6 +1466,11 @@
     },
     "triggerRecords": {
       "title": "触发记录",
+      "timeRange": "时间范围",
+      "startDate": "开始日期",
+      "endDate": "结束日期",
+      "successTab": "成功",
+      "failTab": "失败",
       "triggerTime": "触发时间",
       "market": "市场",
       "direction": "方向",
@@ -1477,8 +1482,12 @@
       "status": "状态",
       "success": "成功",
       "fail": "失败",
+      "failReason": "失败原因",
       "realizedPnl": "收益",
-      "resolved": "已结算"
+      "resolved": "已结算",
+      "emptySuccess": "暂无成功记录",
+      "emptyFail": "暂无失败记录",
+      "totalCount": "共 {count} 条"
     }
   }
 }

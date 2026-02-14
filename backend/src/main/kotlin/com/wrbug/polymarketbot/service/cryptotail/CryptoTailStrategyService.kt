@@ -199,16 +199,33 @@ class CryptoTailStrategyService(
     fun getTriggerRecords(request: CryptoTailStrategyTriggerListRequest): Result<CryptoTailStrategyTriggerListResponse> {
         return try {
             val page = PageRequest.of((request.page - 1).coerceAtLeast(0), request.pageSize.coerceIn(1, 100))
-            val pageResult = if (request.status != null && request.status.isNotBlank()) {
-                triggerRepository.findAllByStrategyIdAndStatusOrderByCreatedAtDesc(request.strategyId, request.status, page)
-            } else {
-                triggerRepository.findAllByStrategyIdOrderByCreatedAtDesc(request.strategyId, page)
+            val startTs = request.startDate ?: 0L
+            val endTs = request.endDate ?: Long.MAX_VALUE
+            val useTimeRange = request.startDate != null || request.endDate != null
+            val pageResult = when {
+                useTimeRange && request.status != null && request.status.isNotBlank() ->
+                    triggerRepository.findAllByStrategyIdAndStatusAndCreatedAtBetweenOrderByCreatedAtDesc(
+                        request.strategyId, request.status, startTs, endTs, page
+                    )
+                useTimeRange ->
+                    triggerRepository.findAllByStrategyIdAndCreatedAtBetweenOrderByCreatedAtDesc(
+                        request.strategyId, startTs, endTs, page
+                    )
+                request.status != null && request.status.isNotBlank() ->
+                    triggerRepository.findAllByStrategyIdAndStatusOrderByCreatedAtDesc(request.strategyId, request.status, page)
+                else ->
+                    triggerRepository.findAllByStrategyIdOrderByCreatedAtDesc(request.strategyId, page)
             }
             val list = pageResult.content.map { triggerToDto(it) }
-            val total = if (request.status != null && request.status.isNotBlank()) {
-                triggerRepository.countByStrategyIdAndStatus(request.strategyId, request.status)
-            } else {
-                pageResult.totalElements
+            val total = when {
+                useTimeRange && request.status != null && request.status.isNotBlank() ->
+                    triggerRepository.countByStrategyIdAndStatusAndCreatedAtBetween(request.strategyId, request.status, startTs, endTs)
+                useTimeRange ->
+                    triggerRepository.countByStrategyIdAndCreatedAtBetween(request.strategyId, startTs, endTs)
+                request.status != null && request.status.isNotBlank() ->
+                    triggerRepository.countByStrategyIdAndStatus(request.strategyId, request.status)
+                else ->
+                    pageResult.totalElements
             }
             Result.success(CryptoTailStrategyTriggerListResponse(list = list, total = total))
         } catch (e: Exception) {

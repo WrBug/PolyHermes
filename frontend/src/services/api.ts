@@ -468,7 +468,14 @@ export const apiService = {
       apiClient.post<ApiResponse<import('../types').CryptoTailStrategyDto>>('/crypto-tail-strategy/update', data),
     delete: (data: { strategyId: number }) =>
       apiClient.post<ApiResponse<void>>('/crypto-tail-strategy/delete', data),
-    triggers: (data: { strategyId: number; page?: number; pageSize?: number; status?: string }) =>
+    triggers: (data: {
+      strategyId: number
+      page?: number
+      pageSize?: number
+      status?: string
+      startDate?: number
+      endDate?: number
+    }) =>
       apiClient.post<ApiResponse<{ list: import('../types').CryptoTailStrategyTriggerDto[]; total: number }>>('/crypto-tail-strategy/triggers', data),
     marketOptions: () =>
       apiClient.post<ApiResponse<import('../types').CryptoTailMarketOptionDto[]>>('/crypto-tail-strategy/market-options', {}),

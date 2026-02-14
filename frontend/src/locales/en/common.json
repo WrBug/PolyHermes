@@ -1412,13 +1412,13 @@
       "walletTip": "Use a dedicated wallet for tail strategy. Do not use it for manual trading or copy trading to avoid balance/position issues.",
       "addStrategy": "Add Strategy",
       "strategyName": "Strategy Name",
+      "account": "Account",
       "market": "Market",
       "timeWindow": "Time Window",
       "priceRange": "Price Range",
       "amountMode": "Amount Mode",
       "ratio": "Ratio",
       "fixed": "Fixed",
-      "recentTrigger": "Last Trigger",
       "totalRealizedPnl": "Total PnL",
       "winRate": "Win Rate",
       "actions": "Actions",
@@ -1426,14 +1426,14 @@
       "enable": "Enable",
       "disable": "Disable",
       "delete": "Delete",
-      "viewTriggers": "Trigger Records",
+      "viewTriggers": "Orders",
       "deleteConfirm": "Delete this strategy?",
       "fetchFailed": "Failed to fetch list"
     },
     "form": {
       "walletTip": "Use a dedicated wallet to avoid balance or order issues.",
       "strategyName": "Strategy Name",
-      "strategyNamePlaceholder": "Auto",
+      "strategyNamePlaceholder": "Optional, leave blank to auto-generate",
       "selectAccount": "Select Account",
       "selectMarket": "Select Market",
       "timeWindowStart": "Window Start",
@@ -1467,6 +1467,11 @@
     },
     "triggerRecords": {
       "title": "Trigger Records",
+      "timeRange": "Time Range",
+      "startDate": "Start Date",
+      "endDate": "End Date",
+      "successTab": "Success",
+      "failTab": "Failed",
       "triggerTime": "Time",
       "market": "Market",
       "direction": "Direction",
@@ -1478,8 +1483,12 @@
       "status": "Status",
       "success": "Success",
       "fail": "Fail",
+      "failReason": "Failure Reason",
       "realizedPnl": "PnL",
-      "resolved": "Settled"
+      "resolved": "Settled",
+      "emptySuccess": "No success records",
+      "emptyFail": "No failed records",
+      "totalCount": "{count} record(s)"
     }
   }
 }

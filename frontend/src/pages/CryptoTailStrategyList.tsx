@@ -17,9 +17,16 @@ import {
   InputNumber,
   Radio,
   Spin,
-  Tooltip
+  Tooltip,
+  Tabs,
+  DatePicker,
+  Empty,
+  Typography,
+  Divider
 } from 'antd'
-import { PlusOutlined, EditOutlined, UnorderedListOutlined, InfoCircleOutlined, WarningOutlined } from '@ant-design/icons'
+import type { Dayjs } from 'dayjs'
+import dayjs from 'dayjs'
+import { PlusOutlined, EditOutlined, UnorderedListOutlined, InfoCircleOutlined, WarningOutlined, CalendarOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useMediaQuery } from 'react-responsive'
 import { apiService } from '../services/api'
@@ -41,9 +48,13 @@ const CryptoTailStrategyList: React.FC = () => {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [marketOptions, setMarketOptions] = useState<CryptoTailMarketOptionDto[]>([])
   const [triggersModalOpen, setTriggersModalOpen] = useState(false)
-  const [, setTriggersStrategyId] = useState<number | null>(null)
+  const [triggersStrategyId, setTriggersStrategyId] = useState<number | null>(null)
+  const [triggerTab, setTriggerTab] = useState<'success' | 'fail'>('success')
+  const [triggerDateRange, setTriggerDateRange] = useState<[Dayjs | null, Dayjs | null]>([null, null])
+  const [triggerPage, setTriggerPage] = useState(1)
+  const [triggerPageSize, setTriggerPageSize] = useState(20)
   const [triggers, setTriggers] = useState<CryptoTailStrategyTriggerDto[]>([])
-  const [, setTriggersTotal] = useState(0)
+  const [triggersTotal, setTriggersTotal] = useState(0)
   const [triggersLoading, setTriggersLoading] = useState(false)
   const [form] = Form.useForm()
 
@@ -269,12 +280,30 @@ const CryptoTailStrategyList: React.FC = () => {
     }
   }
 
-  const openTriggers = async (strategyId: number) => {
-    setTriggersStrategyId(strategyId)
-    setTriggersModalOpen(true)
+  type TriggerLoadOpts = { page?: number; pageSize?: number; dateRange?: [Dayjs | null, Dayjs | null] }
+
+  const loadTriggerRecords = async (
+    strategyId: number,
+    status: 'success' | 'fail',
+    opts?: TriggerLoadOpts
+  ) => {
+    const page = opts?.page ?? triggerPage
+    const pageSize = opts?.pageSize ?? triggerPageSize
+    const range = opts?.dateRange ?? triggerDateRange
+    const startDate =
+      range[0] != null ? range[0].startOf('day').valueOf() : undefined
+    const endDate =
+      range[1] != null ? range[1].endOf('day').valueOf() : undefined
     setTriggersLoading(true)
     try {
-      const res = await apiService.cryptoTailStrategy.triggers({ strategyId, page: 1, pageSize: 50 })
+      const res = await apiService.cryptoTailStrategy.triggers({
+        strategyId,
+        page,
+        pageSize,
+        status,
+        startDate,
+        endDate
+      })
       if (res.data.code === 0 && res.data.data) {
         setTriggers(res.data.data.list ?? [])
         setTriggersTotal(res.data.data.total ?? 0)
@@ -284,18 +313,52 @@ const CryptoTailStrategyList: React.FC = () => {
     }
   }
 
-  const formatTimeWindow = (startSec: number, endSec: number): string => {
+  const openTriggers = async (strategyId: number) => {
+    setTriggersStrategyId(strategyId)
+    setTriggerTab('success')
+    setTriggerDateRange([null, null])
+    setTriggerPage(1)
+    setTriggerPageSize(20)
+    setTriggersModalOpen(true)
+    await loadTriggerRecords(strategyId, 'success', { page: 1, pageSize: 20, dateRange: [null, null] })
+  }
+
+  const onTriggerTabChange = (key: string) => {
+    const next = key === 'success' ? 'success' : 'fail'
+    setTriggerTab(next)
+    setTriggers([])
+    setTriggerPage(1)
+    if (triggersStrategyId != null) {
+      loadTriggerRecords(triggersStrategyId, next, { page: 1 })
+    }
+  }
+
+  const onTriggerDateRangeChange = (dates: [Dayjs | null, Dayjs | null] | null) => {
+    const next = dates ?? [null, null]
+    setTriggerDateRange(next)
+    setTriggerPage(1)
+    if (triggersStrategyId != null) {
+      loadTriggerRecords(triggersStrategyId, triggerTab, { page: 1, dateRange: next })
+    }
+  }
+
+  const onTriggerPageChange = (page: number, pageSize: number) => {
+    setTriggerPage(page)
+    setTriggerPageSize(pageSize)
+    if (triggersStrategyId != null) {
+      loadTriggerRecords(triggersStrategyId, triggerTab, { page, pageSize })
+    }
+  }
+
+  const disabledTriggerEndDate = (current: Dayjs) => current && current.isAfter(dayjs(), 'day')
+
+  const formatTimeWindow = (startSec: number, endSec: number, wrap = true): string => {
     const sm = Math.floor(startSec / 60)
     const ss = startSec % 60
     const em = Math.floor(endSec / 60)
     const es = endSec % 60
-    return `${sm} ${t('cryptoTailStrategy.form.minute')} ${ss} ${t('cryptoTailStrategy.form.second')} ~ ${em} ${t('cryptoTailStrategy.form.minute')} ${es} ${t('cryptoTailStrategy.form.second')}`
-  }
-
-  const formatLastTrigger = (ts?: number) => {
-    if (ts == null) return '-'
-    const d = new Date(ts)
-    return d.toLocaleString()
+    const sep = wrap ? '\n~ ' : ' ~ '
+    return `${sm} ${t('cryptoTailStrategy.form.minute')} ${ss} ${t('cryptoTailStrategy.form.second')}${sep}${em} ${t('cryptoTailStrategy.form.minute')} ${es} ${t('cryptoTailStrategy.form.second')}`
   }
 
   const formatPriceRange = (minPrice: string, maxPrice: string): string => {
@@ -314,79 +377,110 @@ const CryptoTailStrategyList: React.FC = () => {
     return undefined
   }
 
+  const getAccountLabel = (accountId: number) => accounts.find((a) => a.id === accountId)?.accountName || `#${accountId}`
+
   const columns = [
+    {
+      title: t('common.status'),
+      dataIndex: 'enabled',
+      key: 'enabled',
+      width: 80,
+      render: (enabled: boolean, record: CryptoTailStrategyDto) => (
+        <Switch
+          checked={enabled}
+          onChange={() => handleToggle(record)}
+          size="small"
+        />
+      )
+    },
     {
       title: t('cryptoTailStrategy.list.strategyName'),
       dataIndex: 'name',
       key: 'name',
-      width: isMobile ? 100 : 140,
-      render: (name: string | undefined, r: CryptoTailStrategyDto) => name || (r.marketTitle ?? r.marketSlugPrefix) || '-'
+      width: isMobile ? 100 : 160,
+      render: (name: string | undefined, r: CryptoTailStrategyDto) => (
+        <Typography.Text strong style={{ wordBreak: 'break-word', whiteSpace: 'normal' }}>
+          {name || (r.marketTitle ?? r.marketSlugPrefix) || '-'}
+        </Typography.Text>
+      )
+    },
+    {
+      title: t('cryptoTailStrategy.list.account'),
+      dataIndex: 'accountId',
+      key: 'accountId',
+      width: isMobile ? 90 : 120,
+      render: (_: unknown, r: CryptoTailStrategyDto) => (
+        <Typography.Text type="secondary" style={{ wordBreak: 'break-word', whiteSpace: 'normal' }}>
+          {getAccountLabel(r.accountId)}
+        </Typography.Text>
+      )
     },
     {
       title: t('cryptoTailStrategy.list.market'),
       key: 'market',
       width: isMobile ? 120 : 200,
-      render: (_: unknown, r: CryptoTailStrategyDto) =>
-        marketOptions.find((m) => m.slug === r.marketSlugPrefix)?.title ?? r.marketTitle ?? r.marketSlugPrefix ?? '-'
+      render: (_: unknown, r: CryptoTailStrategyDto) => (
+        <Typography.Text style={{ wordBreak: 'break-word', whiteSpace: 'normal' }}>
+          {marketOptions.find((m) => m.slug === r.marketSlugPrefix)?.title ?? r.marketTitle ?? r.marketSlugPrefix ?? '-'}
+        </Typography.Text>
+      )
     },
     {
       title: t('cryptoTailStrategy.list.timeWindow'),
       key: 'timeWindow',
-      width: isMobile ? 140 : 180,
-      render: (_: unknown, r: CryptoTailStrategyDto) => formatTimeWindow(r.windowStartSeconds, r.windowEndSeconds)
+      width: isMobile ? 100 : 120,
+      render: (_: unknown, r: CryptoTailStrategyDto) => (
+        <Typography.Text type="secondary" style={{ wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
+          {formatTimeWindow(r.windowStartSeconds, r.windowEndSeconds)}
+        </Typography.Text>
+      )
     },
     {
       title: t('cryptoTailStrategy.list.priceRange'),
       key: 'priceRange',
       width: isMobile ? 90 : 120,
-      render: (_: unknown, r: CryptoTailStrategyDto) => formatPriceRange(r.minPrice, r.maxPrice)
+      render: (_: unknown, r: CryptoTailStrategyDto) => (
+        <Typography.Text type="secondary" style={{ wordBreak: 'break-word', whiteSpace: 'normal' }}>
+          {formatPriceRange(r.minPrice, r.maxPrice)}
+        </Typography.Text>
+      )
     },
     {
       title: t('cryptoTailStrategy.list.amountMode'),
       key: 'amountMode',
       width: isMobile ? 90 : 120,
-      render: (_: unknown, r: CryptoTailStrategyDto) =>
-        (r.amountMode?.toUpperCase() ?? '') === 'RATIO'
-          ? `${t('cryptoTailStrategy.list.ratio')} ${formatNumber(r.amountValue, 2) || '0'}%`
-          : `${t('cryptoTailStrategy.list.fixed')} ${formatUSDC(r.amountValue)} USDC`
-    },
-    {
-      title: t('common.status'),
-      dataIndex: 'enabled',
-      key: 'enabled',
-      width: 90,
-      render: (enabled: boolean, record: CryptoTailStrategyDto) => (
-        <Switch
-          checked={enabled}
-          onChange={() => handleToggle(record)}
-          checkedChildren={t('cryptoTailStrategy.list.enable')}
-          unCheckedChildren={t('cryptoTailStrategy.list.disable')}
-        />
+      render: (_: unknown, r: CryptoTailStrategyDto) => (
+        <Typography.Text type="secondary" style={{ wordBreak: 'break-word', whiteSpace: 'normal' }}>
+          {(r.amountMode?.toUpperCase() ?? '') === 'RATIO'
+            ? `${t('cryptoTailStrategy.list.ratio')} ${formatNumber(r.amountValue, 2) || '0'}%`
+            : `${t('cryptoTailStrategy.list.fixed')} ${formatUSDC(r.amountValue)} USDC`}
+        </Typography.Text>
       )
-    },
-    {
-      title: t('cryptoTailStrategy.list.recentTrigger'),
-      dataIndex: 'lastTriggerAt',
-      key: 'lastTriggerAt',
-      width: isMobile ? 100 : 160,
-      render: (ts: number | undefined) => formatLastTrigger(ts)
     },
     {
       title: t('cryptoTailStrategy.list.totalRealizedPnl'),
       key: 'totalRealizedPnl',
-      width: isMobile ? 90 : 110,
+      width: isMobile ? 90 : 120,
       render: (_: unknown, r: CryptoTailStrategyDto) => {
         const text = r.totalRealizedPnl != null ? `${formatUSDC(r.totalRealizedPnl)} USDC` : '-'
         const color = pnlColor(r.totalRealizedPnl)
-        return color ? <span style={{ color }}>{text}</span> : text
+        return color ? (
+          <Typography.Text style={{ color, fontWeight: 500 }}>{text}</Typography.Text>
+        ) : (
+          <Typography.Text type="secondary">{text}</Typography.Text>
+        )
       }
     },
     {
       title: t('cryptoTailStrategy.list.winRate'),
       key: 'winRate',
-      width: isMobile ? 70 : 80,
+      width: isMobile ? 70 : 90,
       render: (_: unknown, r: CryptoTailStrategyDto) =>
-        r.winRate != null ? `${(Number(r.winRate) * 100).toFixed(1)}%` : '-'
+        r.winRate != null ? (
+          <Tag color="blue">{(Number(r.winRate) * 100).toFixed(1)}%</Tag>
+        ) : (
+          <Typography.Text type="secondary">-</Typography.Text>
+        )
     },
     {
       title: t('cryptoTailStrategy.list.actions'),
@@ -504,45 +598,71 @@ const CryptoTailStrategyList: React.FC = () => {
         </div>
         <Spin spinning={loading}>
           {isMobile ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {list.map((item) => (
-                <Card key={item.id} size="small">
-                  <div style={{ marginBottom: 8 }}>
-                    <strong>{item.name || item.marketSlugPrefix || '-'}</strong>
+                <Card
+                  key={item.id}
+                  size="small"
+                  styles={{ body: { padding: 16 } }}
+                  style={{ borderLeft: `3px solid ${item.enabled ? 'var(--ant-colorSuccess)' : 'var(--ant-colorBorder)'}` }}
+                >
+                  <Typography.Text strong style={{ fontSize: 15, wordBreak: 'break-word', whiteSpace: 'normal', display: 'block', marginBottom: 8 }}>
+                    {item.name || (item.marketTitle ?? item.marketSlugPrefix) || '-'}
+                  </Typography.Text>
+                  <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 13, wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                    {t('cryptoTailStrategy.list.account')}: {getAccountLabel(item.accountId)}
+                  </Typography.Text>
+                  <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 13, wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                    {marketOptions.find((m) => m.slug === item.marketSlugPrefix)?.title ?? item.marketSlugPrefix ?? '-'}
+                  </Typography.Text>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px', marginBottom: 12 }}>
+                    <Typography.Text type="secondary" style={{ fontSize: 12, wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                      {t('cryptoTailStrategy.list.timeWindow')}
+                    </Typography.Text>
+                    <Typography.Text style={{ fontSize: 12 }}>{formatTimeWindow(item.windowStartSeconds, item.windowEndSeconds, false)}</Typography.Text>
+                    <Typography.Text type="secondary" style={{ fontSize: 12, wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                      {t('cryptoTailStrategy.list.priceRange')}
+                    </Typography.Text>
+                    <Typography.Text style={{ fontSize: 12, wordBreak: 'break-word', whiteSpace: 'normal' }}>{formatPriceRange(item.minPrice, item.maxPrice)}</Typography.Text>
+                    <Typography.Text type="secondary" style={{ fontSize: 12, wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                      {t('cryptoTailStrategy.list.amountMode')}
+                    </Typography.Text>
+                    <Typography.Text style={{ fontSize: 12, wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                      {(item.amountMode?.toUpperCase() ?? '') === 'RATIO'
+                        ? `${t('cryptoTailStrategy.list.ratio')} ${formatNumber(item.amountValue, 2) || '0'}%`
+                        : `${t('cryptoTailStrategy.list.fixed')} ${formatUSDC(item.amountValue)} USDC`}
+                    </Typography.Text>
                   </div>
-                  <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
-                    {t('cryptoTailStrategy.list.timeWindow')}: {formatTimeWindow(item.windowStartSeconds, item.windowEndSeconds)}
-                  </div>
-                  <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
-                    {t('cryptoTailStrategy.list.priceRange')}: {formatPriceRange(item.minPrice, item.maxPrice)}
-                  </div>
-                  <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
-                    {t('cryptoTailStrategy.list.amountMode')}:{' '}
-                    {(item.amountMode?.toUpperCase() ?? '') === 'RATIO'
-                      ? `${t('cryptoTailStrategy.list.ratio')} ${formatNumber(item.amountValue, 2) || '0'}%`
-                      : `${t('cryptoTailStrategy.list.fixed')} ${formatUSDC(item.amountValue)} USDC`}
-                  </div>
-                  <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>
-                    {t('cryptoTailStrategy.list.totalRealizedPnl')}:{' '}
+                  <Divider style={{ margin: '10px 0' }} />
+                  <Space wrap style={{ marginBottom: 12 }}>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      {t('cryptoTailStrategy.list.totalRealizedPnl')}:{' '}
+                    </Typography.Text>
                     {item.totalRealizedPnl != null ? (
-                      <span style={{ color: pnlColor(item.totalRealizedPnl) ?? '#666' }}>
+                      <Typography.Text style={{ color: pnlColor(item.totalRealizedPnl) ?? undefined, fontWeight: 500, fontSize: 12 }}>
                         {formatUSDC(item.totalRealizedPnl)} USDC
-                      </span>
+                      </Typography.Text>
                     ) : (
-                      '-'
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>-</Typography.Text>
                     )}
-                    {item.winRate != null ? ` · ${t('cryptoTailStrategy.list.winRate')}: ${(Number(item.winRate) * 100).toFixed(1)}%` : ''}
-                  </div>
-                  <Space>
+                    {item.winRate != null && (
+                      <>
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>·</Typography.Text>
+                        <Tag color="blue" style={{ margin: 0 }}>{t('cryptoTailStrategy.list.winRate')} {(Number(item.winRate) * 100).toFixed(1)}%</Tag>
+                      </>
+                    )}
+                  </Space>
+                  <Divider style={{ margin: '10px 0' }} />
+                  <Space wrap size="small">
                     <Switch
                       checked={item.enabled}
                       onChange={() => handleToggle(item)}
                       size="small"
                     />
-                    <Button type="link" size="small" onClick={() => openEditModal(item)}>
+                    <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEditModal(item)}>
                       {t('cryptoTailStrategy.list.edit')}
                     </Button>
-                    <Button type="link" size="small" onClick={() => openTriggers(item.id)}>
+                    <Button type="link" size="small" icon={<UnorderedListOutlined />} onClick={() => openTriggers(item.id)}>
                       {t('cryptoTailStrategy.list.viewTriggers')}
                     </Button>
                     <Popconfirm
@@ -608,6 +728,7 @@ const CryptoTailStrategyList: React.FC = () => {
             <Select
               placeholder={t('cryptoTailStrategy.form.selectAccount')}
               options={accounts.map((a) => ({ label: a.accountName || `#${a.id}`, value: a.id }))}
+              disabled={!!editingId}
             />
           </Form.Item>
           <Form.Item name="name" label={t('cryptoTailStrategy.form.strategyName')}>
@@ -741,76 +862,193 @@ const CryptoTailStrategyList: React.FC = () => {
       </Modal>
 
       <Modal
-        title={t('cryptoTailStrategy.triggerRecords.title')}
+        title={
+          <Space>
+            <UnorderedListOutlined style={{ fontSize: 18, color: 'var(--ant-colorPrimary)' }} />
+            <span>{t('cryptoTailStrategy.triggerRecords.title')}</span>
+          </Space>
+        }
         open={triggersModalOpen}
         onCancel={() => setTriggersModalOpen(false)}
         footer={null}
-        width={Math.min(800, window.innerWidth - 48)}
+        width={Math.min(900, window.innerWidth - 48)}
+        styles={{ body: { paddingTop: 16 } }}
       >
-        <Spin spinning={triggersLoading}>
-          <Table
-            rowKey="id"
-            size="small"
-            dataSource={triggers}
-            columns={[
-              {
-                title: t('cryptoTailStrategy.triggerRecords.triggerTime'),
-                dataIndex: 'createdAt',
-                key: 'createdAt',
-                render: (ts: number) => new Date(ts).toLocaleString()
-              },
-              {
-                title: t('cryptoTailStrategy.triggerRecords.direction'),
-                dataIndex: 'outcomeIndex',
-                key: 'outcomeIndex',
-                render: (i: number) => (i === 0 ? t('cryptoTailStrategy.triggerRecords.up') : t('cryptoTailStrategy.triggerRecords.down'))
-              },
-              {
-                title: t('cryptoTailStrategy.triggerRecords.triggerPrice'),
-                dataIndex: 'triggerPrice',
-                key: 'triggerPrice',
-                render: (v: string) => (formatNumber(v, 2) || '-')
-              },
-              {
-                title: t('cryptoTailStrategy.triggerRecords.amount'),
-                dataIndex: 'amountUsdc',
-                key: 'amountUsdc',
-                render: (v: string) => `${formatUSDC(v)} USDC`
-              },
-              {
-                title: t('cryptoTailStrategy.triggerRecords.orderId'),
-                dataIndex: 'orderId',
-                key: 'orderId',
-                ellipsis: true
-              },
-              {
-                title: t('cryptoTailStrategy.triggerRecords.status'),
-                dataIndex: 'status',
-                key: 'status',
-                render: (s: string) => (
-                  <Tag color={s === 'success' ? 'green' : 'red'}>
-                    {s === 'success' ? t('cryptoTailStrategy.triggerRecords.success') : t('cryptoTailStrategy.triggerRecords.fail')}
-                  </Tag>
-                )
-              },
-              {
-                title: t('cryptoTailStrategy.triggerRecords.realizedPnl'),
-                dataIndex: 'realizedPnl',
-                key: 'realizedPnl',
-                render: (v: string | undefined, r: CryptoTailStrategyTriggerDto) => {
-                  if (v == null || v === '') return r.resolved ? formatUSDC('0') : '-'
-                  const num = Number(v)
-                  const formatted = formatUSDC(String(Math.abs(num)))
-                  const text = num >= 0 ? `+${formatted}` : `-${formatted}`
-                  const color = pnlColor(v)
-                  return color ? <span style={{ color }}>{text}</span> : text
-                }
-              }
-            ]}
-            pagination={false}
-            scroll={{ x: 600 }}
-          />
-        </Spin>
+        <Card size="small" style={{ marginBottom: 16, background: 'var(--ant-colorFillQuaternary)' }}>
+          <Space wrap align="center" size="middle">
+            <Space align="center">
+              <CalendarOutlined style={{ color: 'var(--ant-colorTextSecondary)' }} />
+              <Typography.Text type="secondary">{t('cryptoTailStrategy.triggerRecords.timeRange')}</Typography.Text>
+            </Space>
+            <DatePicker.RangePicker
+              value={triggerDateRange}
+              onChange={onTriggerDateRangeChange}
+              format="YYYY-MM-DD"
+              placeholder={[t('cryptoTailStrategy.triggerRecords.startDate'), t('cryptoTailStrategy.triggerRecords.endDate')]}
+              allowClear
+              disabledDate={disabledTriggerEndDate}
+              style={{ minWidth: 240 }}
+            />
+          </Space>
+        </Card>
+        <Tabs
+          activeKey={triggerTab}
+          onChange={onTriggerTabChange}
+          items={[
+            {
+              key: 'success',
+              label: t('cryptoTailStrategy.triggerRecords.successTab'),
+              children: (
+                <Spin spinning={triggersLoading}>
+                  <Table
+                    rowKey="id"
+                    size="small"
+                    dataSource={triggerTab === 'success' ? triggers : []}
+                    locale={{
+                      emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('cryptoTailStrategy.triggerRecords.emptySuccess')} />
+                    }}
+                    columns={[
+                      {
+                        title: t('cryptoTailStrategy.triggerRecords.triggerTime'),
+                        dataIndex: 'createdAt',
+                        key: 'createdAt',
+                        width: 172,
+                        render: (ts: number) => <Typography.Text>{new Date(ts).toLocaleString()}</Typography.Text>
+                      },
+                      {
+                        title: t('cryptoTailStrategy.triggerRecords.direction'),
+                        dataIndex: 'outcomeIndex',
+                        key: 'outcomeIndex',
+                        width: 80,
+                        align: 'center',
+                        render: (i: number) =>
+                          i === 0 ? (
+                            <Tag icon={<ArrowUpOutlined />} color="green">{t('cryptoTailStrategy.triggerRecords.up')}</Tag>
+                          ) : (
+                            <Tag icon={<ArrowDownOutlined />} color="volcano">{t('cryptoTailStrategy.triggerRecords.down')}</Tag>
+                          )
+                      },
+                      {
+                        title: t('cryptoTailStrategy.triggerRecords.triggerPrice'),
+                        dataIndex: 'triggerPrice',
+                        key: 'triggerPrice',
+                        width: 100,
+                        render: (v: string) => (formatNumber(v, 2) || '-')
+                      },
+                      {
+                        title: t('cryptoTailStrategy.triggerRecords.amount'),
+                        dataIndex: 'amountUsdc',
+                        key: 'amountUsdc',
+                        width: 110,
+                        render: (v: string) => `${formatUSDC(v)} USDC`
+                      },
+                      {
+                        title: t('cryptoTailStrategy.triggerRecords.realizedPnl'),
+                        dataIndex: 'realizedPnl',
+                        key: 'realizedPnl',
+                        width: 100,
+                        render: (v: string | undefined, r: CryptoTailStrategyTriggerDto) => {
+                          if (v == null || v === '') return r.resolved ? formatUSDC('0') : '-'
+                          const num = Number(v)
+                          const formatted = formatUSDC(String(Math.abs(num)))
+                          const text = num >= 0 ? `+${formatted}` : `-${formatted}`
+                          const color = pnlColor(v)
+                          return color ? <Typography.Text style={{ color, fontWeight: 500 }}>{text}</Typography.Text> : text
+                        }
+                      }
+                    ]}
+                    pagination={{
+                      current: triggerPage,
+                      pageSize: triggerPageSize,
+                      total: triggersTotal,
+                      showSizeChanger: true,
+                      showTotal: (total) => t('cryptoTailStrategy.triggerRecords.totalCount').replace('{count}', String(total)),
+                      onChange: onTriggerPageChange
+                    }}
+                    scroll={{ x: 540 }}
+                  />
+                </Spin>
+              )
+            },
+            {
+              key: 'fail',
+              label: t('cryptoTailStrategy.triggerRecords.failTab'),
+              children: (
+                <Spin spinning={triggersLoading}>
+                  <Table
+                    rowKey="id"
+                    size="small"
+                    dataSource={triggerTab === 'fail' ? triggers : []}
+                    locale={{
+                      emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('cryptoTailStrategy.triggerRecords.emptyFail')} />
+                    }}
+                    columns={[
+                      {
+                        title: t('cryptoTailStrategy.triggerRecords.triggerTime'),
+                        dataIndex: 'createdAt',
+                        key: 'createdAt',
+                        width: 172,
+                        render: (ts: number) => <Typography.Text>{new Date(ts).toLocaleString()}</Typography.Text>
+                      },
+                      {
+                        title: t('cryptoTailStrategy.triggerRecords.direction'),
+                        dataIndex: 'outcomeIndex',
+                        key: 'outcomeIndex',
+                        width: 80,
+                        align: 'center',
+                        render: (i: number) =>
+                          i === 0 ? (
+                            <Tag icon={<ArrowUpOutlined />} color="green">{t('cryptoTailStrategy.triggerRecords.up')}</Tag>
+                          ) : (
+                            <Tag icon={<ArrowDownOutlined />} color="volcano">{t('cryptoTailStrategy.triggerRecords.down')}</Tag>
+                          )
+                      },
+                      {
+                        title: t('cryptoTailStrategy.triggerRecords.triggerPrice'),
+                        dataIndex: 'triggerPrice',
+                        key: 'triggerPrice',
+                        width: 100,
+                        render: (v: string) => (formatNumber(v, 2) || '-')
+                      },
+                      {
+                        title: t('cryptoTailStrategy.triggerRecords.amount'),
+                        dataIndex: 'amountUsdc',
+                        key: 'amountUsdc',
+                        width: 110,
+                        render: (v: string) => `${formatUSDC(v)} USDC`
+                      },
+                      {
+                        title: t('cryptoTailStrategy.triggerRecords.failReason'),
+                        dataIndex: 'failReason',
+                        key: 'failReason',
+                        ellipsis: true,
+                        render: (v: string | null | undefined) => {
+                          const text = v ?? '-'
+                          return text.length > 40 ? (
+                            <Tooltip title={text}>
+                              <Typography.Text ellipsis style={{ maxWidth: 280 }}>{text}</Typography.Text>
+                            </Tooltip>
+                          ) : (
+                            <Typography.Text type={text === '-' ? 'secondary' : undefined}>{text}</Typography.Text>
+                          )
+                        }
+                      }
+                    ]}
+                    pagination={{
+                      current: triggerPage,
+                      pageSize: triggerPageSize,
+                      total: triggersTotal,
+                      showSizeChanger: true,
+                      showTotal: (total) => t('cryptoTailStrategy.triggerRecords.totalCount').replace('{count}', String(total)),
+                      onChange: onTriggerPageChange
+                    }}
+                    scroll={{ x: 540 }}
+                  />
+                </Spin>
+              )
+            }
+          ]}
+        />
       </Modal>
     </div>
   )
