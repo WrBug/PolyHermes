@@ -8,6 +8,7 @@ import org.web3j.crypto.Credentials
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.math.RoundingMode
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * 订单签名服务
@@ -323,12 +324,17 @@ class OrderSigningService {
         }
     }
     
+    /** 并发安全：确保同一毫秒内多次调用生成唯一 salt，避免 FIXED 模式预签双单等场景的 salt 碰撞 */
+    private val saltSequence = AtomicLong(0)
+
     /**
-     * 生成 salt（使用时间戳，毫秒）
-     * 与 TypeScript SDK 保持一致，使用时间戳作为 salt
+     * 生成 salt（时间戳 + 自增序列，保证并发下唯一）
+     * 兼容 Polymarket：salt 为 Long，时间戳主位 + 序列次位，与 TypeScript SDK 语义兼容
      */
     private fun generateSalt(): Long {
-        return System.currentTimeMillis()
+        val now = System.currentTimeMillis()
+        val seq = saltSequence.incrementAndGet() and 0x3FF
+        return now * 1000 + seq
     }
     
     /**
