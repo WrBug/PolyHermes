@@ -20,6 +20,8 @@ import com.wrbug.polymarketbot.util.div
 import com.wrbug.polymarketbot.util.fromJson
 import com.wrbug.polymarketbot.util.multi
 import com.wrbug.polymarketbot.util.toSafeBigDecimal
+import com.github.benmanes.caffeine.cache.Cache
+import com.github.benmanes.caffeine.cache.Caffeine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.slf4j.LoggerFactory
@@ -83,6 +85,11 @@ class CryptoTailStrategyExecutionService(
 
     /** 周期预置上下文缓存：(strategyId-periodStartUnix) -> PeriodContext，过期周期在读取时剔除 */
     private val periodContextCache = ConcurrentHashMap<String, PeriodContext>()
+
+    /** 已打印「首次满足条件」日志的周期：LRU 容量 100，每周期只打一次 */
+    private val conditionLoggedCache: Cache<String, Long> = Caffeine.newBuilder()
+        .maximumSize(100)
+        .build()
 
     /**
      * 在周期内首次需要时构建并缓存预置上下文；失败返回 null，触发流程将走完整路径。
@@ -175,6 +182,20 @@ class CryptoTailStrategyExecutionService(
         val mutex = getTriggerMutex(strategy.id!!, periodStartUnix)
         mutex.withLock {
             if (triggerRepository.findByStrategyIdAndPeriodStartUnix(strategy.id!!, periodStartUnix) != null) return@withLock
+            val logKey = triggerLockKey(strategy.id!!, periodStartUnix)
+            if (conditionLoggedCache.getIfPresent(logKey) == null) {
+                conditionLoggedCache.put(logKey, periodStartUnix + strategy.intervalSeconds)
+                val oc = binanceKlineService.getCurrentOpenClose(strategy.intervalSeconds, periodStartUnix)
+                val openPrice = oc?.first?.toPlainString() ?: "-"
+                val closePrice = oc?.second?.toPlainString() ?: "-"
+                val strategyName = strategy.name?.takeIf { it.isNotBlank() } ?: "尾盘策略-${strategy.marketSlugPrefix}"
+                val direction = if (outcomeIndex == 0) "Up" else "Down"
+                logger.info(
+                    "尾盘策略首次满足条件: strategyName=$strategyName, strategyId=${strategy.id}, " +
+                        "openPrice=$openPrice, closePrice=$closePrice, marketPrice=${bestBid.toPlainString()}, " +
+                        "direction=$direction, outcomeIndex=$outcomeIndex"
+                )
+            }
             if (!passMinSpreadCheck(strategy, periodStartUnix, outcomeIndex)) return@withLock
             ensurePeriodContext(strategy, periodStartUnix, tokenIds, marketTitle)
             placeOrderForTrigger(strategy, periodStartUnix, marketTitle, tokenIds, outcomeIndex, bestBid)
