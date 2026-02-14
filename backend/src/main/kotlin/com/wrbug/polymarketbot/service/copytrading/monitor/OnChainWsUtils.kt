@@ -220,10 +220,10 @@ object OnChainWsUtils {
             return null
         }
         
-        // 尝试通过 Gamma API 查询市场信息（通过 tokenId）
+        // 尝试通过 Gamma API 查询市场信息（通过 tokenId）；失败时仍保留链上 tokenId 供后续按 tokenId 补查市场
         val marketInfo = fetchMarketByTokenId(asset.toString(), retrofitFactory)
         
-        // 创建 TradeResponse
+        // 创建 TradeResponse：tokenId 始终写入链上解析得到的 asset（与 CLOB 一致），便于 Gamma 失败时在 processBuyTrade 中按 tokenId 再查
         return TradeResponse(
             id = txHash,
             market = marketInfo?.conditionId ?: "",
@@ -233,7 +233,8 @@ object OnChainWsUtils {
             timestamp = (timestamp ?: System.currentTimeMillis() / 1000).toString(),
             user = walletAddress,
             outcomeIndex = marketInfo?.outcomeIndex,
-            outcome = marketInfo?.outcome
+            outcome = marketInfo?.outcome,
+            tokenId = asset.toString()
         )
     }
     

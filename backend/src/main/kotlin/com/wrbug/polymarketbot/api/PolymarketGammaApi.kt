@@ -62,19 +62,21 @@ data class GammaEventMarketItem(
 
 /**
  * 事件响应（从 MarketResponse.events 解析）
+ * Gamma API Event 含 negRisk，用于判断是否使用 Neg Risk Exchange 签约
  */
 data class EventResponse(
     val id: String? = null,
     val ticker: String? = null,
-    val slug: String,
-    val title: String,
+    val slug: String? = null,
+    val title: String? = null,
     val category: String? = null,
     val active: Boolean? = null,
     val closed: Boolean? = null,
     val archived: Boolean? = null,
     val startDate: String? = null,
     val endDate: String? = null,
-    val createdAt: String? = null
+    val createdAt: String? = null,
+    val negRisk: Boolean? = null
 )
 
 /**
@@ -106,6 +108,8 @@ data class MarketResponse(
     val events: List<EventResponse>? = null,  // 事件列表（从 events[0] 获取 slug）
     // 以下字段可能存在于响应中，但不在标准文档中
     val clobTokenIds: String? = null,  // CLOB token IDs（可能是 JSON 字符串或数组）
-    val clob_token_ids: String? = null  // 下划线格式（兼容不同 API 版本）
+    val clob_token_ids: String? = null,  // 下划线格式（兼容不同 API 版本）
+    val negRisk: Boolean? = null,       // 事件级 neg risk（部分 API 直接返回在 market）
+    val negRiskOther: Boolean? = null  // Market 级 neg risk 标记
 )
 

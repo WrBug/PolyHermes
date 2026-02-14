@@ -8,6 +8,7 @@ import com.wrbug.polymarketbot.entity.Market
 import com.wrbug.polymarketbot.repository.MarketRepository
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.getEventSlug
+import com.wrbug.polymarketbot.util.parseStringArray
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -208,6 +209,36 @@ class MarketService(
     }
     
     /**
+     * 按 tokenId 从 Gamma 解析市场信息（conditionId、outcomeIndex）
+     * 用于链上解析时 Gamma 失败、仅带 tokenId 的交易在 processBuyTrade 中补查市场
+     */
+    suspend fun getMarketInfoByTokenId(tokenId: String): MarketInfoByTokenId? {
+        if (tokenId.isBlank()) return null
+        return try {
+            val gammaApi = retrofitFactory.createGammaApi()
+            val response = gammaApi.listMarkets(
+                conditionIds = null,
+                clobTokenIds = listOf(tokenId),
+                includeTag = null
+            )
+            if (!response.isSuccessful || response.body().isNullOrEmpty()) return null
+            val market = response.body()!!.first()
+            val conditionId = market.conditionId ?: return null
+            val clobTokenIdsRaw = market.clobTokenIds ?: market.clob_token_ids
+            val clobTokenIds = (clobTokenIdsRaw ?: "").parseStringArray()
+            val outcomeIndex = clobTokenIds.indexOfFirst { it.equals(tokenId, ignoreCase = true) }.takeIf { it >= 0 }
+                ?: return null
+            val outcomes = market.outcomes.parseStringArray()
+            val outcome = if (outcomeIndex < outcomes.size) outcomes[outcomeIndex] else null
+            saveMarketFromResponse(conditionId, market)
+            MarketInfoByTokenId(conditionId = conditionId, outcomeIndex = outcomeIndex, outcome = outcome)
+        } catch (e: Exception) {
+            logger.warn("按 tokenId 查询市场失败: tokenId=$tokenId, error=${e.message}")
+            null
+        }
+    }
+
+    /**
      * 清除缓存（用于测试或手动刷新）
      */
     fun clearCache() {
@@ -230,5 +261,33 @@ class MarketService(
             null
         }
     }
+
+    /**
+     * 根据 conditionId 查询该市场是否为 Neg Risk（需使用 Neg Risk Exchange 签约）
+     * 用于跟单下单时选择正确的 exchange 合约，避免 invalid signature
+     */
+    suspend fun getNegRiskByConditionId(conditionId: String): Boolean? {
+        if (conditionId.isBlank()) return null
+        return try {
+            val gammaApi = retrofitFactory.createGammaApi()
+            val response = gammaApi.listMarkets(conditionIds = listOf(conditionId))
+            if (!response.isSuccessful || response.body().isNullOrEmpty()) return null
+            val marketResponse = response.body()!!.first()
+            val fromEvent = marketResponse.events?.firstOrNull()?.negRisk
+            val fromMarket = marketResponse.negRisk ?: marketResponse.negRiskOther
+            fromEvent ?: fromMarket
+        } catch (e: Exception) {
+            logger.warn("查询市场 negRisk 失败: conditionId=$conditionId, error=${e.message}")
+            null
+        }
+    }
 }
 
+/**
+ * 按 tokenId 查询 Gamma 得到的市场信息（用于补全 trade.market / outcomeIndex）
+ */
+data class MarketInfoByTokenId(
+    val conditionId: String,
+    val outcomeIndex: Int,
+    val outcome: String? = null
+)
