@@ -158,6 +158,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       ]
     },
     {
+      key: '/crypto-tail-strategy',
+      icon: <LineChartOutlined />,
+      label: t('menu.cryptoTailStrategy')
+    },
+    {
       key: '/positions',
       icon: <UnorderedListOutlined />,
       label: t('menu.positions')

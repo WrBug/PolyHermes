@@ -463,6 +463,7 @@ class PolymarketActivityWsService(
             // 使用 transactionHash 作为 trade ID，如果没有则生成 fallback ID
             val tradeId = payload.transactionHash ?: "${leaderId}_${System.currentTimeMillis()}_${asset.take(10)}"
 
+            // asset 即 CLOB 的 tokenId，必须写入 TradeResponse，跟单下单时用此 tokenId 请求订单簿/下单，否则会用 conditionId+outcomeIndex 链上重算，可能得到与 CLOB 不一致的 tokenId
             TradeResponse(
                 id = tradeId,
                 market = conditionId,
@@ -472,7 +473,8 @@ class PolymarketActivityWsService(
                 timestamp = timestamp,
                 user = null, // Activity WS 中不需要
                 outcomeIndex = outcomeIndex,
-                outcome = outcome
+                outcome = outcome,
+                tokenId = asset
             )
         } catch (e: Exception) {
             logger.error("解析 Activity Trade 失败: ${e.message}", e)

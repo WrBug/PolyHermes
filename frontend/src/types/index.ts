@@ -1034,3 +1034,74 @@ export interface BacktestTaskDto {
   executionStartedAt?: number
   executionFinishedAt?: number
 }
+
+/**
+ * 尾盘策略
+ */
+export interface CryptoTailStrategyDto {
+  id: number
+  accountId: number
+  name?: string
+  marketSlugPrefix: string
+  marketTitle?: string
+  intervalSeconds: number
+  windowStartSeconds: number
+  windowEndSeconds: number
+  minPrice: string
+  maxPrice: string
+  amountMode: string
+  amountValue: string
+  /** 最小价差模式: NONE, FIXED, AUTO */
+  minSpreadMode?: string
+  /** 最小价差数值（FIXED 时必填；AUTO 时可为计算值） */
+  minSpreadValue?: string | null
+  enabled: boolean
+  lastTriggerAt?: number
+  /** 已实现总收益 USDC */
+  totalRealizedPnl?: string
+  settledCount?: number
+  winCount?: number
+  /** 胜率 0~1 */
+  winRate?: string
+  createdAt: number
+  updatedAt: number
+}
+
+/** 自动最小价差计算响应 */
+export interface CryptoTailAutoMinSpreadResponse {
+  minSpreadUp: string
+  minSpreadDown: string
+}
+
+/**
+ * 尾盘策略触发记录
+ */
+export interface CryptoTailStrategyTriggerDto {
+  id: number
+  strategyId: number
+  periodStartUnix: number
+  marketTitle?: string
+  outcomeIndex: number
+  triggerPrice: string
+  amountUsdc: string
+  orderId?: string
+  status: string
+  failReason?: string
+  resolved?: boolean
+  /** 已实现盈亏 USDC（结算后有值） */
+  realizedPnl?: string
+  winnerOutcomeIndex?: number
+  settledAt?: number
+  createdAt: number
+}
+
+/**
+ * 尾盘策略市场选项
+ */
+export interface CryptoTailMarketOptionDto {
+  slug: string
+  title: string
+  intervalSeconds: number
+  periodStartUnix: number
+  endDate?: string
+}

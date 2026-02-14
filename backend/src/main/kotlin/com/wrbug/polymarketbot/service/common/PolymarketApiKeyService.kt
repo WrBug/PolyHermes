@@ -99,6 +99,24 @@ class PolymarketApiKeyService(
     }
     
     /**
+     * 从 CLOB /time 获取服务器时间戳，失败时返回 null（调用方使用本地时间）
+     */
+    private suspend fun fetchServerTimeOrNull(): Long? {
+        return try {
+            val timeApi = createUnauthenticatedApi()
+            val timeResponse = timeApi.getServerTime()
+            if (timeResponse.isSuccessful) {
+                timeResponse.body()?.string()?.trim()?.toLongOrNull()
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            logger.warn("获取服务器时间失败，使用本地时间", e)
+            null
+        }
+    }
+    
+    /**
      * 创建新的 API Key
      */
     private suspend fun createApiKey(
@@ -107,20 +125,7 @@ class PolymarketApiKeyService(
         chainId: Long
     ): Result<ApiKeyCreds> {
         return try {
-            // 获取服务器时间（可选，用于更准确的时间戳）
-            val serverTime = try {
-                val timeApi = createUnauthenticatedApi()
-                val timeResponse = timeApi.getServerTime()
-                if (timeResponse.isSuccessful && timeResponse.body() != null) {
-                    timeResponse.body()!!.timestamp
-                } else {
-                    null
-                }
-            } catch (e: Exception) {
-                logger.warn("获取服务器时间失败，使用本地时间", e)
-                null
-            }
-            
+            val serverTime = fetchServerTimeOrNull()
             // 创建带 L1 认证的 API 客户端
             val api = createL1AuthenticatedApi(privateKey, walletAddress, chainId, serverTime)
             
@@ -158,20 +163,7 @@ class PolymarketApiKeyService(
         chainId: Long
     ): Result<ApiKeyCreds> {
         return try {
-            // 获取服务器时间（可选）
-            val serverTime = try {
-                val timeApi = createUnauthenticatedApi()
-                val timeResponse = timeApi.getServerTime()
-                if (timeResponse.isSuccessful && timeResponse.body() != null) {
-                    timeResponse.body()!!.timestamp
-                } else {
-                    null
-                }
-            } catch (e: Exception) {
-                logger.warn("获取服务器时间失败，使用本地时间", e)
-                null
-            }
-            
+            val serverTime = fetchServerTimeOrNull()
             // 创建带 L1 认证的 API 客户端
             val api = createL1AuthenticatedApi(privateKey, walletAddress, chainId, serverTime)
             

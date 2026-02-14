@@ -1,6 +1,7 @@
 package com.wrbug.polymarketbot.api
 
 import com.google.gson.annotations.SerializedName
+import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.*
 
@@ -164,10 +165,10 @@ interface PolymarketClobApi {
     
     /**
      * 获取服务器时间
-     * 端点: /time
+     * 端点: /time 返回纯数字（Unix 时间戳），非 JSON
      */
     @GET("/time")
-    suspend fun getServerTime(): Response<ServerTimeResponse>
+    suspend fun getServerTime(): Response<ResponseBody>
 }
 
 // 请求和响应数据类
@@ -334,7 +335,8 @@ data class TradeResponse(
     val timestamp: String,  // ISO 8601 格式字符串或时间戳
     val user: String?,
     val outcomeIndex: Int? = null,  // 结果索引（0=YES, 1=NO）
-    val outcome: String? = null    // 结果名称（如 "Up", "Down"）
+    val outcome: String? = null,   // 结果名称（如 "Up", "Down"）
+    val tokenId: String? = null    // CLOB tokenId（链上解析时从 ERC1155 取得，与 Gamma clobTokenIds 一致，用于下单）
 )
 
 /**
@@ -361,13 +363,6 @@ data class ApiKeyResponse(
     val apiKey: String,
     val secret: String,
     val passphrase: String
-)
-
-/**
- * 服务器时间响应
- */
-data class ServerTimeResponse(
-    val timestamp: Long
 )
 
 /**

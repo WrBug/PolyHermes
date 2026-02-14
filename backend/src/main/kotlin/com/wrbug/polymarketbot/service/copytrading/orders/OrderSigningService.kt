@@ -8,6 +8,7 @@ import org.web3j.crypto.Credentials
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.math.RoundingMode
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * 订单签名服务
@@ -23,6 +24,14 @@ class OrderSigningService {
     private val logger = LoggerFactory.getLogger(OrderSigningService::class.java)
 
     /**
+     * 根据是否为 Neg Risk 市场返回签约用 exchange 合约地址
+     * @param negRisk true 时使用 Neg Risk CTF Exchange，否则使用标准 CTF Exchange
+     */
+    fun getExchangeContract(negRisk: Boolean): String {
+        return if (negRisk) NEG_RISK_EXCHANGE_CONTRACT else EXCHANGE_CONTRACT
+    }
+
+    /**
      * 根据钱包类型返回 CLOB 订单签名类型
      * @param walletType Magic=邮箱/社交登录, Safe=Web3 钱包
      * @return 1=POLY_PROXY(Magic), 2=POLY_GNOSIS_SAFE(Safe), 默认 2
@@ -32,8 +41,10 @@ class OrderSigningService {
         return if (walletTypeEnum == com.wrbug.polymarketbot.enums.WalletType.MAGIC) 1 else 2
     }
 
-    // Polygon 主网合约地址
+    // Polygon 主网合约地址（标准 CTF Exchange）
     private val EXCHANGE_CONTRACT = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E"
+    // Neg Risk CTF Exchange（neg risk 市场需用此合约签约，否则服务端返回 invalid signature）
+    private val NEG_RISK_EXCHANGE_CONTRACT = "0xC5d563A36AE78145C45a50134d48A1215220f80a"
     private val CHAIN_ID = 137L
     
     // USDC 有 6 位小数
@@ -157,6 +168,7 @@ class OrderSigningService {
      * @param nonce nonce（默认 "0"）
      * @param feeRateBps 费率基点（默认 "0"）
      * @param expiration 过期时间戳（秒，0 表示永不过期）
+     * @param exchangeContract 签约用 exchange 合约地址；null 时用标准 CTF Exchange，neg risk 市场需传 Neg Risk Exchange
      * @return 签名的订单对象
      */
     fun createAndSignOrder(
@@ -169,7 +181,8 @@ class OrderSigningService {
         signatureType: Int = 2,  // 默认使用 Browser Wallet（与正确订单数据一致）
         nonce: String = "0",
         feeRateBps: String = "0",
-        expiration: String = "0"
+        expiration: String = "0",
+        exchangeContract: String? = null
     ): SignedOrderObject {
         try {
             // 1. 从私钥获取签名地址
@@ -202,10 +215,11 @@ class OrderSigningService {
             logger.debug("Salt: $salt, Expiration: $expiration, Nonce: $nonce, FeeRateBPS: $feeRateBps")
             logger.debug("Signature Type: $signatureType, Chain ID: $CHAIN_ID")
             
-            // 6. 构建订单数据并签名
+            // 6. 构建订单数据并签名（neg risk 市场需用 NEG_RISK_EXCHANGE_CONTRACT）
+            val contract = exchangeContract?.takeIf { it.isNotBlank() } ?: EXCHANGE_CONTRACT
             val signature = signOrder(
                 privateKey = privateKey,
-                exchangeContract = EXCHANGE_CONTRACT,
+                exchangeContract = contract,
                 chainId = CHAIN_ID,
                 salt = salt,
                 maker = makerAddressLower,
@@ -267,20 +281,20 @@ class OrderSigningService {
         signatureType: Int
     ): String {
         try {
-            // 1. 从私钥创建 BigInteger
+            // 1. 私钥与密钥对
             val cleanPrivateKey = privateKey.removePrefix("0x")
             val privateKeyBigInt = BigInteger(cleanPrivateKey, 16)
-            val ecKeyPair = org.web3j.crypto.ECKeyPair.create(privateKeyBigInt)
-            
-            // 2. 编码域分隔符
+            val credentials = Credentials.create(privateKeyBigInt.toString(16))
+            val ecKeyPair = credentials.ecKeyPair
+
+            // 2. 编码域分隔符（verifyingContract 显式小写，与 EIP-712 约定一致）
             val domainSeparator = com.wrbug.polymarketbot.util.Eip712Encoder.encodeExchangeDomain(
                 chainId = chainId,
-                verifyingContract = exchangeContract
+                verifyingContract = exchangeContract.lowercase()
             )
-            
+
             // 3. 编码订单消息哈希
-            // signatureType 参数：1 = POLY_PROXY (代理钱包), 2 = POLY_GNOSIS_SAFE, 0 = EOA
-            // 使用传入的 signatureType 参数，而不是硬编码
+            // signatureType：1 = POLY_PROXY (Magic), 2 = POLY_GNOSIS_SAFE (Safe), 0 = EOA
             val orderHash = com.wrbug.polymarketbot.util.Eip712Encoder.encodeExchangeOrder(
                 salt = salt,
                 maker = maker,
@@ -293,29 +307,25 @@ class OrderSigningService {
                 nonce = nonce,
                 feeRateBps = feeRateBps,
                 side = side,
-                signatureType = signatureType  // 使用传入的参数
+                signatureType = signatureType
             )
-            
-            // 4. 计算完整的结构化数据哈希
+
+            // 4. 计算完整 EIP-712 结构化数据哈希
             val structuredHash = com.wrbug.polymarketbot.util.Eip712Encoder.hashStructuredData(
                 domainSeparator = domainSeparator,
                 messageHash = orderHash
             )
-            
-            // 5. 使用私钥签名
+
+            // 5. 使用私钥签名（needToHash=false，对 32 字节 hash 直接签名）
             val signature = org.web3j.crypto.Sign.signMessage(structuredHash, ecKeyPair, false)
-            
-            // 6. 组合签名（r + s + v）
+
+            // 6. 组合 r + s + v
             val rHex = org.web3j.utils.Numeric.toHexString(signature.r).removePrefix("0x").padStart(64, '0')
             val sHex = org.web3j.utils.Numeric.toHexString(signature.s).removePrefix("0x").padStart(64, '0')
-            val vBytes = signature.v as ByteArray
-            val vInt = if (vBytes.isNotEmpty()) {
-                vBytes[0].toInt() and 0xff
-            } else {
-                0
-            }
-            val vHex = String.format("%02x", vInt)
-            
+            val vBytes = signature.v
+            val vInt = if (vBytes.isNotEmpty()) vBytes[0].toInt() and 0xff else 0
+            val vHex = "%02x".format(vInt)
+
             return "0x$rHex$sHex$vHex"
         } catch (e: Exception) {
             logger.error("订单签名失败", e)
@@ -323,12 +333,17 @@ class OrderSigningService {
         }
     }
     
+    /** 并发安全：确保同一毫秒内多次调用生成唯一 salt，避免 FIXED 模式预签双单等场景的 salt 碰撞 */
+    private val saltSequence = AtomicLong(0)
+
     /**
-     * 生成 salt（使用时间戳，毫秒）
-     * 与 TypeScript SDK 保持一致，使用时间戳作为 salt
+     * 生成 salt（时间戳 + 自增序列，保证并发下唯一）
+     * 兼容 Polymarket：salt 为 Long，时间戳主位 + 序列次位，与 TypeScript SDK 语义兼容
      */
     private fun generateSalt(): Long {
-        return System.currentTimeMillis()
+        val now = System.currentTimeMillis()
+        val seq = saltSequence.incrementAndGet() and 0x3FF
+        return now * 1000 + seq
     }
     
     /**

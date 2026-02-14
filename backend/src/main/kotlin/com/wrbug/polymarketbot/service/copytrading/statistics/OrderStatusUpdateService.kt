@@ -198,8 +198,6 @@ class OrderStatusUpdateService(
                 return
             }
 
-            logger.debug("检查 ${ordersToCheck.size} 个30秒前创建的订单是否成交")
-
             // 按账户分组，避免重复创建 API 客户端
             val ordersByAccount = ordersToCheck.groupBy { it.accountId }
 

@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "get-order-detail": "node get-order-detail.js",
-    "verify-backtest-data": "node verify-backtest-data.js"
+    "verify-backtest-data": "node verify-backtest-data.js",
+    "ws-binance-klines": "node ws_binance_btc_usdc_klines.js"
   },
   "dependencies": {
     "@ethersproject/wallet": "^5.7.0",
-    "@polymarket/clob-client": "^5.2.1"
+    "@polymarket/clob-client": "^5.2.1",
+    "ws": "^8.18.0"
   }
 }

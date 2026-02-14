@@ -258,19 +258,36 @@ open class CopyOrderTrackingService(
                         continue
                     }
 
-                    // 直接使用outcomeIndex获取tokenId（支持多元市场）
-                    if (trade.outcomeIndex == null) {
-                        logger.warn("交易缺少outcomeIndex，无法确定tokenId: tradeId=${trade.id}, market=${trade.market}")
-                        continue
+                    // 获取 tokenId：优先使用链上解析得到的 tokenId（与 Gamma clobTokenIds 一致），否则用 conditionId+outcomeIndex 链上重算
+                    val tokenId = if (!trade.tokenId.isNullOrBlank()) {
+                        trade.tokenId
+                    } else {
+                        if (trade.outcomeIndex == null) {
+                            logger.warn("交易缺少outcomeIndex且无tokenId，无法确定tokenId: tradeId=${trade.id}, market=${trade.market}")
+                            continue
+                        }
+                        val tokenIdResult = blockchainService.getTokenId(trade.market, trade.outcomeIndex)
+                        if (tokenIdResult.isFailure) {
+                            logger.error("获取tokenId失败: market=${trade.market}, outcomeIndex=${trade.outcomeIndex}, error=${tokenIdResult.exceptionOrNull()?.message}")
+                            continue
+                        }
+                        tokenIdResult.getOrNull() ?: continue
                     }
 
-                    // 获取tokenId（直接使用outcomeIndex，不转换为YES/NO）
-                    val tokenIdResult = blockchainService.getTokenId(trade.market, trade.outcomeIndex)
-                    if (tokenIdResult.isFailure) {
-                        logger.error("获取tokenId失败: market=${trade.market}, outcomeIndex=${trade.outcomeIndex}, error=${tokenIdResult.exceptionOrNull()?.message}")
+                    // 当链上解析时 Gamma 失败导致 market/outcomeIndex 为空时，按 tokenId 补查市场信息
+                    var effectiveMarketId = trade.market
+                    var effectiveOutcomeIndex = trade.outcomeIndex
+                    if (effectiveMarketId.isBlank() && !trade.tokenId.isNullOrBlank()) {
+                        val infoByToken = marketService.getMarketInfoByTokenId(trade.tokenId)
+                        if (infoByToken != null) {
+                            effectiveMarketId = infoByToken.conditionId
+                            effectiveOutcomeIndex = infoByToken.outcomeIndex
+                        }
+                    }
+                    if (effectiveMarketId.isBlank()) {
+                        logger.warn("无法确定市场(conditionId)，跳过: tradeId=${trade.id}, tokenId=${trade.tokenId}")
                         continue
                     }
-                    val tokenId = tokenIdResult.getOrNull() ?: continue
 
                     // 先计算跟单金额（用于仓位检查）
                     // 注意：这里先计算金额，即使后续被过滤也会记录
@@ -293,7 +310,7 @@ open class CopyOrderTrackingService(
 
                     if (needMarketInfo) {
                         try {
-                            val market = marketService.getMarket(trade.market)
+                            val market = marketService.getMarket(effectiveMarketId)
                             marketTitle = market?.title
                             marketEndDate = market?.endDate
                         } catch (e: Exception) {
@@ -312,10 +329,10 @@ open class CopyOrderTrackingService(
                         tokenId,
                         tradePrice = tradePrice,
                         copyOrderAmount = copyOrderAmount,
-                        marketId = trade.market,
+                        marketId = effectiveMarketId,
                         marketTitle = marketTitle,
                         marketEndDate = marketEndDate,
-                        outcomeIndex = trade.outcomeIndex
+                        outcomeIndex = effectiveOutcomeIndex
                     )
                     val orderbook = filterResult.orderbook  // 获取订单簿（如果需要）
                     if (!filterResult.isPassed) {
@@ -325,8 +342,8 @@ open class CopyOrderTrackingService(
                         notificationScope.launch {
                             try {
                                 // 获取市场信息（标题和slug）
-                                val market = marketService.getMarket(trade.market)
-                                val marketTitle = market?.title ?: trade.market
+                                val market = marketService.getMarket(effectiveMarketId)
+                                val marketTitle = market?.title ?: effectiveMarketId
                                 val marketSlug = market?.slug  // 显示用的 slug
 
                                 // 从过滤结果中提取 filterType
@@ -346,11 +363,11 @@ open class CopyOrderTrackingService(
                                     accountId = copyTrading.accountId,
                                     leaderId = copyTrading.leaderId,
                                     leaderTradeId = trade.id,
-                                    marketId = trade.market,
+                                    marketId = effectiveMarketId,
                                     marketTitle = marketTitle,
                                     marketSlug = marketSlug,
                                     side = "BUY",
-                                    outcomeIndex = trade.outcomeIndex,
+                                    outcomeIndex = effectiveOutcomeIndex,
                                     outcome = trade.outcome,
                                     price = trade.price.toSafeBigDecimal(),
                                     size = trade.size.toSafeBigDecimal(),
@@ -376,7 +393,7 @@ open class CopyOrderTrackingService(
 
                                     telegramNotificationService?.sendOrderFilteredNotification(
                                         marketTitle = marketTitle,
-                                        marketId = trade.market,
+                                        marketId = effectiveMarketId,
                                         marketSlug = marketSlug,
                                         side = "BUY",
                                         outcome = trade.outcome,
@@ -556,6 +573,11 @@ open class CopyOrderTrackingService(
 
                     logger.info("准备创建买入订单: copyTradingId=${copyTrading.id}, tradeId=${trade.id}, leaderPrice=${trade.price}, tolerance=${copyTrading.priceTolerance}, calculatedPrice=$buyPrice, quantity=$finalBuyQuantity, baseFee=$feeRateBps")
 
+                    // Neg Risk 市场需用 Neg Risk Exchange 签约，否则服务端返回 invalid signature
+                    val negRisk = marketService.getNegRiskByConditionId(effectiveMarketId) == true
+                    val exchangeContract = orderSigningService.getExchangeContract(negRisk)
+                    if (negRisk) logger.debug("市场为 Neg Risk，使用 Neg Risk Exchange 签约: conditionId=$effectiveMarketId")
+
                     // 调用API创建订单（带重试机制）
                     // 重试策略：最多重试 MAX_RETRY_ATTEMPTS 次，每次重试前等待 RETRY_DELAY_MS 毫秒
                     // 每次重试都会重新生成salt并重新签名，确保签名唯一性
@@ -563,6 +585,8 @@ open class CopyOrderTrackingService(
                         clobApi = clobApi,
                         privateKey = decryptedPrivateKey,
                         makerAddress = account.proxyAddress,
+                        walletAddress = account.walletAddress,
+                        exchangeContract = exchangeContract,
                         tokenId = tokenId,
                         side = "BUY",
                         price = buyPrice.toString(),
@@ -585,8 +609,8 @@ open class CopyOrderTrackingService(
                             notificationScope.launch {
                                 try {
                                     // 获取市场信息（标题和slug）
-                                    val market = marketService.getMarket(trade.market)
-                                    val marketTitle = market?.title ?: trade.market
+                                    val market = marketService.getMarket(effectiveMarketId)
+                                    val marketTitle = market?.title ?: effectiveMarketId
                                     val marketSlug = market?.eventSlug  // 跳转用的 slug
 
                                     // 获取当前语言设置（从 LocaleContextHolder）
@@ -598,7 +622,7 @@ open class CopyOrderTrackingService(
 
                                     telegramNotificationService?.sendOrderFailureNotification(
                                         marketTitle = marketTitle,
-                                        marketId = trade.market,
+                                        marketId = effectiveMarketId,
                                         marketSlug = marketSlug,
                                         side = "BUY",
                                         outcome = null,  // 失败时可能没有 outcome
@@ -632,9 +656,9 @@ open class CopyOrderTrackingService(
                         copyTradingId = copyTrading.id,
                         accountId = copyTrading.accountId,
                         leaderId = copyTrading.leaderId,
-                        marketId = trade.market,
-                        side = trade.outcomeIndex.toString(),  // 使用outcomeIndex作为side（兼容旧数据）
-                        outcomeIndex = trade.outcomeIndex,  // 新增字段
+                        marketId = effectiveMarketId,
+                        side = effectiveOutcomeIndex?.toString() ?: "",  // 使用outcomeIndex作为side（兼容旧数据）
+                        outcomeIndex = effectiveOutcomeIndex,  // 新增字段
                         buyOrderId = realOrderId,  // 使用真实订单ID
                         leaderBuyTradeId = trade.id,
                         leaderBuyQuantity = trade.size.toSafeBigDecimal(),  // 存储 Leader 买入数量（用于固定金额模式计算卖出比例）
@@ -904,13 +928,21 @@ open class CopyOrderTrackingService(
             finalNeedMatch = BigDecimal.ONE
         }
 
-        // 4. 获取tokenId（直接使用outcomeIndex，支持多元市场）
-        val tokenIdResult = blockchainService.getTokenId(leaderSellTrade.market, leaderSellTrade.outcomeIndex)
-        if (tokenIdResult.isFailure) {
-            logger.error("获取tokenId失败: market=${leaderSellTrade.market}, outcomeIndex=${leaderSellTrade.outcomeIndex}, error=${tokenIdResult.exceptionOrNull()?.message}")
-            return
+        // 4. 获取 tokenId：优先使用链上解析得到的 tokenId，否则用 conditionId+outcomeIndex 链上重算
+        val tokenId = if (!leaderSellTrade.tokenId.isNullOrBlank()) {
+            leaderSellTrade.tokenId
+        } else {
+            if (leaderSellTrade.outcomeIndex == null) {
+                logger.error("卖出交易缺少outcomeIndex且无tokenId: market=${leaderSellTrade.market}")
+                return
+            }
+            val tokenIdResult = blockchainService.getTokenId(leaderSellTrade.market, leaderSellTrade.outcomeIndex)
+            if (tokenIdResult.isFailure) {
+                logger.error("获取tokenId失败: market=${leaderSellTrade.market}, outcomeIndex=${leaderSellTrade.outcomeIndex}, error=${tokenIdResult.exceptionOrNull()?.message}")
+                return
+            }
+            tokenIdResult.getOrNull() ?: return
         }
-        val tokenId = tokenIdResult.getOrNull() ?: return
 
         // 5. 计算卖出价格（优先使用订单簿 bestBid，失败则使用 Leader 价格，固定按90%计算）
         // 注意：需要先计算卖出价格，因为后续创建 matchDetails 需要使用实际卖出价格
@@ -995,7 +1027,12 @@ open class CopyOrderTrackingService(
             "0"
         }
 
-        // 9. 创建并签名卖出订单（按账户钱包类型使用对应 signatureType）
+        // 9. Neg Risk 市场需用 Neg Risk Exchange 签约
+        val negRiskSell = marketService.getNegRiskByConditionId(leaderSellTrade.market) == true
+        val exchangeContractSell = orderSigningService.getExchangeContract(negRiskSell)
+        if (negRiskSell) logger.debug("卖出市场为 Neg Risk，使用 Neg Risk Exchange 签约: conditionId=${leaderSellTrade.market}")
+
+        // 10. 创建并签名卖出订单（按账户钱包类型使用对应 signatureType）
         val signedOrder = try {
             orderSigningService.createAndSignOrder(
                 privateKey = decryptedPrivateKey,
@@ -1007,14 +1044,15 @@ open class CopyOrderTrackingService(
                 signatureType = orderSigningService.getSignatureTypeForWalletType(account.walletType),
                 nonce = "0",
                 feeRateBps = feeRateBps,  // 使用动态获取的费率
-                expiration = "0"
+                expiration = "0",
+                exchangeContract = exchangeContractSell
             )
         } catch (e: Exception) {
             logger.error("创建并签名卖出订单失败: copyTradingId=${copyTrading.id}, tradeId=${leaderSellTrade.id}", e)
             return
         }
 
-        // 10. 构建订单请求
+        // 11. 构建订单请求
         // 跟单订单使用 FAK (Fill-And-Kill)，允许部分成交，未成交部分立即取消
         // 这样可以快速响应 Leader 的交易，避免订单长期挂单导致价格不匹配
         val orderRequest = NewOrderRequest(
@@ -1024,7 +1062,7 @@ open class CopyOrderTrackingService(
             deferExec = false
         )
 
-        // 11. 创建带认证的CLOB API客户端（使用解密后的凭证）
+        // 12. 创建带认证的CLOB API客户端（使用解密后的凭证）
         val clobApi = retrofitFactory.createClobApi(
             account.apiKey,
             apiSecret,
@@ -1032,12 +1070,13 @@ open class CopyOrderTrackingService(
             account.walletAddress
         )
 
-        // 12. 调用API创建卖出订单（带重试机制，重试时会重新生成salt并重新签名）
-
+        // 13. 调用API创建卖出订单（带重试机制，重试时会重新生成salt并重新签名）
         val createOrderResult = createOrderWithRetry(
             clobApi = clobApi,
             privateKey = decryptedPrivateKey,
             makerAddress = account.proxyAddress,
+            walletAddress = account.walletAddress,
+            exchangeContract = exchangeContractSell,
             tokenId = tokenId,
             side = "SELL",
             price = sellPrice.toString(),
@@ -1130,7 +1169,9 @@ open class CopyOrderTrackingService(
      *
      * @param clobApi CLOB API 客户端
      * @param privateKey 私钥（用于签名）
-     * @param makerAddress 代理钱包地址
+     * @param makerAddress 代理钱包地址（funder）
+     * @param walletAddress 账户 EOA 地址（须与私钥推导的 signer 一致，用于校验及 POLY_ADDRESS）
+     * @param exchangeContract 签约用 exchange 合约（Neg Risk 市场需用 Neg Risk Exchange）
      * @param tokenId Token ID
      * @param side 订单方向（BUY/SELL）
      * @param price 价格
@@ -1146,6 +1187,8 @@ open class CopyOrderTrackingService(
         clobApi: PolymarketClobApi,
         privateKey: String,
         makerAddress: String,
+        walletAddress: String,
+        exchangeContract: String,
         tokenId: String,
         side: String,
         price: String,
@@ -1172,8 +1215,16 @@ open class CopyOrderTrackingService(
                     signatureType = signatureType,
                     nonce = "0",
                     feeRateBps = feeRateBps,  // 使用动态获取的费率
-                    expiration = "0"
+                    expiration = "0",
+                    exchangeContract = exchangeContract
                 )
+
+                // 校验 signer 与账户 walletAddress 一致，否则服务端会返回 invalid signature（POLY_ADDRESS 与 order.signer 需一致）
+                if (signedOrder.signer.lowercase() != walletAddress.lowercase()) {
+                    val msg = "订单 signer 与账户 walletAddress 不一致，会导致 invalid signature。请确认该账户的私钥与 walletAddress 对应同一 EOA，且 API 密钥由该 EOA 创建。signer=${signedOrder.signer.take(10)}..., walletAddress=${walletAddress.take(10)}..."
+                    logger.error(msg)
+                    return Result.failure(IllegalStateException(msg))
+                }
 
                 // 构建订单请求
                 // 跟单订单使用 FAK (Fill-And-Kill)，允许部分成交，未成交部分立即取消
