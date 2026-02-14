@@ -10,7 +10,9 @@ import com.wrbug.polymarketbot.dto.CryptoTailStrategyTriggerListRequest
 import com.wrbug.polymarketbot.dto.CryptoTailStrategyTriggerListResponse
 import com.wrbug.polymarketbot.dto.CryptoTailStrategyUpdateRequest
 import com.wrbug.polymarketbot.dto.CryptoTailMarketOptionDto
+import com.wrbug.polymarketbot.dto.CryptoTailAutoMinSpreadResponse
 import com.wrbug.polymarketbot.enums.ErrorCode
+import com.wrbug.polymarketbot.service.binance.BinanceKlineAutoSpreadService
 import com.wrbug.polymarketbot.service.cryptotail.CryptoTailStrategyService
 import org.slf4j.LoggerFactory
 import org.springframework.context.MessageSource
@@ -24,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/api/crypto-tail-strategy")
 class CryptoTailStrategyController(
     private val cryptoTailStrategyService: CryptoTailStrategyService,
+    private val binanceKlineAutoSpreadService: BinanceKlineAutoSpreadService,
     private val messageSource: MessageSource
 ) {
 
@@ -148,6 +151,32 @@ class CryptoTailStrategyController(
             ResponseEntity.ok(ApiResponse.success(options))
         } catch (e: Exception) {
             logger.error("获取市场选项异常: ${e.message}", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
+        }
+    }
+
+    /**
+     * 自动最小价差预览：按「当前周期」计算一次并返回，仅用于前端展示参考。
+     * 实际触发时按每个周期在需要时计算，不依赖此接口。
+     */
+    @PostMapping("/auto-min-spread")
+    fun getAutoMinSpread(@RequestBody request: java.util.Map<String, Any>): ResponseEntity<ApiResponse<CryptoTailAutoMinSpreadResponse>> {
+        return try {
+            val intervalSeconds = (request["intervalSeconds"] as? Number)?.toInt() ?: 300
+            if (intervalSeconds != 300 && intervalSeconds != 900) {
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ERROR, messageSource = messageSource))
+            }
+            val periodStartUnix = (request["periodStartUnix"] as? Number)?.toLong()
+                ?: (System.currentTimeMillis() / 1000 / intervalSeconds) * intervalSeconds
+            val pair = binanceKlineAutoSpreadService.computeAndCache(intervalSeconds, periodStartUnix)
+                ?: return ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, "fetch_failed", messageSource))
+            val body = CryptoTailAutoMinSpreadResponse(
+                minSpreadUp = pair.first.toPlainString(),
+                minSpreadDown = pair.second.toPlainString()
+            )
+            ResponseEntity.ok(ApiResponse.success(body))
+        } catch (e: Exception) {
+            logger.error("计算自动最小价差异常: ${e.message}", e)
             ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
         }
     }

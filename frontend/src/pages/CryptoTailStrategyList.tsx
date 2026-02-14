@@ -16,9 +16,10 @@ import {
   Input,
   InputNumber,
   Radio,
-  Spin
+  Spin,
+  Tooltip
 } from 'antd'
-import { PlusOutlined, EditOutlined, UnorderedListOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, UnorderedListOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useMediaQuery } from 'react-responsive'
 import { apiService } from '../services/api'
@@ -107,6 +108,7 @@ const CryptoTailStrategyList: React.FC = () => {
       enabled: true,
       amountMode: 'RATIO',
       maxPrice: '1',
+      minSpreadMode: 'AUTO',
       windowStartMinutes: 0,
       windowStartSeconds: 0
     })
@@ -127,6 +129,8 @@ const CryptoTailStrategyList: React.FC = () => {
       maxPrice: record.maxPrice,
       amountMode: record.amountMode,
       amountValue: record.amountValue,
+      minSpreadMode: record.minSpreadMode ?? 'AUTO',
+      minSpreadValue: record.minSpreadValue ?? undefined,
       enabled: record.enabled
     })
     setFormModalOpen(true)
@@ -159,6 +163,8 @@ const CryptoTailStrategyList: React.FC = () => {
         maxPrice: v.maxPrice != null ? String(v.maxPrice) : undefined,
         amountMode: v.amountMode as string,
         amountValue: String(v.amountValue ?? 0),
+        minSpreadMode: (v.minSpreadMode as string) || 'AUTO',
+        minSpreadValue: v.minSpreadMode === 'FIXED' && v.minSpreadValue != null ? String(v.minSpreadValue) : (v.minSpreadMode === 'AUTO' && v.minSpreadValue != null ? String(v.minSpreadValue) : undefined),
         enabled: v.enabled !== false
       }
       if (editingId) {
@@ -171,6 +177,8 @@ const CryptoTailStrategyList: React.FC = () => {
           maxPrice: payload.maxPrice,
           amountMode: payload.amountMode,
           amountValue: payload.amountValue,
+          minSpreadMode: payload.minSpreadMode,
+          minSpreadValue: payload.minSpreadValue,
           enabled: payload.enabled
         })
         if (res.data.code === 0) {
@@ -181,7 +189,10 @@ const CryptoTailStrategyList: React.FC = () => {
           message.error(res.data.msg || t('common.failed'))
         }
       } else {
-        const res = await apiService.cryptoTailStrategy.create(payload)
+        const res = await apiService.cryptoTailStrategy.create({
+          ...payload,
+          minSpreadValue: payload.minSpreadMode === 'FIXED' ? payload.minSpreadValue : undefined
+        })
         if (res.data.code === 0) {
           message.success(t('common.success'))
           setFormModalOpen(false)
@@ -532,7 +543,7 @@ const CryptoTailStrategyList: React.FC = () => {
         destroyOnClose
       >
         <Alert type="warning" showIcon message={t('cryptoTailStrategy.form.walletTip')} style={{ marginBottom: 16 }} />
-        <Form form={form} layout="vertical" initialValues={{ amountMode: 'RATIO', maxPrice: '1', enabled: true }}>
+        <Form form={form} layout="vertical" initialValues={{ amountMode: 'RATIO', maxPrice: '1', minSpreadMode: 'AUTO', enabled: true }}>
           <Form.Item name="accountId" label={t('cryptoTailStrategy.form.selectAccount')} rules={[{ required: true }]}>
             <Select
               placeholder={t('cryptoTailStrategy.form.selectAccount')}
@@ -622,6 +633,45 @@ const CryptoTailStrategyList: React.FC = () => {
                   <InputNumber min={1} style={{ width: '100%' }} addonAfter="USDC" stringMode />
                 </Form.Item>
               )
+            }
+          </Form.Item>
+          <Form.Item
+            name="minSpreadMode"
+            label={
+              <Space size={4}>
+                <span>{t('cryptoTailStrategy.form.minSpreadMode')}</span>
+                <Tooltip title={t('cryptoTailStrategy.form.minSpreadModeTip')}>
+                  <InfoCircleOutlined style={{ color: '#999', cursor: 'help', fontSize: 14 }} />
+                </Tooltip>
+              </Space>
+            }
+          >
+            <Radio.Group>
+              <Radio value="AUTO">{t('cryptoTailStrategy.form.minSpreadModeAuto')}</Radio>
+              <Radio value="FIXED">{t('cryptoTailStrategy.form.minSpreadModeFixed')}</Radio>
+              <Radio value="NONE">{t('cryptoTailStrategy.form.minSpreadModeNone')}</Radio>
+            </Radio.Group>
+          </Form.Item>
+          <Form.Item
+            noStyle
+            shouldUpdate={(prev, curr) => prev.minSpreadMode !== curr.minSpreadMode}
+          >
+            {({ getFieldValue }) =>
+              getFieldValue('minSpreadMode') === 'FIXED' ? (
+                <Form.Item
+                  name="minSpreadValue"
+                  label={t('cryptoTailStrategy.form.minSpreadValue')}
+                  rules={[{ required: true }]}
+                >
+                  <InputNumber
+                    min={0}
+                    step={1}
+                    placeholder={t('cryptoTailStrategy.form.minSpreadValuePlaceholder')}
+                    style={{ width: '100%' }}
+                    stringMode
+                  />
+                </Form.Item>
+              ) : null
             }
           </Form.Item>
           <Form.Item name="enabled" valuePropName="checked">

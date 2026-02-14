@@ -10,6 +10,8 @@ import com.wrbug.polymarketbot.repository.AccountRepository
 import com.wrbug.polymarketbot.repository.CryptoTailStrategyRepository
 import com.wrbug.polymarketbot.repository.CryptoTailStrategyTriggerRepository
 import com.wrbug.polymarketbot.service.accounts.AccountService
+import com.wrbug.polymarketbot.service.binance.BinanceKlineAutoSpreadService
+import com.wrbug.polymarketbot.service.binance.BinanceKlineService
 import com.wrbug.polymarketbot.service.common.PolymarketClobService
 import com.wrbug.polymarketbot.service.copytrading.orders.OrderSigningService
 import com.wrbug.polymarketbot.util.CryptoUtils
@@ -63,7 +65,9 @@ class CryptoTailStrategyExecutionService(
     private val retrofitFactory: RetrofitFactory,
     private val clobService: PolymarketClobService,
     private val orderSigningService: OrderSigningService,
-    private val cryptoUtils: CryptoUtils
+    private val cryptoUtils: CryptoUtils,
+    private val binanceKlineService: BinanceKlineService,
+    private val binanceKlineAutoSpreadService: BinanceKlineAutoSpreadService
 ) {
 
     private val logger = LoggerFactory.getLogger(CryptoTailStrategyExecutionService::class.java)
@@ -212,9 +216,27 @@ class CryptoTailStrategyExecutionService(
         val mutex = getTriggerMutex(strategy.id!!, periodStartUnix)
         mutex.withLock {
             if (triggerRepository.findByStrategyIdAndPeriodStartUnix(strategy.id!!, periodStartUnix) != null) return@withLock
+            if (!passMinSpreadCheck(strategy, periodStartUnix, outcomeIndex)) return@withLock
             ensurePeriodContext(strategy, periodStartUnix, tokenIds, marketTitle)
             placeOrderForTrigger(strategy, periodStartUnix, marketTitle, tokenIds, outcomeIndex, bestBid)
         }
+    }
+
+    private fun passMinSpreadCheck(strategy: CryptoTailStrategy, periodStartUnix: Long, outcomeIndex: Int): Boolean {
+        val mode = strategy.minSpreadMode.uppercase()
+        if (mode == "NONE") return true
+        val oc = binanceKlineService.getCurrentOpenClose(strategy.intervalSeconds, periodStartUnix)
+            ?: return false
+        val (openP, closeP) = oc
+        val spreadAbs = closeP.subtract(openP).abs()
+        val effectiveMinSpread = when (mode) {
+            "FIXED" -> strategy.minSpreadValue?.takeIf { it > BigDecimal.ZERO }
+            "AUTO" -> binanceKlineAutoSpreadService.getAutoMinSpread(strategy.intervalSeconds, periodStartUnix, outcomeIndex)
+                ?: binanceKlineAutoSpreadService.computeAndCache(strategy.intervalSeconds, periodStartUnix)?.let { if (outcomeIndex == 0) it.first else it.second }
+            else -> null
+        }
+        if (effectiveMinSpread == null || effectiveMinSpread <= BigDecimal.ZERO) return true
+        return spreadAbs >= effectiveMinSpread
     }
 
     private suspend fun placeOrderForTrigger(

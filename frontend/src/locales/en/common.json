@@ -1445,7 +1445,14 @@
       "create": "Create",
       "update": "Update",
       "timeWindowStartLEEnd": "Window start must not be greater than end",
-      "timeWindowExceed": "Time window must not exceed period length"
+      "timeWindowExceed": "Time window must not exceed period length",
+      "minSpreadMode": "Min spread",
+      "minSpreadModeTip": "Whether to place an order is based on the spread between open and close in the current period. Auto: system computes a suggested spread from the last 30 klines (updated each period); Fixed: you enter a value (e.g. 30), order only when spread ≥ that value; None: no spread check, order when price is in range.",
+      "minSpreadModeNone": "None",
+      "minSpreadModeFixed": "Fixed",
+      "minSpreadModeAuto": "Auto",
+      "minSpreadValue": "Min spread value (USDC)",
+      "minSpreadValuePlaceholder": "e.g. 30"
     },
     "redeemRequiredModal": {
       "title": "Configure Auto Redeem First",

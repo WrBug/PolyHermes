@@ -62,6 +62,14 @@ class CryptoTailStrategyService(
             if (amountValue <= BigDecimal.ZERO) {
                 return Result.failure(IllegalArgumentException(ErrorCode.PARAM_ERROR.messageKey))
             }
+            val minSpreadMode = (request.minSpreadMode ?: "NONE").uppercase()
+            if (minSpreadMode != "NONE" && minSpreadMode != "FIXED" && minSpreadMode != "AUTO") {
+                return Result.failure(IllegalArgumentException(ErrorCode.PARAM_ERROR.messageKey))
+            }
+            val minSpreadValue = request.minSpreadValue?.toSafeBigDecimal()
+            if (minSpreadMode == "FIXED" && (minSpreadValue == null || minSpreadValue < BigDecimal.ZERO)) {
+                return Result.failure(IllegalArgumentException(ErrorCode.PARAM_ERROR.messageKey))
+            }
 
             val nameToSave = request.name?.takeIf { it.isNotBlank() }
                 ?: generateStrategyName(request.marketSlugPrefix.trim())
@@ -77,6 +85,8 @@ class CryptoTailStrategyService(
                 maxPrice = maxPrice,
                 amountMode = amountMode,
                 amountValue = amountValue,
+                minSpreadMode = minSpreadMode,
+                minSpreadValue = minSpreadValue,
                 enabled = request.enabled
             )
             val saved = strategyRepository.save(entity)
@@ -111,6 +121,15 @@ class CryptoTailStrategyService(
                 ?: existing.name?.takeIf { it.isNotBlank() }
                 ?: generateStrategyName(existing.marketSlugPrefix)
 
+            val newMinSpreadMode = request.minSpreadMode?.uppercase() ?: existing.minSpreadMode
+            if (newMinSpreadMode != "NONE" && newMinSpreadMode != "FIXED" && newMinSpreadMode != "AUTO") {
+                return Result.failure(IllegalArgumentException(ErrorCode.PARAM_ERROR.messageKey))
+            }
+            val newMinSpreadValue = request.minSpreadValue?.toSafeBigDecimal() ?: existing.minSpreadValue
+            if (newMinSpreadMode == "FIXED" && (newMinSpreadValue == null || newMinSpreadValue < BigDecimal.ZERO)) {
+                return Result.failure(IllegalArgumentException(ErrorCode.PARAM_ERROR.messageKey))
+            }
+
             val updated = existing.copy(
                 name = nameToSave,
                 windowStartSeconds = request.windowStartSeconds ?: existing.windowStartSeconds,
@@ -119,6 +138,8 @@ class CryptoTailStrategyService(
                 maxPrice = request.maxPrice?.toSafeBigDecimal() ?: existing.maxPrice,
                 amountMode = request.amountMode?.uppercase() ?: existing.amountMode,
                 amountValue = request.amountValue?.toSafeBigDecimal() ?: existing.amountValue,
+                minSpreadMode = newMinSpreadMode,
+                minSpreadValue = newMinSpreadValue,
                 enabled = request.enabled ?: existing.enabled,
                 updatedAt = System.currentTimeMillis()
             )
@@ -224,6 +245,8 @@ class CryptoTailStrategyService(
             maxPrice = e.maxPrice.toPlainString(),
             amountMode = e.amountMode,
             amountValue = e.amountValue.toPlainString(),
+            minSpreadMode = e.minSpreadMode,
+            minSpreadValue = e.minSpreadValue?.toPlainString(),
             enabled = e.enabled,
             lastTriggerAt = lastTriggerAt,
             totalRealizedPnl = totalPnl?.toPlainString(),

@@ -447,6 +447,8 @@ export const apiService = {
       maxPrice?: string
       amountMode: string
       amountValue: string
+      minSpreadMode?: string
+      minSpreadValue?: string | null
       enabled?: boolean
     }) =>
       apiClient.post<ApiResponse<import('../types').CryptoTailStrategyDto>>('/crypto-tail-strategy/create', data),
@@ -459,6 +461,8 @@ export const apiService = {
       maxPrice?: string
       amountMode?: string
       amountValue?: string
+      minSpreadMode?: string
+      minSpreadValue?: string | null
       enabled?: boolean
     }) =>
       apiClient.post<ApiResponse<import('../types').CryptoTailStrategyDto>>('/crypto-tail-strategy/update', data),
@@ -467,7 +471,9 @@ export const apiService = {
     triggers: (data: { strategyId: number; page?: number; pageSize?: number; status?: string }) =>
       apiClient.post<ApiResponse<{ list: import('../types').CryptoTailStrategyTriggerDto[]; total: number }>>('/crypto-tail-strategy/triggers', data),
     marketOptions: () =>
-      apiClient.post<ApiResponse<import('../types').CryptoTailMarketOptionDto[]>>('/crypto-tail-strategy/market-options', {})
+      apiClient.post<ApiResponse<import('../types').CryptoTailMarketOptionDto[]>>('/crypto-tail-strategy/market-options', {}),
+    autoMinSpread: (data: { intervalSeconds: number }) =>
+      apiClient.post<ApiResponse<import('../types').CryptoTailAutoMinSpreadResponse>>('/crypto-tail-strategy/auto-min-spread', data)
   },
   
   /**

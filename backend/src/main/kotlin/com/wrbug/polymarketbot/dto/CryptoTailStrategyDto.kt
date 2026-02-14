@@ -15,6 +15,8 @@ data class CryptoTailStrategyCreateRequest(
     val maxPrice: String? = null,
     val amountMode: String = "RATIO",
     val amountValue: String = "0",
+    val minSpreadMode: String = "NONE",
+    val minSpreadValue: String? = null,
     val enabled: Boolean = true
 )
 
@@ -30,6 +32,8 @@ data class CryptoTailStrategyUpdateRequest(
     val maxPrice: String? = null,
     val amountMode: String? = null,
     val amountValue: String? = null,
+    val minSpreadMode: String? = null,
+    val minSpreadValue: String? = null,
     val enabled: Boolean? = null
 )
 
@@ -57,6 +61,8 @@ data class CryptoTailStrategyDto(
     val maxPrice: String = "1",
     val amountMode: String = "RATIO",
     val amountValue: String = "0",
+    val minSpreadMode: String = "NONE",
+    val minSpreadValue: String? = null,
     val enabled: Boolean = true,
     val lastTriggerAt: Long? = null,
     /** 已实现总收益 USDC（已结算订单的 realizedPnl 之和） */
@@ -125,6 +131,14 @@ data class CryptoTailStrategyTriggerDto(
 data class CryptoTailStrategyTriggerListResponse(
     val list: List<CryptoTailStrategyTriggerDto> = emptyList(),
     val total: Long = 0L
+)
+
+/**
+ * 自动最小价差计算响应（按 30 根历史 K 线 + IQR 剔除后 × 0.8）
+ */
+data class CryptoTailAutoMinSpreadResponse(
+    val minSpreadUp: String = "0",
+    val minSpreadDown: String = "0"
 )
 
 /**

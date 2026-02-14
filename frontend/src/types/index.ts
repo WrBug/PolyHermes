@@ -1051,6 +1051,10 @@ export interface CryptoTailStrategyDto {
   maxPrice: string
   amountMode: string
   amountValue: string
+  /** 最小价差模式: NONE, FIXED, AUTO */
+  minSpreadMode?: string
+  /** 最小价差数值（FIXED 时必填；AUTO 时可为计算值） */
+  minSpreadValue?: string | null
   enabled: boolean
   lastTriggerAt?: number
   /** 已实现总收益 USDC */
@@ -1061,6 +1065,12 @@ export interface CryptoTailStrategyDto {
   winRate?: string
   createdAt: number
   updatedAt: number
+}
+
+/** 自动最小价差计算响应 */
+export interface CryptoTailAutoMinSpreadResponse {
+  minSpreadUp: string
+  minSpreadDown: string
 }
 
 /**

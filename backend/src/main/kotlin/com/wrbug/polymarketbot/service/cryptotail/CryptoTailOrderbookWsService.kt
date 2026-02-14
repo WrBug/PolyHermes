@@ -5,6 +5,7 @@ import com.wrbug.polymarketbot.constants.PolymarketConstants
 import com.wrbug.polymarketbot.entity.CryptoTailStrategy
 import com.wrbug.polymarketbot.event.CryptoTailStrategyChangedEvent
 import com.wrbug.polymarketbot.repository.CryptoTailStrategyRepository
+import com.wrbug.polymarketbot.service.binance.BinanceKlineAutoSpreadService
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.createClient
 import com.wrbug.polymarketbot.util.fromJson
@@ -36,7 +37,8 @@ import java.util.concurrent.atomic.AtomicReference
 class CryptoTailOrderbookWsService(
     private val strategyRepository: CryptoTailStrategyRepository,
     private val executionService: CryptoTailStrategyExecutionService,
-    private val retrofitFactory: RetrofitFactory
+    private val retrofitFactory: RetrofitFactory,
+    private val binanceKlineAutoSpreadService: BinanceKlineAutoSpreadService
 ) {
 
     private val logger = LoggerFactory.getLogger(CryptoTailOrderbookWsService::class.java)
@@ -217,6 +219,28 @@ class CryptoTailOrderbookWsService(
             return
         }
         scheduleRefreshAtPeriodEnd(newMap)
+        precomputeAutoMinSpreadForCurrentPeriods(newMap)
+    }
+
+    /**
+     * AUTO 模式：在周期开始（刷新订阅）时预拉历史 30 根 K 线并计算该周期最小价差，触发时直接用缓存。
+     */
+    private fun precomputeAutoMinSpreadForCurrentPeriods(newMap: Map<String, List<WsBookEntry>>) {
+        val autoPeriods = newMap.values.asSequence().flatten()
+            .filter { it.strategy.minSpreadMode.uppercase() == "AUTO" }
+            .distinctBy { "${it.strategy.intervalSeconds}-${it.periodStartUnix}" }
+            .map { it.strategy.intervalSeconds to it.periodStartUnix }
+            .toList()
+        if (autoPeriods.isEmpty()) return
+        scope.launch {
+            for ((intervalSeconds, periodStartUnix) in autoPeriods) {
+                try {
+                    binanceKlineAutoSpreadService.computeAndCache(intervalSeconds, periodStartUnix)
+                } catch (e: Exception) {
+                    logger.warn("周期开始预计算 AUTO 价差失败: interval=$intervalSeconds periodStartUnix=$periodStartUnix ${e.message}")
+                }
+            }
+        }
     }
 
     /**

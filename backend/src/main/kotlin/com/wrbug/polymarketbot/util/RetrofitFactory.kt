@@ -1,6 +1,7 @@
 package com.wrbug.polymarketbot.util
 
 import com.google.gson.Gson
+import com.wrbug.polymarketbot.api.BinanceApi
 import com.wrbug.polymarketbot.api.BuilderRelayerApi
 import com.wrbug.polymarketbot.api.EthereumRpcApi
 import com.wrbug.polymarketbot.api.GitHubApi
@@ -300,7 +301,18 @@ class RetrofitFactory(
     fun createDataApi(): PolymarketDataApi {
         return dataApi
     }
-    
+
+    private val binanceApi: BinanceApi by lazy {
+        Retrofit.Builder()
+            .baseUrl("https://api.binance.com/")
+            .client(sharedOkHttpClient)
+            .addConverterFactory(GsonConverterFactory.create(gson))
+            .build()
+            .create(BinanceApi::class.java)
+    }
+
+    fun createBinanceApi(): BinanceApi = binanceApi
+
     /**
      * 创建 Builder Relayer API 客户端
      * 按 relayerUrl 缓存，避免重复创建

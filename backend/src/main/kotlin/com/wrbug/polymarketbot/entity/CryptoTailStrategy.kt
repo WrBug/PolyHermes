@@ -45,6 +45,12 @@ data class CryptoTailStrategy(
     @Column(name = "amount_value", nullable = false, precision = 20, scale = 8)
     val amountValue: BigDecimal = BigDecimal.ZERO,
 
+    @Column(name = "min_spread_mode", nullable = false, length = 16)
+    val minSpreadMode: String = "NONE",
+
+    @Column(name = "min_spread_value", precision = 20, scale = 8)
+    val minSpreadValue: BigDecimal? = null,
+
     @Column(name = "enabled", nullable = false)
     val enabled: Boolean = true,
 
