@@ -18,7 +18,6 @@ import com.wrbug.polymarketbot.util.CryptoUtils
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.fromJson
 import com.wrbug.polymarketbot.util.toSafeBigDecimal
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.slf4j.LoggerFactory
@@ -71,9 +70,6 @@ class CryptoTailStrategyExecutionService(
 ) {
 
     private val logger = LoggerFactory.getLogger(CryptoTailStrategyExecutionService::class.java)
-
-    private val maxRetryAttempts = 3
-    private val retryDelayMs = 2000L
 
     /** 按 (strategyId, periodStartUnix) 加锁，避免同一周期被调度器与 WebSocket 等多路并发重复下单 */
     private val triggerMutexMap = ConcurrentHashMap<String, Mutex>()
@@ -267,29 +263,27 @@ class CryptoTailStrategyExecutionService(
         amountUsdc: BigDecimal,
         orderRequest: NewOrderRequest
     ) {
-        var lastError: String? = null
-        for (attempt in 1..maxRetryAttempts) {
-            try {
-                val response = clobApi.createOrder(orderRequest)
-                if (response.isSuccessful && response.body() != null) {
-                    val body = response.body()!!
-                    if (body.success && body.orderId != null) {
-                        saveTriggerRecord(strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, amountUsdc, body.orderId, "success", null)
-                        logger.info("尾盘策略下单成功: strategyId=${strategy.id}, periodStartUnix=$periodStartUnix, outcomeIndex=$outcomeIndex, orderId=${body.orderId}")
-                        return
-                    }
-                    lastError = body.errorMsg ?: "unknown"
-                } else {
-                    lastError = "HTTP ${response.code()} ${response.errorBody()?.string()?.take(200)}"
+        var failReason: String? = null
+        try {
+            val response = clobApi.createOrder(orderRequest)
+            if (response.isSuccessful && response.body() != null) {
+                val body = response.body()!!
+                if (body.success && body.orderId != null) {
+                    saveTriggerRecord(strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, amountUsdc, body.orderId, "success", null)
+                    logger.info("尾盘策略下单成功: strategyId=${strategy.id}, periodStartUnix=$periodStartUnix, outcomeIndex=$outcomeIndex, orderId=${body.orderId}")
+                    return
                 }
-            } catch (e: Exception) {
-                lastError = e.message ?: "exception"
-                logger.warn("尾盘策略下单异常 (attempt $attempt/$maxRetryAttempts): strategyId=${strategy.id}, error=$lastError")
+                failReason = body.errorMsg ?: "unknown"
+            } else {
+                val errorBody = response.errorBody()?.string().orEmpty()
+                failReason = "HTTP ${response.code()} $errorBody"
             }
-            if (attempt < maxRetryAttempts) delay(retryDelayMs)
+        } catch (e: Exception) {
+            failReason = e.message ?: e.toString()
+            logger.error("尾盘策略下单异常: strategyId=${strategy.id}, periodStartUnix=$periodStartUnix", e)
         }
-        saveTriggerRecord(strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, amountUsdc, null, "fail", lastError)
-        logger.warn("尾盘策略下单失败(已重试${maxRetryAttempts}次): strategyId=${strategy.id}, periodStartUnix=$periodStartUnix, reason=$lastError")
+        saveTriggerRecord(strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, amountUsdc, null, "fail", failReason)
+        logger.error("尾盘策略下单失败: strategyId=${strategy.id}, periodStartUnix=$periodStartUnix, reason=$failReason")
     }
 
     /** 无预置上下文时的完整流程：固定价格 0.99，账户/解密/费率/签名在触发时执行 */
