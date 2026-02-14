@@ -296,12 +296,26 @@ class CryptoTailOrderbookWsService(
             val interval = strategy.intervalSeconds
             val periodStartUnix = (nowSeconds / interval) * interval
             val windowEnd = periodStartUnix + strategy.windowEndSeconds
-            if (nowSeconds >= windowEnd) continue
+            if (nowSeconds >= windowEnd) {
+                logger.debug("尾盘策略跳过（已过时间窗口）: strategyId=${strategy.id}, slug=${strategy.marketSlugPrefix}, windowEnd=$windowEnd")
+                continue
+            }
             val slug = "${strategy.marketSlugPrefix}-$periodStartUnix"
-            val event = fetchEventBySlug(slug).getOrNull() ?: continue
-            val market = event.markets?.firstOrNull() ?: continue
+            val event = fetchEventBySlugWithRetry(slug).getOrNull()
+            if (event == null) {
+                logger.warn("尾盘策略跳过（拉取事件失败）: strategyId=${strategy.id}, slug=$slug，请确认 Gamma 是否存在该 slug 或稍后重试")
+                continue
+            }
+            val market = event.markets?.firstOrNull()
+            if (market == null) {
+                logger.warn("尾盘策略跳过（事件无市场）: strategyId=${strategy.id}, slug=$slug")
+                continue
+            }
             val tokenIds = parseClobTokenIds(market.clobTokenIds)
-            if (tokenIds.size < 2) continue
+            if (tokenIds.size < 2) {
+                logger.warn("尾盘策略跳过（token 数量不足）: strategyId=${strategy.id}, slug=$slug, tokenCount=${tokenIds.size}")
+                continue
+            }
             tokenIdSet.addAll(tokenIds)
             for (i in tokenIds.indices) {
                 map.getOrPut(tokenIds[i]) { mutableListOf() }.add(
@@ -311,6 +325,18 @@ class CryptoTailOrderbookWsService(
         }
 
         return Pair(tokenIdSet.toList(), map)
+    }
+
+    /** 拉取事件，失败时重试最多 2 次（间隔 1s），避免瞬时失败导致多策略只订阅到其中一个 */
+    private fun fetchEventBySlugWithRetry(slug: String, maxAttempts: Int = 3): Result<GammaEventBySlugResponse> {
+        var lastFailure: Exception? = null
+        repeat(maxAttempts) { attempt ->
+            val result = fetchEventBySlug(slug)
+            if (result.isSuccess) return result
+            lastFailure = result.exceptionOrNull() as? Exception
+            if (attempt < maxAttempts - 1) runBlocking { delay(1000L) }
+        }
+        return Result.failure(lastFailure ?: Exception("fetchEventBySlug failed"))
     }
 
     private fun fetchEventBySlug(slug: String): Result<GammaEventBySlugResponse> {
