@@ -57,5 +57,8 @@ data class CryptoTailStrategyTrigger(
     val failReason: String? = null,
 
     @Column(name = "created_at", nullable = false)
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+
+    @Column(name = "notification_sent", nullable = false)
+    var notificationSent: Boolean = false
 )
