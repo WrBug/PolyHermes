@@ -20,8 +20,8 @@ import java.math.BigInteger
  * 如果需要真正的 Gasless 功能，需要集成 Builder Relayer API
  *
  * 参考：
- * - TypeScript: @polymarket/builder-relayer-client
- * - TypeScript: utils/redeem.ts
+ * - TypeScript: https://github.com/Polymarket/builder-relayer-client（client.execute、src/encode/safe.ts MultiSend）
+ * - 赎回 calldata 由本服务构建，官方仓库无 redeem 工具；Neg Risk 逻辑见 docs/neg-risk-redeem.md
  */
 @Service
 class RelayClientService(
@@ -35,8 +35,11 @@ class RelayClientService(
     // ConditionalTokens 合约地址
     private val conditionalTokensAddress = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"
 
-    // USDC.e 合约地址
+    // USDC.e 合约地址（普通市场抵押品）
     private val usdcContractAddress = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
+
+    // Neg Risk 市场使用的 WrappedCollateral 合约地址（Polygon，neg-risk-ctf-adapter）
+    private val negRiskWrappedCollateralAddress = "0x3A3BD7bb9528E159577F7C2e685CC81A765002E2"
 
     // 空集合ID
     private val EMPTY_SET = "0x0000000000000000000000000000000000000000000000000000000000000000"
@@ -45,6 +48,9 @@ class RelayClientService(
     private val proxyFactoryAddress = "0xaB45c5A4B0c941a2F231C04C3f49182e1A254052"
     private val relayHubAddress = "0xD216153c06E857cD7f72665E0aF1d7D82172F494"
     private val defaultProxyGasLimit = "10000000"
+
+    // Safe MultiSend 合约地址（Polygon 主网）
+    private val safeMultisendAddress = "0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761"
     
     // Builder Relayer API 交易类型常量
     private val RELAYER_TYPE_PROXY = "PROXY"
@@ -170,19 +176,22 @@ class RelayClientService(
     /**
      * 创建赎回交易（支持多个 indexSets，用于批量赎回）
      * 参考 TypeScript: utils/redeem.ts 的 createRedeemTx
+     * Neg Risk 市场使用 WrappedCollateral 作为抵押品，需传 isNegRisk=true
      *
      * @param conditionId 市场条件ID
      * @param indexSets 索引集合列表（每个元素是 2^outcomeIndex）
+     * @param isNegRisk 是否为 Neg Risk 市场（true 时使用 WrappedCollateral 地址）
      * @return Safe 交易对象
      */
-    fun createRedeemTx(conditionId: String, indexSets: List<BigInteger>): SafeTransaction {
+    fun createRedeemTx(conditionId: String, indexSets: List<BigInteger>, isNegRisk: Boolean = false): SafeTransaction {
         // 编码 redeemPositions 函数调用
         val functionSelector = EthereumUtils.getFunctionSelector(
             "redeemPositions(address,bytes32,bytes32,uint256[])"
         )
 
-        // 编码参数
-        val encodedCollateral = EthereumUtils.encodeAddress(usdcContractAddress)
+        // Neg Risk 市场仓位由 WrappedCollateral 抵押，普通市场由 USDC 抵押
+        val collateralAddress = if (isNegRisk) negRiskWrappedCollateralAddress else usdcContractAddress
+        val encodedCollateral = EthereumUtils.encodeAddress(collateralAddress)
         val encodedParentCollection = EthereumUtils.encodeBytes32(EMPTY_SET)
         val encodedConditionId = EthereumUtils.encodeBytes32(conditionId)
 
@@ -205,6 +214,73 @@ class RelayClientService(
         return SafeTransaction(
             to = conditionalTokensAddress,
             operation = 0,  // CALL
+            data = callData,
+            value = "0"
+        )
+    }
+
+    /**
+     * 创建 MultiSend 交易（合并多个 SafeTransaction 为一笔交易）
+     * 参考 TypeScript: builder-relayer-client/src/encode/safe.ts createSafeMultisendTransaction
+     *
+     * 使用 Gnosis Safe 的 MultiSend 合约将多个交易合并为一笔 DelegateCall 交易
+     *
+     * @param safeTxs 多个 Safe 交易
+     * @return 合并后的 MultiSend 交易（operation = 1 = DelegateCall）
+     */
+    fun createMultiSendTx(safeTxs: List<SafeTransaction>): SafeTransaction {
+        if (safeTxs.isEmpty()) {
+            throw IllegalArgumentException("safeTxs 不能为空")
+        }
+
+        // 单个交易直接返回，不需要 MultiSend
+        if (safeTxs.size == 1) {
+            logger.debug("单个交易，不使用 MultiSend")
+            return safeTxs.first()
+        }
+
+        logger.debug("创建 MultiSend 交易: ${safeTxs.size} 个交易待合并")
+
+        // MultiSend 函数选择器：multiSend(bytes)
+        val multiSendSelector = EthereumUtils.getFunctionSelector("multiSend(bytes)")
+
+        // 编码每个交易：encodePacked([uint8 operation, address to, uint256 value, uint256 dataLength, bytes data])
+        // 与 builder-relayer-client encode/safe.ts 完全一致
+        val encodedTransactions = safeTxs.map { tx ->
+            val operation = tx.operation.toByte()
+            // address: 20 字节，右对齐（取最后 40 个十六进制字符）
+            val toHex = tx.to.removePrefix("0x").lowercase().padStart(40, '0').takeLast(40)
+            val to = EthereumUtils.hexToBytes(toHex)
+            // value: 32 字节大端
+            val valueHex = BigInteger(tx.value).toString(16).padStart(64, '0')
+            val value = EthereumUtils.hexToBytes(valueHex)
+
+            val dataBytes = EthereumUtils.hexToBytes(tx.data.removePrefix("0x"))
+            // dataLength: 32 字节大端，表示 data 的字节数
+            val dataLengthHex = BigInteger.valueOf(dataBytes.size.toLong()).toString(16).padStart(64, '0')
+            val dataLength = EthereumUtils.hexToBytes(dataLengthHex)
+
+            // encodePacked: operation(1) + to(20) + value(32) + dataLength(32) + data(variable)
+            byteArrayOf(operation) + to + value + dataLength + dataBytes
+        }
+
+        // 拼接所有交易（无 padding，与 viem concatHex 一致）
+        val concatenatedTransactions = encodedTransactions.reduce { acc, bytes -> acc + bytes }
+        val totalDataLength = concatenatedTransactions.size
+
+        // multiSend(bytes) 的 ABI 编码：offset(32) + length(32) + data(按 32 字节对齐 padding)
+        val paddedLength = ((totalDataLength + 31) / 32) * 32
+        val paddedData = concatenatedTransactions + ByteArray(paddedLength - totalDataLength)
+
+        val encodedOffset = EthereumUtils.encodeUint256(BigInteger.valueOf(32))
+        val encodedLength = EthereumUtils.encodeUint256(BigInteger.valueOf(totalDataLength.toLong()))
+        val encodedData = paddedData.joinToString("") { "%02x".format(it) }
+
+        val callData = "0x" + multiSendSelector.removePrefix("0x") + encodedOffset + encodedLength + encodedData
+
+        return SafeTransaction(
+            to = safeMultisendAddress,
+            operation = 1,  // DelegateCall
             data = callData,
             value = "0"
         )
@@ -607,7 +683,11 @@ class RelayClientService(
                 gasToken = gasToken,
                 refundReceiver = refundReceiver
             ),
-            metadata = "Redeem positions via Builder Relayer"
+            metadata = if (safeTx.operation == 1) {
+                "MultiSend redeem positions via Builder Relayer"
+            } else {
+                "Redeem positions via Builder Relayer"
+            }
         )
 
         logger.debug("Request: type=${request.type}, dataLen=${request.data.length}, sigLen=${request.signature.length}, nonce=${request.nonce}")

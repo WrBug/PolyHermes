@@ -587,6 +587,7 @@ class BlockchainService(
      * @param proxyAddress 代理地址（Safe 或 Magic 代理钱包地址）
      * @param conditionId 市场条件ID（bytes32，必须是 0x 开头的 66 位十六进制字符串）
      * @param indexSets 要赎回的索引集合列表（每个元素是 2^outcomeIndex）
+     * @param isNegRisk 是否为 Neg Risk 市场（true 时使用 WrappedCollateral 作为抵押品）
      * @param walletType 钱包类型：MAGIC 或 SAFE，用于选择执行路径
      * @return 交易哈希
      */
@@ -595,6 +596,7 @@ class BlockchainService(
         proxyAddress: String,
         conditionId: String,
         indexSets: List<BigInteger>,
+        isNegRisk: Boolean = false,
         walletType: WalletType = WalletType.SAFE
     ): Result<String> {
         return try {
@@ -608,14 +610,71 @@ class BlockchainService(
                 return Result.failure(IllegalArgumentException("proxyAddress 格式错误，必须是有效的以太坊地址"))
             }
 
-            val redeemTx = relayClientService.createRedeemTx(conditionId, indexSets)
+            val redeemTx = relayClientService.createRedeemTx(conditionId, indexSets, isNegRisk)
             relayClientService.execute(privateKey, proxyAddress, redeemTx, walletType)
         } catch (e: Exception) {
             logger.error("赎回仓位失败: ${e.message}", e)
             Result.failure(e)
         }
     }
-    
+
+    /**
+     * 批量赎回多个市场的仓位（使用 MultiSend 合并为一笔交易）
+     * 仅支持 Safe 钱包类型，Magic 钱包不支持 MultiSend
+     *
+     * @param privateKey 私钥（原始钱包的私钥，用于签名交易）
+     * @param proxyAddress 代理地址（Safe 代理钱包地址）
+     * @param redeemRequests 赎回请求列表，每个元素是 (conditionId, indexSets, isNegRisk)
+     * @param walletType 钱包类型：仅支持 SAFE
+     * @return 交易哈希
+     */
+    suspend fun redeemPositionsBatch(
+        privateKey: String,
+        proxyAddress: String,
+        redeemRequests: List<Triple<String, List<BigInteger>, Boolean>>,
+        walletType: WalletType = WalletType.SAFE
+    ): Result<String> {
+        return try {
+            if (redeemRequests.isEmpty()) {
+                return Result.failure(IllegalArgumentException("redeemRequests 不能为空"))
+            }
+
+            // Magic 钱包不支持 MultiSend
+            if (walletType == WalletType.MAGIC) {
+                return Result.failure(IllegalArgumentException("Magic 钱包不支持 MultiSend 批量赎回，请使用逐笔赎回"))
+            }
+
+            if (proxyAddress.isBlank() || !proxyAddress.startsWith("0x") || proxyAddress.length != 42) {
+                return Result.failure(IllegalArgumentException("proxyAddress 格式错误，必须是有效的以太坊地址"))
+            }
+
+            // 验证所有 conditionId 格式
+            for ((conditionId, _, _) in redeemRequests) {
+                if (conditionId.isBlank() || !conditionId.startsWith("0x") || conditionId.length != 66) {
+                    return Result.failure(IllegalArgumentException("conditionId 格式错误: $conditionId"))
+                }
+            }
+
+            // 创建每个市场的赎回交易（Neg Risk 市场使用 WrappedCollateral）
+            val redeemTxs = redeemRequests.map { (conditionId, indexSets, isNegRisk) ->
+                if (indexSets.isEmpty()) {
+                    throw IllegalArgumentException("indexSets 不能为空: $conditionId")
+                }
+                relayClientService.createRedeemTx(conditionId, indexSets, isNegRisk)
+            }
+
+            // 使用 MultiSend 合并所有交易
+            val multiSendTx = relayClientService.createMultiSendTx(redeemTxs)
+
+            logger.info("批量赎回: 合并 ${redeemRequests.size} 个市场为一笔交易")
+
+            relayClientService.execute(privateKey, proxyAddress, multiSendTx, walletType)
+        } catch (e: Exception) {
+            logger.error("批量赎回仓位失败: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
     /**
      * 获取代理钱包的 nonce（用于构建 Safe 交易）
      */
