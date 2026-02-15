@@ -18,6 +18,7 @@ import com.wrbug.polymarketbot.util.toSafeBigDecimal
 import org.slf4j.LoggerFactory
 import com.wrbug.polymarketbot.service.system.RelayClientService
 import com.wrbug.polymarketbot.service.system.RpcNodeService
+import kotlinx.coroutines.delay
 import org.springframework.stereotype.Service
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -54,6 +55,9 @@ class BlockchainService(
     
     // ConditionalTokens 合约地址（Polygon 主网）
     private val conditionalTokensAddress = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"
+
+    // Neg Risk WrappedCollateral 合约地址（Polygon，解包后得 USDC.e）
+    private val wcolContractAddress = "0x3A3BD7bb9528E159577F7C2e685CC81A765002E2"
     
     // 空集合ID（用于计算collectionId）
     private val EMPTY_SET = "0x0000000000000000000000000000000000000000000000000000000000000000"
@@ -671,6 +675,126 @@ class BlockchainService(
             relayClientService.execute(privateKey, proxyAddress, multiSendTx, walletType)
         } catch (e: Exception) {
             logger.error("批量赎回仓位失败: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 轮询等待交易上链并确认成功
+     * @param txHash 交易 hash（0x 开头）
+     * @param maxWaitMs 最大等待毫秒数
+     * @param pollIntervalMs 轮询间隔毫秒数
+     * @return 成功返回 Unit，超时或 revert 返回 Result.failure
+     */
+    suspend fun waitForTransactionConfirmed(
+        txHash: String,
+        maxWaitMs: Long = 120_000,
+        pollIntervalMs: Long = 3_000
+    ): Result<Unit> {
+        val rpcApi = polygonRpcApi
+        val start = System.currentTimeMillis()
+        while (System.currentTimeMillis() - start < maxWaitMs) {
+            val req = JsonRpcRequest(method = "eth_getTransactionReceipt", params = listOf(txHash))
+            val response = rpcApi.call(req)
+            if (!response.isSuccessful || response.body() == null) {
+                delay(pollIntervalMs)
+                continue
+            }
+            val body = response.body()!!
+            if (body.error != null) {
+                delay(pollIntervalMs)
+                continue
+            }
+            val result = body.result
+            if (result == null || result.isJsonNull) {
+                delay(pollIntervalMs)
+                continue
+            }
+            val status = result.asJsonObject?.get("status")?.asString
+            if (status == null) {
+                delay(pollIntervalMs)
+                continue
+            }
+            return when (status) {
+                "0x1" -> Result.success(Unit)
+                "0x0" -> Result.failure(Exception("交易已上链但执行失败 (revert)"))
+                else -> Result.failure(Exception("交易状态异常: $status"))
+            }
+        }
+        return Result.failure(Exception("等待交易确认超时 (${maxWaitMs}ms)"))
+    }
+
+    /**
+     * 查询代理地址的 WCOL（Wrapped Collateral）余额（raw，6 位小数）
+     */
+    suspend fun getWcolBalance(proxyAddress: String): Result<BigInteger> {
+        val rpcApi = polygonRpcApi
+        val functionSelector = "0x70a08231" // balanceOf(address)
+        val paddedAddress = proxyAddress.removePrefix("0x").lowercase().padStart(64, '0')
+        val data = functionSelector + paddedAddress
+        val rpcRequest = JsonRpcRequest(
+            method = "eth_call",
+            params = listOf(
+                mapOf(
+                    "to" to wcolContractAddress,
+                    "data" to data
+                ),
+                "latest"
+            )
+        )
+        val response = rpcApi.call(rpcRequest)
+        if (!response.isSuccessful || response.body() == null) {
+            return Result.failure(Exception("查询 WCOL 余额失败: ${response.code()} ${response.message()}"))
+        }
+        val rpcResponse = response.body()!!
+        if (rpcResponse.error != null) {
+            return Result.failure(Exception("查询 WCOL 余额失败: ${rpcResponse.error.message}"))
+        }
+        val hexBalance = rpcResponse.result?.asString ?: return Result.failure(Exception("WCOL 余额结果为空"))
+        val balance = EthereumUtils.decodeUint256(hexBalance)
+        return Result.success(balance)
+    }
+
+    /**
+     * 将代理钱包内的 WCOL 解包为 USDC.e（解包后转入代理地址）
+     * 赎回 Neg Risk 仓位后到账为 WCOL，调用此方法可转为 USDC.e 以便显示/使用。
+     *
+     * Safe 与 Magic 使用同一套逻辑：同一 [createUnwrapWcolTx] + [RelayClientService.execute]；
+     * Safe 走 execTransaction，Magic 走 PROXY 编码，最终均为代理合约调用 WCOL.unwrap(proxyAddress, amount)，USDC.e 转入 proxyAddress。
+     *
+     * @param privateKey 主钱包私钥
+     * @param proxyAddress 代理地址（Safe 或 Magic 代理）
+     * @param walletType 钱包类型（SAFE / MAGIC），用于选择 Relayer 执行路径
+     * @return 成功返回交易 hash，余额为 0 返回 null，失败返回 Result.failure
+     */
+    suspend fun unwrapWcolForProxy(
+        privateKey: String,
+        proxyAddress: String,
+        walletType: WalletType
+    ): Result<String?> {
+        return try {
+            val balanceResult = getWcolBalance(proxyAddress)
+            val balance = balanceResult.getOrElse {
+                logger.warn("查询 WCOL 余额失败，跳过解包: ${it.message}")
+                return Result.success(null)
+            }
+            if (balance == BigInteger.ZERO) {
+                return Result.success(null)
+            }
+            val unwrapTx = relayClientService.createUnwrapWcolTx(proxyAddress, balance)
+            val executeResult = relayClientService.execute(privateKey, proxyAddress, unwrapTx, walletType)
+            executeResult.fold(
+                onSuccess = { txHash ->
+                    logger.info("WCOL 解包成功: proxy=${proxyAddress.take(10)}..., txHash=$txHash")
+                    Result.success(txHash)
+                },
+                onFailure = { e ->
+                    logger.error("WCOL 解包失败: ${e.message}", e)
+                    Result.failure(e)
+                }
+            )
+        } catch (e: Exception) {
+            logger.error("WCOL 解包异常: ${e.message}", e)
             Result.failure(e)
         }
     }

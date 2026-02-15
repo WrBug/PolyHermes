@@ -727,7 +727,38 @@ class AccountService(
             throw RuntimeException("解密私钥失败: ${e.message}", e)
         }
     }
-    
+
+    /**
+     * 轮询用：遍历所有账户，对代理地址 WCOL 余额 > 0 的执行解包为 USDC.e。
+     * 由 WcolUnwrapJobService 每 20 秒调用，赎回后无需在赎回流程内等待确认与解包。
+     */
+    suspend fun runWcolUnwrapForAllAccounts() {
+        val accounts = accountRepository.findAllByOrderByCreatedAtAsc()
+        if (accounts.isEmpty()) return
+        for (account in accounts) {
+            try {
+                val privateKey = decryptPrivateKey(account)
+                val walletType = WalletType.fromStringOrDefault(account.walletType, WalletType.SAFE)
+                blockchainService.unwrapWcolForProxy(
+                    privateKey = privateKey,
+                    proxyAddress = account.proxyAddress,
+                    walletType = walletType
+                ).fold(
+                    onSuccess = { txHash ->
+                        if (txHash != null) {
+                            logger.info("轮询解包 WCOL: accountId=${account.id}, proxy=${account.proxyAddress.take(10)}..., txHash=$txHash")
+                        }
+                    },
+                    onFailure = { e ->
+                        logger.warn("轮询解包 WCOL 失败 accountId=${account.id}: ${e.message}")
+                    }
+                )
+            } catch (e: Exception) {
+                logger.warn("轮询解包 WCOL 跳过 accountId=${account.id}: ${e.message}")
+            }
+        }
+    }
+
     /**
      * 解密账户 API Secret
      */
@@ -1523,9 +1554,11 @@ class AccountService(
                                 logger.error("账户 $accountId 市场 $marketId 赎回失败: ${e.message}", e)
                                 return Result.failure(Exception("赎回失败: 账户 $accountId 市场 $marketId - ${e.message}"))
                             }
-                        )
-                    }
+                    )
                 }
+                }
+
+                // WCOL 解包由 WcolUnwrapJobService 每 20 秒轮询统一处理，赎回流程不再等待确认与解包
 
                 // 计算该账户的赎回总价值
                 val accountTotalValue = redeemedInfo.fold(BigDecimal.ZERO) { sum, info ->
