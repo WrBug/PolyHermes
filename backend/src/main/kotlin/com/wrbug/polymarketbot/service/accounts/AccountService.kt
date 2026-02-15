@@ -1464,21 +1464,30 @@ class AccountService(
                 // 按市场分组（同一市场的仓位可以批量赎回）
                 val positionsByMarket = positions.groupBy { it.first.marketId }
 
-                // 对每个市场执行赎回
+                // 获取钱包类型
+                val walletTypeEnum = WalletType.fromStringOrDefault(account.walletType, WalletType.SAFE)
+
+                // 解密私钥（只需解密一次）
+                val decryptedPrivateKey = decryptPrivateKey(account)
+
+                // 执行赎回
                 var lastTxHash: String? = null
-                for ((marketId, marketPositions) in positionsByMarket) {
-                    val indexSets = marketPositions.map { it.second }
 
-                    // 解密私钥
-                    val decryptedPrivateKey = decryptPrivateKey(account)
+                // Safe 钱包且有多个市场：使用 MultiSend 批量赎回
+                if (walletTypeEnum == WalletType.SAFE && positionsByMarket.size > 1) {
+                    val redeemRequests = mutableListOf<Triple<String, List<BigInteger>, Boolean>>()
+                    for ((marketId, marketPositions) in positionsByMarket) {
+                        val indexSets = marketPositions.map { it.second }
+                        val isNegRisk = marketService.getNegRiskByConditionId(marketId) == true
+                        redeemRequests.add(Triple(marketId, indexSets, isNegRisk))
+                    }
 
-                    // 调用区块链服务赎回仓位
-                    val walletTypeEnum = WalletType.fromStringOrDefault(account.walletType, WalletType.SAFE)
-                    val redeemResult = blockchainService.redeemPositions(
+                    logger.info("账户 $accountId: 使用 MultiSend 批量赎回 ${redeemRequests.size} 个市场")
+
+                    val redeemResult = blockchainService.redeemPositionsBatch(
                         privateKey = decryptedPrivateKey,
                         proxyAddress = account.proxyAddress,
-                        conditionId = marketId,
-                        indexSets = indexSets,
+                        redeemRequests = redeemRequests,
                         walletType = walletTypeEnum
                     )
 
@@ -1487,10 +1496,35 @@ class AccountService(
                             lastTxHash = txHash
                         },
                         onFailure = { e ->
-                            logger.error("账户 $accountId 市场 $marketId 赎回失败: ${e.message}", e)
-                            return Result.failure(Exception("赎回失败: 账户 $accountId 市场 $marketId - ${e.message}"))
+                            logger.error("账户 $accountId MultiSend 批量赎回失败: ${e.message}", e)
+                            return Result.failure(Exception("赎回失败: 账户 $accountId - ${e.message}"))
                         }
                     )
+                } else {
+                    // Magic 钱包或单个市场：逐笔赎回
+                    for ((marketId, marketPositions) in positionsByMarket) {
+                        val indexSets = marketPositions.map { it.second }
+                        val isNegRisk = marketService.getNegRiskByConditionId(marketId) == true
+
+                        val redeemResult = blockchainService.redeemPositions(
+                            privateKey = decryptedPrivateKey,
+                            proxyAddress = account.proxyAddress,
+                            conditionId = marketId,
+                            indexSets = indexSets,
+                            isNegRisk = isNegRisk,
+                            walletType = walletTypeEnum
+                        )
+
+                        redeemResult.fold(
+                            onSuccess = { txHash ->
+                                lastTxHash = txHash
+                            },
+                            onFailure = { e ->
+                                logger.error("账户 $accountId 市场 $marketId 赎回失败: ${e.message}", e)
+                                return Result.failure(Exception("赎回失败: 账户 $accountId 市场 $marketId - ${e.message}"))
+                            }
+                        )
+                    }
                 }
 
                 // 计算该账户的赎回总价值
