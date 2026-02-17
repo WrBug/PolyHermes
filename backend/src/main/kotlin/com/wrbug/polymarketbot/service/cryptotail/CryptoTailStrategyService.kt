@@ -4,6 +4,8 @@ import com.wrbug.polymarketbot.dto.*
 import com.wrbug.polymarketbot.entity.CryptoTailStrategy
 import com.wrbug.polymarketbot.entity.CryptoTailStrategyTrigger
 import com.wrbug.polymarketbot.enums.ErrorCode
+import com.wrbug.polymarketbot.enums.SpreadMode
+import com.wrbug.polymarketbot.enums.SpreadDirection
 import com.wrbug.polymarketbot.repository.CryptoTailStrategyRepository
 import com.wrbug.polymarketbot.repository.CryptoTailStrategyTriggerRepository
 import com.wrbug.polymarketbot.event.CryptoTailStrategyChangedEvent
@@ -62,12 +64,18 @@ class CryptoTailStrategyService(
             if (amountValue <= BigDecimal.ZERO) {
                 return Result.failure(IllegalArgumentException(ErrorCode.PARAM_ERROR.messageKey))
             }
-            val minSpreadMode = (request.minSpreadMode ?: "NONE").uppercase()
-            if (minSpreadMode != "NONE" && minSpreadMode != "FIXED" && minSpreadMode != "AUTO") {
+            val spreadMode = try {
+                SpreadMode.fromString(request.spreadMode)
+            } catch (e: Exception) {
                 return Result.failure(IllegalArgumentException(ErrorCode.PARAM_ERROR.messageKey))
             }
-            val minSpreadValue = request.minSpreadValue?.toSafeBigDecimal()
-            if (minSpreadMode == "FIXED" && (minSpreadValue == null || minSpreadValue < BigDecimal.ZERO)) {
+            val spreadValue = request.spreadValue?.toSafeBigDecimal()
+            if (spreadMode == SpreadMode.FIXED && (spreadValue == null || spreadValue < BigDecimal.ZERO)) {
+                return Result.failure(IllegalArgumentException(ErrorCode.PARAM_ERROR.messageKey))
+            }
+            val spreadDirection = try {
+                SpreadDirection.fromString(request.spreadDirection)
+            } catch (e: Exception) {
                 return Result.failure(IllegalArgumentException(ErrorCode.PARAM_ERROR.messageKey))
             }
 
@@ -85,8 +93,9 @@ class CryptoTailStrategyService(
                 maxPrice = maxPrice,
                 amountMode = amountMode,
                 amountValue = amountValue,
-                minSpreadMode = minSpreadMode,
-                minSpreadValue = minSpreadValue,
+                spreadMode = spreadMode,
+                spreadValue = spreadValue,
+                spreadDirection = spreadDirection,
                 enabled = request.enabled
             )
             val saved = strategyRepository.save(entity)
@@ -121,13 +130,27 @@ class CryptoTailStrategyService(
                 ?: existing.name?.takeIf { it.isNotBlank() }
                 ?: generateStrategyName(existing.marketSlugPrefix)
 
-            val newMinSpreadMode = request.minSpreadMode?.uppercase() ?: existing.minSpreadMode
-            if (newMinSpreadMode != "NONE" && newMinSpreadMode != "FIXED" && newMinSpreadMode != "AUTO") {
+            val newSpreadMode = if (request.spreadMode != null) {
+                try {
+                    SpreadMode.fromString(request.spreadMode)
+                } catch (e: Exception) {
+                    return Result.failure(IllegalArgumentException(ErrorCode.PARAM_ERROR.messageKey))
+                }
+            } else {
+                existing.spreadMode
+            }
+            val newSpreadValue = request.spreadValue?.toSafeBigDecimal() ?: existing.spreadValue
+            if (newSpreadMode == SpreadMode.FIXED && (newSpreadValue == null || newSpreadValue < BigDecimal.ZERO)) {
                 return Result.failure(IllegalArgumentException(ErrorCode.PARAM_ERROR.messageKey))
             }
-            val newMinSpreadValue = request.minSpreadValue?.toSafeBigDecimal() ?: existing.minSpreadValue
-            if (newMinSpreadMode == "FIXED" && (newMinSpreadValue == null || newMinSpreadValue < BigDecimal.ZERO)) {
-                return Result.failure(IllegalArgumentException(ErrorCode.PARAM_ERROR.messageKey))
+            val newSpreadDirection = if (request.spreadDirection != null) {
+                try {
+                    SpreadDirection.fromString(request.spreadDirection)
+                } catch (e: Exception) {
+                    return Result.failure(IllegalArgumentException(ErrorCode.PARAM_ERROR.messageKey))
+                }
+            } else {
+                existing.spreadDirection
             }
 
             val updated = existing.copy(
@@ -138,8 +161,9 @@ class CryptoTailStrategyService(
                 maxPrice = request.maxPrice?.toSafeBigDecimal() ?: existing.maxPrice,
                 amountMode = request.amountMode?.uppercase() ?: existing.amountMode,
                 amountValue = request.amountValue?.toSafeBigDecimal() ?: existing.amountValue,
-                minSpreadMode = newMinSpreadMode,
-                minSpreadValue = newMinSpreadValue,
+                spreadMode = newSpreadMode,
+                spreadValue = newSpreadValue,
+                spreadDirection = newSpreadDirection,
                 enabled = request.enabled ?: existing.enabled,
                 updatedAt = System.currentTimeMillis()
             )
@@ -263,8 +287,9 @@ class CryptoTailStrategyService(
             maxPrice = e.maxPrice.toPlainString(),
             amountMode = e.amountMode,
             amountValue = e.amountValue.toPlainString(),
-            minSpreadMode = e.minSpreadMode,
-            minSpreadValue = e.minSpreadValue?.toPlainString(),
+            spreadMode = e.spreadMode.name,
+            spreadValue = e.spreadValue?.toPlainString(),
+            spreadDirection = e.spreadDirection.name,
             enabled = e.enabled,
             lastTriggerAt = lastTriggerAt,
             totalRealizedPnl = totalPnl?.toPlainString(),

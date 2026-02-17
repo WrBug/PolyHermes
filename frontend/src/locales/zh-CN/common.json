@@ -4,6 +4,7 @@
     "save": "保存",
     "cancel": "取消",
     "confirm": "确定",
+    "later": "稍后",
     "delete": "删除",
     "edit": "编辑",
     "viewDetail": "查看详情",
@@ -235,6 +236,51 @@
       "error": "获取失败",
       "select": "选择此代理地址"
     }
+  },
+  "accountSetup": {
+    "title": "账户设置检查",
+    "completed": "已完成",
+    "pending": "待完成",
+    "refresh": "刷新状态",
+    "allCompleted": {
+      "title": "所有设置已完成",
+      "description": "您的账户已准备就绪，可以开始使用所有功能。"
+    },
+    "incomplete": {
+      "title": "账户设置未完成",
+      "description": "请完成以下设置步骤，以确保账户可以正常使用。"
+    },
+    "step1": {
+      "title": "部署代理钱包",
+      "description": "代理钱包是您在 Polymarket 上进行交易的必要组件。Safe 账户可点击下方按钮由系统一键部署；Magic 账户将跳转至 Polymarket 完成。",
+      "action": "部署代理钱包"
+    },
+    "step2": {
+      "title": "启用交易",
+      "description": "需要配置 API 凭证才能进行交易。点击下方按钮由系统自动获取并保存 API Key。",
+      "action": "一键启用交易"
+    },
+    "step3": {
+      "title": "批准代币",
+      "description": "需要授权代理钱包使用您的 USDC 代币。点击下方按钮由系统自动完成代币授权。",
+      "action": "一键批准代币"
+    },
+    "approvalDetails": {
+      "title": "代币授权详情",
+      "CTF_CONTRACT": "CTF 合约",
+      "CTF_EXCHANGE": "CTF 交易所",
+      "NEG_RISK_EXCHANGE": "负风险交易所",
+      "NEG_RISK_ADAPTER": "负风险适配器",
+      "notApproved": "未授权",
+      "unlimited": "无限"
+    },
+    "error": {
+      "title": "检查失败",
+      "description": "无法检查账户设置状态，请稍后重试。"
+    },
+    "actionSuccess": "操作成功",
+    "actionFailed": "操作失败，请稍后重试",
+    "help": "提示：完成设置后，点击「刷新状态」按钮更新检查结果。如果所有步骤都已完成，您可以正常使用账户功能。"
   },
   "leader": {
     "title": "Leader 管理",
@@ -1427,7 +1473,8 @@
       "delete": "删除",
       "viewTriggers": "订单",
       "deleteConfirm": "确定删除该策略？",
-      "fetchFailed": "获取列表失败"
+      "fetchFailed": "获取列表失败",
+      "configGuide": "配置指南"
     },
     "form": {
       "walletTip": "建议使用专用钱包，避免手动操作等导致余额或下单异常。",
@@ -1450,13 +1497,17 @@
       "update": "更新",
       "timeWindowStartLEEnd": "时间区间开始不能大于结束",
       "timeWindowExceed": "时间区间不能超过周期长度",
-      "minSpreadMode": "最小价差",
-      "minSpreadModeTip": "根据当前周期开盘价与收盘价的价差决定是否下单。自动：系统按历史 20 根 K 线计算建议价差（每周期更新）；固定：您输入一个数值（如 30），仅当价差 ≥ 该值时才下单；无：不校验价差，满足价格区间即下单。",
-      "minSpreadModeNone": "无",
-      "minSpreadModeFixed": "固定",
-      "minSpreadModeAuto": "自动",
-      "minSpreadValue": "最小价差数值 (USDC)",
-      "minSpreadValuePlaceholder": "如 30"
+      "spreadMode": "价差",
+      "spreadModeTip": "根据当前周期开盘价与收盘价的价差决定是否下单。自动：系统按历史 20 根 K 线计算建议价差（每周期更新）；固定：您输入一个数值（如 30）；无：不校验价差，满足价格区间即下单。",
+      "spreadModeNone": "无",
+      "spreadModeFixed": "固定",
+      "spreadModeAuto": "自动",
+      "spreadValue": "价差数值 (USDC)",
+      "spreadValuePlaceholder": "如 30",
+      "spreadDirection": "价差方向",
+      "spreadDirectionTip": "最小价差：价差 ≥ 配置值时触发，买入价固定 0.99；最大价差：价差 ≤ 配置值时触发，买入价 = 触发价 + 0.02（适合低价买入）。",
+      "spreadDirectionMin": "最小价差",
+      "spreadDirectionMax": "最大价差"
     },
     "redeemRequiredModal": {
       "title": "请先配置自动赎回",

@@ -932,9 +932,9 @@ export interface SystemConfig {
   builderApiKeyConfigured: boolean
   builderSecretConfigured: boolean
   builderPassphraseConfigured: boolean
-  builderApiKeyDisplay?: string  // Builder API Key 显示值（部分显示）
-  builderSecretDisplay?: string  // Builder Secret 显示值（部分显示）
-  builderPassphraseDisplay?: string  // Builder Passphrase 显示值（部分显示）
+  builderApiKeyDisplay?: string  // Builder API Key 显示值（完整）
+  builderSecretDisplay?: string  // Builder Secret 显示值（完整）
+  builderPassphraseDisplay?: string  // Builder Passphrase 显示值（完整）
   autoRedeemEnabled: boolean  // 自动赎回（系统级别配置，默认开启）
 }
 
@@ -1051,10 +1051,12 @@ export interface CryptoTailStrategyDto {
   maxPrice: string
   amountMode: string
   amountValue: string
-  /** 最小价差模式: NONE, FIXED, AUTO */
-  minSpreadMode?: string
-  /** 最小价差数值（FIXED 时必填；AUTO 时可为计算值） */
-  minSpreadValue?: string | null
+  /** 价差模式: NONE, FIXED, AUTO */
+  spreadMode?: string
+  /** 价差数值 */
+  spreadValue?: string | null
+  /** 价差方向: MIN=最小价差（价差>=配置值触发）, MAX=最大价差（价差<=配置值触发） */
+  spreadDirection?: string
   enabled: boolean
   lastTriggerAt?: number
   /** 已实现总收益 USDC */

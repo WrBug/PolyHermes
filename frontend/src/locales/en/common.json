@@ -13,6 +13,7 @@
     "success": "Success",
     "failed": "Failed",
     "confirm": "Confirm",
+    "later": "Later",
     "submit": "Submit",
     "reset": "Reset",
     "close": "Close",
@@ -236,6 +237,51 @@
       "error": "Failed to fetch",
       "select": "Select this proxy address"
     }
+  },
+  "accountSetup": {
+    "title": "Account Setup Check",
+    "completed": "Completed",
+    "pending": "Pending",
+    "refresh": "Refresh Status",
+    "allCompleted": {
+      "title": "All Setup Completed",
+      "description": "Your account is ready to use all features."
+    },
+    "incomplete": {
+      "title": "Account Setup Incomplete",
+      "description": "Please complete the following setup steps to ensure your account works properly."
+    },
+    "step1": {
+      "title": "Deploy Proxy Wallet",
+      "description": "Proxy wallet is required for trading on Polymarket. Safe accounts can deploy with one click; Magic accounts will be redirected to Polymarket.",
+      "action": "Deploy Proxy Wallet"
+    },
+    "step2": {
+      "title": "Enable Trading",
+      "description": "API credentials are required for trading. Click the button below to let the system automatically obtain and save the API Key.",
+      "action": "Enable Trading (One-Click)"
+    },
+    "step3": {
+      "title": "Approve Tokens",
+      "description": "You need to authorize the proxy wallet to use your USDC tokens. Click the button below to complete token approval automatically.",
+      "action": "Approve Tokens (One-Click)"
+    },
+    "approvalDetails": {
+      "title": "Token Approval Details",
+      "CTF_CONTRACT": "CTF Contract",
+      "CTF_EXCHANGE": "CTF Exchange",
+      "NEG_RISK_EXCHANGE": "Neg Risk Exchange",
+      "NEG_RISK_ADAPTER": "Neg Risk Adapter",
+      "notApproved": "Not Approved",
+      "unlimited": "Unlimited"
+    },
+    "error": {
+      "title": "Check Failed",
+      "description": "Unable to check account setup status, please try again later."
+    },
+    "actionSuccess": "Operation successful",
+    "actionFailed": "Operation failed, please try again later",
+    "help": "Tip: After completing the setup, click the \"Refresh Status\" button to update the check results. If all steps are completed, you can use account features normally."
   },
   "leader": {
     "title": "Leader Management",
@@ -1428,7 +1474,8 @@
       "delete": "Delete",
       "viewTriggers": "Orders",
       "deleteConfirm": "Delete this strategy?",
-      "fetchFailed": "Failed to fetch list"
+      "fetchFailed": "Failed to fetch list",
+      "configGuide": "Configuration Guide"
     },
     "form": {
       "walletTip": "Use a dedicated wallet to avoid balance or order issues.",
@@ -1451,13 +1498,17 @@
       "update": "Update",
       "timeWindowStartLEEnd": "Window start must not be greater than end",
       "timeWindowExceed": "Time window must not exceed period length",
-      "minSpreadMode": "Min spread",
-      "minSpreadModeTip": "Whether to place an order is based on the spread between open and close in the current period. Auto: system computes a suggested spread from the last 20 klines (updated each period); Fixed: you enter a value (e.g. 30), order only when spread ≥ that value; None: no spread check, order when price is in range.",
-      "minSpreadModeNone": "None",
-      "minSpreadModeFixed": "Fixed",
-      "minSpreadModeAuto": "Auto",
-      "minSpreadValue": "Min spread value (USDC)",
-      "minSpreadValuePlaceholder": "e.g. 30"
+      "spreadMode": "Spread",
+      "spreadModeTip": "Whether to place an order is based on the spread between open and close in the current period. Auto: system computes a suggested spread from the last 20 klines (updated each period); Fixed: you enter a value (e.g. 30); None: no spread check, order when price is in range.",
+      "spreadModeNone": "None",
+      "spreadModeFixed": "Fixed",
+      "spreadModeAuto": "Auto",
+      "spreadValue": "Spread value (USDC)",
+      "spreadValuePlaceholder": "e.g. 30",
+      "spreadDirection": "Spread Direction",
+      "spreadDirectionTip": "Min spread: trigger when spread ≥ configured value, buy price fixed at 0.99; Max spread: trigger when spread ≤ configured value, buy price = trigger price + 0.02 (suitable for low-price buying).",
+      "spreadDirectionMin": "Min Spread",
+      "spreadDirectionMax": "Max Spread"
     },
     "redeemRequiredModal": {
       "title": "Configure Auto Redeem First",

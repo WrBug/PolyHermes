@@ -7,6 +7,7 @@ import type { Account } from '../types'
 import { useMediaQuery } from 'react-responsive'
 import { formatUSDC } from '../utils'
 import AccountImportForm from '../components/AccountImportForm'
+import AccountSetupStatusBlock from '../components/AccountSetupStatusBlock'
 
 const { Title } = Typography
 
@@ -204,10 +205,7 @@ const AccountList: React.FC = () => {
       setEditAccount(accountDetail)
 
       editForm.setFieldsValue({
-        accountName: accountDetail.accountName || '',
-        apiKey: '',  // 不显示实际值，留空表示不修改
-        apiSecret: '',  // 不显示实际值，留空表示不修改
-        apiPassphrase: ''  // 不显示实际值，留空表示不修改
+        accountName: accountDetail.accountName || ''
       })
     } catch (error: any) {
       console.error('打开编辑失败:', error)
@@ -720,35 +718,14 @@ const AccountList: React.FC = () => {
 
             <Divider />
 
-            <Descriptions
-              column={isMobile ? 1 : 2}
-              bordered
-              size={isMobile ? 'small' : 'middle'}
-              title={t('accountList.apiCredentials')}
-            >
-              <Descriptions.Item label={t('accountList.apiKey')}>
-                <Tag color={detailAccount.apiKeyConfigured ? 'success' : 'default'}>
-                  {detailAccount.apiKeyConfigured ? t('accountList.configured') : t('accountList.notConfiguredStatus')}
-                </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label={t('accountList.apiSecret')}>
-                <Tag color={detailAccount.apiSecretConfigured ? 'success' : 'default'}>
-                  {detailAccount.apiSecretConfigured ? t('accountList.configured') : t('accountList.notConfiguredStatus')}
-                </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label={t('accountList.apiPassphrase')}>
-                <Tag color={detailAccount.apiPassphraseConfigured ? 'success' : 'default'}>
-                  {detailAccount.apiPassphraseConfigured ? t('accountList.configured') : t('accountList.notConfiguredStatus')}
-                </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label={t('accountList.configStatus')}>
-                {detailAccount.apiKeyConfigured && detailAccount.apiSecretConfigured && detailAccount.apiPassphraseConfigured ? (
-                  <Tag color="success">{t('accountList.fullConfig')}</Tag>
-                ) : (
-                  <Tag color="warning">{t('accountList.partialConfig')}</Tag>
-                )}
-              </Descriptions.Item>
-            </Descriptions>
+            <AccountSetupStatusBlock
+              accountId={detailAccount.id}
+              onRefresh={handleRefreshDetailBalance}
+              size={isMobile ? 'small' : 'default'}
+              showApprovalDetails={true}
+            />
+
+            <Divider />
 
             {(detailAccount.totalOrders !== undefined || detailAccount.totalPnl !== undefined ||
               detailAccount.activeOrders !== undefined ||

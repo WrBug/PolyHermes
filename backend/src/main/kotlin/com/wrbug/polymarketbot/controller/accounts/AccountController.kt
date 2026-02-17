@@ -205,6 +205,82 @@ class AccountController(
     }
 
     /**
+     * 检查账户设置状态（代理部署、交易启用、代币批准）
+     */
+    @PostMapping("/check-setup-status")
+    fun checkSetupStatus(@RequestBody request: AccountDetailRequest): ResponseEntity<ApiResponse<AccountSetupStatusDto>> {
+        return try {
+            if (request.accountId == null || request.accountId <= 0) {
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ACCOUNT_ID_INVALID, messageSource = messageSource))
+            }
+            val result = runBlocking { accountService.checkAccountSetupStatus(request.accountId) }
+            result.fold(
+                onSuccess = { status ->
+                    ResponseEntity.ok(ApiResponse.success(status))
+                },
+                onFailure = { e ->
+                    logger.error("检查账户设置状态失败: ${e.message}", e)
+                    when (e) {
+                        is IllegalArgumentException -> ResponseEntity.ok(
+                            ApiResponse.error(
+                                ErrorCode.PARAM_ERROR,
+                                e.message,
+                                messageSource
+                            )
+                        )
+                        else -> ResponseEntity.ok(
+                            ApiResponse.error(
+                                ErrorCode.SERVER_ERROR,
+                                e.message,
+                                messageSource
+                            )
+                        )
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            logger.error("检查账户设置状态异常: ${e.message}", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
+        }
+    }
+
+    /**
+     * 执行设置步骤（步骤1 返回跳转 URL，步骤2/3 由后端执行）
+     */
+    @PostMapping("/execute-setup-step")
+    fun executeSetupStep(@RequestBody request: ExecuteSetupStepRequest): ResponseEntity<ApiResponse<ExecuteSetupStepResponse>> {
+        return try {
+            if (request.accountId == null || request.accountId <= 0) {
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ACCOUNT_ID_INVALID, messageSource = messageSource))
+            }
+            val step = request.step ?: 0
+            if (step !in 1..3) {
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ERROR, "步骤必须为 1、2 或 3", messageSource))
+            }
+            val result = runBlocking { accountService.executeSetupStep(request.accountId, step) }
+            result.fold(
+                onSuccess = { response ->
+                    ResponseEntity.ok(ApiResponse.success(response))
+                },
+                onFailure = { e ->
+                    logger.error("执行设置步骤失败: ${e.message}", e)
+                    when (e) {
+                        is IllegalArgumentException -> ResponseEntity.ok(
+                            ApiResponse.error(ErrorCode.PARAM_ERROR, e.message, messageSource)
+                        )
+                        else -> ResponseEntity.ok(
+                            ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource)
+                        )
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            logger.error("执行设置步骤异常: ${e.message}", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
+        }
+    }
+
+    /**
      * 查询账户详情
      */
     @PostMapping("/detail")

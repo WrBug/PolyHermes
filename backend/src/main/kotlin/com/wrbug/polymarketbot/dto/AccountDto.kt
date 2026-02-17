@@ -68,9 +68,9 @@ data class SystemConfigDto(
     val builderApiKeyConfigured: Boolean,  // Builder API Key 是否已配置
     val builderSecretConfigured: Boolean,  // Builder Secret 是否已配置
     val builderPassphraseConfigured: Boolean,  // Builder Passphrase 是否已配置
-    val builderApiKeyDisplay: String? = null,  // Builder API Key 显示值（部分显示，用于前端展示）
-    val builderSecretDisplay: String? = null,  // Builder Secret 显示值（部分显示，用于前端展示）
-    val builderPassphraseDisplay: String? = null,  // Builder Passphrase 显示值（部分显示，用于前端展示）
+    val builderApiKeyDisplay: String? = null,  // Builder API Key 显示值（完整，用于前端展示）
+    val builderSecretDisplay: String? = null,  // Builder Secret 显示值（完整，用于前端展示）
+    val builderPassphraseDisplay: String? = null,  // Builder Passphrase 显示值（完整，用于前端展示）
     val autoRedeemEnabled: Boolean = true  // 自动赎回（系统级别配置，默认开启）
 )
 

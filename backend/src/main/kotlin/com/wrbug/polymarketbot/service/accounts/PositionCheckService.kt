@@ -25,6 +25,7 @@ import com.wrbug.polymarketbot.service.common.MarketPriceService
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * 仓位检查服务
@@ -77,7 +78,10 @@ class PositionCheckService(
     
     // 同步锁，确保订阅任务的启动和停止是线程安全的
     private val lock = Any()
-    
+
+    // 防止 checkRedeemablePositions 重入：上一轮检查未完成时，新一轮轮询直接跳过
+    private val redeemCheckInProgress = AtomicBoolean(false)
+
     /**
      * 初始化服务（订阅 PositionPollingService 的事件，启动缓存清理任务）
      */
@@ -328,18 +332,23 @@ class PositionCheckService(
     
     /**
      * 逻辑1：处理待赎回仓位
-    https://clob.polymarket.com     * 按照以下逻辑处理：
+     * 按照以下逻辑处理：
      * 1. 无待赎回仓位：跳过
      * 2. (未配置apikey || autoredeem==false) && 有待赎回的仓位：发送通知事件
      * 3. (已配置) && 有待赎回的仓位：处理订单逻辑
+     * 防重入：上一轮检查未完成时，本轮直接跳过，避免并发赎回。
      */
     private suspend fun checkRedeemablePositions(redeemablePositions: List<AccountPositionDto>) {
+        if (!redeemCheckInProgress.compareAndSet(false, true)) {
+            logger.debug("跳过本次待赎回仓位检查：上一次检查尚未完成")
+            return
+        }
         try {
             // 1. 无待赎回仓位：跳过
             if (redeemablePositions.isEmpty()) {
                 return
             }
-            
+
             // 检查系统级别的自动赎回配置
             val autoRedeemEnabled = systemConfigService.isAutoRedeemEnabled()
             val apiKeyConfigured = relayClientService.isBuilderApiKeyConfigured()
@@ -373,7 +382,14 @@ class PositionCheckService(
                 }
                 return  // 未配置时直接返回，不进行后续处理
             }
-            
+
+            // Builder Relayer 配额冷却期内不再发起赎回（如 API 返回 quota exceeded, resets in N seconds）
+            if (relayClientService.isBuilderRelayerQuotaBlocked()) {
+                val remaining = relayClientService.getBuilderRelayerQuotaBlockedRemainingSeconds()
+                logger.info("Builder Relayer 配额冷却中，跳过本次自动赎回，约 ${remaining} 秒后恢复")
+                return
+            }
+
             // 3. (已配置) && 有待赎回的仓位：处理订单逻辑
             // 自动赎回已开启且已配置 API Key，按账户分组进行赎回处理
             // 先执行赎回，赎回成功后再查找订单并更新订单状态
@@ -451,9 +467,11 @@ class PositionCheckService(
             }
         } catch (e: Exception) {
             logger.error("处理待赎回仓位异常: ${e.message}", e)
+        } finally {
+            redeemCheckInProgress.set(false)
         }
     }
-    
+
     /**
      * 逻辑2：处理未卖出订单
      * 检查所有未卖出的订单，匹配仓位

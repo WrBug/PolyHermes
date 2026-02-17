@@ -7,6 +7,7 @@ import { useAccountStore } from '../store/accountStore'
 import type { Account } from '../types'
 import { useMediaQuery } from 'react-responsive'
 import { formatUSDC } from '../utils'
+import AccountSetupStatusBlock from '../components/AccountSetupStatusBlock'
 
 const { Title } = Typography
 
@@ -150,10 +151,7 @@ const AccountDetail: React.FC = () => {
             onClick={() => {
               setEditModalVisible(true)
               editForm.setFieldsValue({
-                accountName: account.accountName || '',
-                apiKey: '',  // 不显示实际值，留空表示不修改
-                apiSecret: '',  // 不显示实际值，留空表示不修改
-                apiPassphrase: ''  // 不显示实际值，留空表示不修改
+                accountName: account.accountName || ''
               })
             }}
             size={isMobile ? 'middle' : 'large'}
@@ -214,46 +212,23 @@ const AccountDetail: React.FC = () => {
       </Card>
       
       <Divider />
-      
-      <Card 
-        title={t('account.apiCredentials')} 
-        style={{ 
+
+      {accountId && (
+        <div style={{
           marginTop: isMobile ? '12px' : '16px',
-          margin: isMobile ? '0 -8px' : '0',
-          borderRadius: isMobile ? '0' : undefined
-        }}
-      >
-        <Descriptions
-          column={isMobile ? 1 : 2}
-          bordered
-          size={isMobile ? 'small' : 'middle'}
-          style={{ fontSize: isMobile ? '14px' : undefined }}
-        >
-          <Descriptions.Item label={t('account.apiKey')}>
-            <Tag color={account.apiKeyConfigured ? 'success' : 'default'}>
-              {account.apiKeyConfigured ? t('account.configured') : t('account.notConfigured')}
-            </Tag>
-          </Descriptions.Item>
-          <Descriptions.Item label={t('account.apiSecret')}>
-            <Tag color={account.apiSecretConfigured ? 'success' : 'default'}>
-              {account.apiSecretConfigured ? t('account.configured') : t('account.notConfigured')}
-            </Tag>
-          </Descriptions.Item>
-          <Descriptions.Item label={t('account.apiPassphrase')}>
-            <Tag color={account.apiPassphraseConfigured ? 'success' : 'default'}>
-              {account.apiPassphraseConfigured ? t('account.configured') : t('account.notConfigured')}
-            </Tag>
-          </Descriptions.Item>
-          <Descriptions.Item label={t('account.apiCredentials')}>
-            {account.apiKeyConfigured && account.apiSecretConfigured && account.apiPassphraseConfigured ? (
-              <Tag color="success">{t('account.fullConfig')}</Tag>
-            ) : (
-              <Tag color="warning">{t('account.partialConfig')}</Tag>
-            )}
-          </Descriptions.Item>
-        </Descriptions>
-      </Card>
-      
+          margin: isMobile ? '0 -8px' : '0'
+        }}>
+          <AccountSetupStatusBlock
+            accountId={Number(accountId)}
+            onRefresh={() => { loadAccountDetail(); loadBalance() }}
+            size={isMobile ? 'small' : 'default'}
+            showApprovalDetails={true}
+          />
+        </div>
+      )}
+
+      <Divider style={{ margin: isMobile ? '12px 0' : '16px 0' }} />
+
       {(account.totalOrders !== undefined || account.totalPnl !== undefined || 
         account.activeOrders !== undefined || 
         account.completedOrders !== undefined || account.positionCount !== undefined) ? (

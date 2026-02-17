@@ -377,5 +377,62 @@ object Eip712Encoder {
         
         return keccak256(encoded)
     }
+
+    /**
+     * SafeCreate 用 EIP712 域（Polymarket Contract Proxy Factory）
+     * Domain: EIP712Domain(string name, uint256 chainId, address verifyingContract)
+     * 参考: builder-relayer-client/src/builder/create.ts createSafeCreateSignature
+     */
+    fun encodeSafeCreateDomain(
+        name: String,
+        chainId: Long,
+        verifyingContract: String
+    ): ByteArray {
+        val domainTypeHash = encodeType(
+            "EIP712Domain",
+            listOf(
+                "name" to "string",
+                "chainId" to "uint256",
+                "verifyingContract" to "address"
+            )
+        )
+        val nameHash = encodeString(name)
+        val chainIdBytes = encodeUint256(BigInteger.valueOf(chainId))
+        val contractBytes = encodeAddress(verifyingContract)
+        val encoded = ByteArray(32 + 32 + 32 + 32)
+        System.arraycopy(domainTypeHash, 0, encoded, 0, 32)
+        System.arraycopy(nameHash, 0, encoded, 32, 32)
+        System.arraycopy(chainIdBytes, 0, encoded, 64, 32)
+        System.arraycopy(contractBytes, 0, encoded, 96, 32)
+        return keccak256(encoded)
+    }
+
+    /**
+     * CreateProxy 消息哈希（SafeCreate 签名用）
+     * CreateProxy(address paymentToken, uint256 payment, address paymentReceiver)
+     */
+    fun encodeCreateProxyMessage(
+        paymentToken: String,
+        payment: BigInteger,
+        paymentReceiver: String
+    ): ByteArray {
+        val typeHash = encodeType(
+            "CreateProxy",
+            listOf(
+                "paymentToken" to "address",
+                "payment" to "uint256",
+                "paymentReceiver" to "address"
+            )
+        )
+        val tokenBytes = encodeAddress(paymentToken)
+        val paymentBytes = encodeUint256(payment)
+        val receiverBytes = encodeAddress(paymentReceiver)
+        val encoded = ByteArray(32 + 32 + 32 + 32)
+        System.arraycopy(typeHash, 0, encoded, 0, 32)
+        System.arraycopy(tokenBytes, 0, encoded, 32, 32)
+        System.arraycopy(paymentBytes, 0, encoded, 64, 32)
+        System.arraycopy(receiverBytes, 0, encoded, 96, 32)
+        return keccak256(encoded)
+    }
 }
 

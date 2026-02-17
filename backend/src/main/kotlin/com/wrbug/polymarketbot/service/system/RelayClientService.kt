@@ -5,12 +5,16 @@ import com.wrbug.polymarketbot.api.EthereumRpcApi
 import com.wrbug.polymarketbot.api.JsonRpcRequest
 import com.wrbug.polymarketbot.constants.PolymarketConstants
 import com.wrbug.polymarketbot.enums.WalletType
+import com.wrbug.polymarketbot.util.Eip712Encoder
 import com.wrbug.polymarketbot.util.EthereumUtils
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.createClient
+import kotlinx.coroutines.delay
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import retrofit2.Response
 import java.math.BigInteger
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * RelayClient 服务
@@ -20,8 +24,8 @@ import java.math.BigInteger
  * 如果需要真正的 Gasless 功能，需要集成 Builder Relayer API
  *
  * 参考：
- * - TypeScript: @polymarket/builder-relayer-client
- * - TypeScript: utils/redeem.ts
+ * - TypeScript: https://github.com/Polymarket/builder-relayer-client（client.execute、src/encode/safe.ts MultiSend）
+ * - 赎回 calldata 由本服务构建，官方仓库无 redeem 工具；Neg Risk 逻辑见 docs/neg-risk-redeem.md
  */
 @Service
 class RelayClientService(
@@ -35,8 +39,11 @@ class RelayClientService(
     // ConditionalTokens 合约地址
     private val conditionalTokensAddress = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"
 
-    // USDC.e 合约地址
+    // USDC.e 合约地址（普通市场抵押品）
     private val usdcContractAddress = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
+
+    // Neg Risk 市场使用的 WrappedCollateral 合约地址（Polygon，neg-risk-ctf-adapter）
+    private val negRiskWrappedCollateralAddress = "0x3A3BD7bb9528E159577F7C2e685CC81A765002E2"
 
     // 空集合ID
     private val EMPTY_SET = "0x0000000000000000000000000000000000000000000000000000000000000000"
@@ -45,14 +52,74 @@ class RelayClientService(
     private val proxyFactoryAddress = "0xaB45c5A4B0c941a2F231C04C3f49182e1A254052"
     private val relayHubAddress = "0xD216153c06E857cD7f72665E0aF1d7D82172F494"
     private val defaultProxyGasLimit = "10000000"
+
+    // Safe MultiSend 合约地址（Polygon 主网）
+    private val safeMultisendAddress = "0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761"
     
     // Builder Relayer API 交易类型常量
     private val RELAYER_TYPE_PROXY = "PROXY"
     private val RELAYER_TYPE_SAFE = "SAFE"
+    private val RELAYER_TYPE_SAFE_CREATE = "SAFE-CREATE"
+
+    // Safe 代理工厂（用于 SAFE-CREATE 部署）
+    private val safeProxyFactoryAddress = PolymarketConstants.SAFE_PROXY_FACTORY_ADDRESS
 
     private val polygonRpcApi: EthereumRpcApi by lazy {
         val rpcUrl = rpcNodeService.getHttpUrl()
         retrofitFactory.createEthereumRpcApi(rpcUrl)
+    }
+
+    /** 遇到 429 限流时的重试次数 */
+    private val builderRelayerRateLimitMaxAttempts = 3
+
+    /** 429 限流重试退避基数（毫秒），第 n 次重试等待 baseMs * 2^(n-1) */
+    private val builderRelayerRateLimitBackoffMs = 2000L
+
+    /** Builder Relayer 配额用尽后的冷却截止时间（毫秒时间戳），在此时间前不再发起赎回 */
+    private val builderRelayerQuotaBlockedUntilMs = AtomicLong(0)
+
+    /**
+     * 是否处于 Builder Relayer 配额冷却期（配额用尽后在该时间内不再发起赎回）。
+     */
+    fun isBuilderRelayerQuotaBlocked(): Boolean = System.currentTimeMillis() < builderRelayerQuotaBlockedUntilMs.get()
+
+    /**
+     * 配额冷却剩余秒数，未在冷却期时返回 0。
+     */
+    fun getBuilderRelayerQuotaBlockedRemainingSeconds(): Long {
+        val remaining = (builderRelayerQuotaBlockedUntilMs.get() - System.currentTimeMillis()) / 1000
+        return maxOf(0, remaining)
+    }
+
+    /**
+     * 从 API 错误响应中解析 "quota exceeded... resets in N seconds"，并设置配额冷却截止时间。
+     */
+    private fun updateQuotaBlockedFromErrorBody(errorBody: String) {
+        if (!errorBody.contains("quota exceeded", ignoreCase = true)) return
+        val regex = Regex("resets\\s+in\\s+(\\d+)\\s+seconds", RegexOption.IGNORE_CASE)
+        regex.find(errorBody)?.groupValues?.getOrNull(1)?.toLongOrNull()?.let { seconds ->
+            val untilMs = System.currentTimeMillis() + seconds * 1000
+            builderRelayerQuotaBlockedUntilMs.set(untilMs)
+            logger.warn("Builder Relayer 配额已用尽，${seconds}秒内不再发起赎回")
+        }
+    }
+
+    /**
+     * 对 Builder Relayer API 调用进行 429 限流重试（指数退避）。
+     * 当 HTTP 状态为 429（Too Many Requests，如 Cloudflare 1015）时等待后重试，避免瞬时限流导致赎回失败。
+     */
+    private suspend fun <T> withBuilderRelayerRateLimitRetry(block: suspend () -> Response<T>): Response<T> {
+        var lastResponse: Response<T>? = null
+        for (attempt in 1..builderRelayerRateLimitMaxAttempts) {
+            val response = block()
+            lastResponse = response
+            if (response.code() != 429) return response
+            if (attempt == builderRelayerRateLimitMaxAttempts) return response
+            val delayMs = builderRelayerRateLimitBackoffMs * (1L shl (attempt - 1))
+            logger.warn("Builder Relayer API 限流(429)，${delayMs}ms 后重试 (${attempt}/${builderRelayerRateLimitMaxAttempts})")
+            delay(delayMs)
+        }
+        return lastResponse!!
     }
 
     /**
@@ -125,6 +192,7 @@ class RelayClientService(
                 Result.success(responseTime)
             } else {
                 val errorBody = response.errorBody()?.string() ?: "未知错误"
+                updateQuotaBlockedFromErrorBody(errorBody)
                 Result.failure(Exception("Builder Relayer API 调用失败: ${response.code()} - $errorBody"))
             }
         } catch (e: Exception) {
@@ -170,19 +238,22 @@ class RelayClientService(
     /**
      * 创建赎回交易（支持多个 indexSets，用于批量赎回）
      * 参考 TypeScript: utils/redeem.ts 的 createRedeemTx
+     * Neg Risk 市场使用 WrappedCollateral 作为抵押品，需传 isNegRisk=true
      *
      * @param conditionId 市场条件ID
      * @param indexSets 索引集合列表（每个元素是 2^outcomeIndex）
+     * @param isNegRisk 是否为 Neg Risk 市场（true 时使用 WrappedCollateral 地址）
      * @return Safe 交易对象
      */
-    fun createRedeemTx(conditionId: String, indexSets: List<BigInteger>): SafeTransaction {
+    fun createRedeemTx(conditionId: String, indexSets: List<BigInteger>, isNegRisk: Boolean = false): SafeTransaction {
         // 编码 redeemPositions 函数调用
         val functionSelector = EthereumUtils.getFunctionSelector(
             "redeemPositions(address,bytes32,bytes32,uint256[])"
         )
 
-        // 编码参数
-        val encodedCollateral = EthereumUtils.encodeAddress(usdcContractAddress)
+        // Neg Risk 市场仓位由 WrappedCollateral 抵押，普通市场由 USDC 抵押
+        val collateralAddress = if (isNegRisk) negRiskWrappedCollateralAddress else usdcContractAddress
+        val encodedCollateral = EthereumUtils.encodeAddress(collateralAddress)
         val encodedParentCollection = EthereumUtils.encodeBytes32(EMPTY_SET)
         val encodedConditionId = EthereumUtils.encodeBytes32(conditionId)
 
@@ -205,6 +276,115 @@ class RelayClientService(
         return SafeTransaction(
             to = conditionalTokensAddress,
             operation = 0,  // CALL
+            data = callData,
+            value = "0"
+        )
+    }
+
+    /**
+     * 创建 WCOL 解包交易（将 Wrapped Collateral 解包为 USDC.e）
+     * 合约: Neg Risk WrappedCollateral 0x3A3BD7bb9528E159577F7C2e685CC81A765002E2
+     * 方法: unwrap(address _to, uint256 _amount)，解包后 USDC.e 转到 _to
+     *
+     * Safe 与 Magic 共用此交易对象：Safe 走 [executeViaBuilderRelayer] / [executeManually]（execTransaction），
+     * Magic 走 [executeViaBuilderRelayerProxy]（encodeProxyTransactionData），语义一致。
+     *
+     * @param toAddress 接收 USDC.e 的地址（通常为 proxy 自身，使余额留在代理钱包）
+     * @param amountWei WCOL 数量（6 位小数对应的 raw 值，与 balanceOf 返回一致）
+     * @return Safe 交易对象
+     */
+    fun createUnwrapWcolTx(toAddress: String, amountWei: BigInteger): SafeTransaction {
+        val functionSelector = EthereumUtils.getFunctionSelector("unwrap(address,uint256)")
+        val encodedTo = EthereumUtils.encodeAddress(toAddress)
+        val encodedAmount = EthereumUtils.encodeUint256(amountWei)
+        val callData = "0x" + functionSelector.removePrefix("0x") + encodedTo + encodedAmount
+        return SafeTransaction(
+            to = negRiskWrappedCollateralAddress,
+            operation = 0,  // CALL
+            data = callData,
+            value = "0"
+        )
+    }
+
+    /**
+     * 创建 USDC approve 交易（ERC20 approve(spender, amount)）
+     * 用于 Polymarket 设置步骤3：代币授权
+     */
+    fun createUsdcApproveTx(spender: String, amount: BigInteger): SafeTransaction {
+        val functionSelector = EthereumUtils.getFunctionSelector("approve(address,uint256)")
+        val encodedSpender = EthereumUtils.encodeAddress(spender)
+        val encodedAmount = EthereumUtils.encodeUint256(amount)
+        val callData = "0x" + functionSelector.removePrefix("0x") + encodedSpender + encodedAmount
+        return SafeTransaction(
+            to = usdcContractAddress,
+            operation = 0,  // CALL
+            data = callData,
+            value = "0"
+        )
+    }
+
+    /**
+     * 创建 MultiSend 交易（合并多个 SafeTransaction 为一笔交易）
+     * 参考 TypeScript: builder-relayer-client/src/encode/safe.ts createSafeMultisendTransaction
+     *
+     * 使用 Gnosis Safe 的 MultiSend 合约将多个交易合并为一笔 DelegateCall 交易
+     *
+     * @param safeTxs 多个 Safe 交易
+     * @return 合并后的 MultiSend 交易（operation = 1 = DelegateCall）
+     */
+    fun createMultiSendTx(safeTxs: List<SafeTransaction>): SafeTransaction {
+        if (safeTxs.isEmpty()) {
+            throw IllegalArgumentException("safeTxs 不能为空")
+        }
+
+        // 单个交易直接返回，不需要 MultiSend
+        if (safeTxs.size == 1) {
+            logger.debug("单个交易，不使用 MultiSend")
+            return safeTxs.first()
+        }
+
+        logger.debug("创建 MultiSend 交易: ${safeTxs.size} 个交易待合并")
+
+        // MultiSend 函数选择器：multiSend(bytes)
+        val multiSendSelector = EthereumUtils.getFunctionSelector("multiSend(bytes)")
+
+        // 编码每个交易：encodePacked([uint8 operation, address to, uint256 value, uint256 dataLength, bytes data])
+        // 与 builder-relayer-client encode/safe.ts 完全一致
+        val encodedTransactions = safeTxs.map { tx ->
+            val operation = tx.operation.toByte()
+            // address: 20 字节，右对齐（取最后 40 个十六进制字符）
+            val toHex = tx.to.removePrefix("0x").lowercase().padStart(40, '0').takeLast(40)
+            val to = EthereumUtils.hexToBytes(toHex)
+            // value: 32 字节大端
+            val valueHex = BigInteger(tx.value).toString(16).padStart(64, '0')
+            val value = EthereumUtils.hexToBytes(valueHex)
+
+            val dataBytes = EthereumUtils.hexToBytes(tx.data.removePrefix("0x"))
+            // dataLength: 32 字节大端，表示 data 的字节数
+            val dataLengthHex = BigInteger.valueOf(dataBytes.size.toLong()).toString(16).padStart(64, '0')
+            val dataLength = EthereumUtils.hexToBytes(dataLengthHex)
+
+            // encodePacked: operation(1) + to(20) + value(32) + dataLength(32) + data(variable)
+            byteArrayOf(operation) + to + value + dataLength + dataBytes
+        }
+
+        // 拼接所有交易（无 padding，与 viem concatHex 一致）
+        val concatenatedTransactions = encodedTransactions.reduce { acc, bytes -> acc + bytes }
+        val totalDataLength = concatenatedTransactions.size
+
+        // multiSend(bytes) 的 ABI 编码：offset(32) + length(32) + data(按 32 字节对齐 padding)
+        val paddedLength = ((totalDataLength + 31) / 32) * 32
+        val paddedData = concatenatedTransactions + ByteArray(paddedLength - totalDataLength)
+
+        val encodedOffset = EthereumUtils.encodeUint256(BigInteger.valueOf(32))
+        val encodedLength = EthereumUtils.encodeUint256(BigInteger.valueOf(totalDataLength.toLong()))
+        val encodedData = paddedData.joinToString("") { "%02x".format(it) }
+
+        val callData = "0x" + multiSendSelector.removePrefix("0x") + encodedOffset + encodedLength + encodedData
+
+        return SafeTransaction(
+            to = safeMultisendAddress,
+            operation = 1,  // DelegateCall
             data = callData,
             value = "0"
         )
@@ -294,9 +474,10 @@ class RelayClientService(
         val credentials = org.web3j.crypto.Credentials.create(privateKeyBigInt.toString(16))
         val fromAddress = credentials.address
 
-        val relayPayloadResponse = relayerApi.getRelayPayload(fromAddress, RELAYER_TYPE_PROXY)
+        val relayPayloadResponse = withBuilderRelayerRateLimitRetry { relayerApi.getRelayPayload(fromAddress, RELAYER_TYPE_PROXY) }
         if (!relayPayloadResponse.isSuccessful || relayPayloadResponse.body() == null) {
             val errorBody = relayPayloadResponse.errorBody()?.string() ?: "未知错误"
+            updateQuotaBlockedFromErrorBody(errorBody)
             logger.error("获取 Relay Payload 失败: code=${relayPayloadResponse.code()}, body=$errorBody")
             return Result.failure(Exception("获取 Relay Payload 失败: ${relayPayloadResponse.code()} - $errorBody"))
         }
@@ -360,9 +541,10 @@ class RelayClientService(
             metadata = "Redeem positions via Builder Relayer PROXY"
         )
 
-        val response = relayerApi.submitTransaction(request)
+        val response = withBuilderRelayerRateLimitRetry { relayerApi.submitTransaction(request) }
         if (!response.isSuccessful || response.body() == null) {
             val errorBody = response.errorBody()?.string() ?: "未知错误"
+            updateQuotaBlockedFromErrorBody(errorBody)
             logger.error("Builder Relayer PROXY API 调用失败: code=${response.code()}, body=$errorBody")
             return Result.failure(Exception("Builder Relayer PROXY 调用失败: ${response.code()} - $errorBody"))
         }
@@ -524,14 +706,26 @@ class RelayClientService(
         // safeTx.data 已经是带 0x 前缀的完整调用数据
         val redeemCallData = safeTx.data
 
-        // 获取 Proxy 的 nonce（通过 Builder Relayer API）
-        val nonceResponse = relayerApi.getNonce(fromAddress, RELAYER_TYPE_SAFE)
+        // 获取 Proxy 的 nonce（通过 Builder Relayer API，遇 429 限流时重试）
+        val nonceResponse = withBuilderRelayerRateLimitRetry { relayerApi.getNonce(fromAddress, RELAYER_TYPE_SAFE) }
         if (!nonceResponse.isSuccessful || nonceResponse.body() == null) {
             val errorBody = nonceResponse.errorBody()?.string() ?: "未知错误"
+            updateQuotaBlockedFromErrorBody(errorBody)
             logger.error("获取 nonce 失败: code=${nonceResponse.code()}, body=$errorBody")
             return Result.failure(Exception("获取 nonce 失败: ${nonceResponse.code()} - $errorBody"))
         }
         val proxyNonce = BigInteger(nonceResponse.body()!!.nonce)
+
+        // 调试 GS026：记录 nonce 与交易参数，便于与 relayer/链上对比
+        logger.debug(
+            "Safe exec 签名参数: nonce={}, to={}, value={}, dataLen={}, operation={}, proxyWallet={}",
+            proxyNonce,
+            safeTx.to,
+            safeTx.value,
+            redeemCallData.removePrefix("0x").length / 2,
+            safeTx.operation,
+            proxyAddress
+        )
 
         // 构建 Safe 交易哈希并签名
         // 注意：encodeSafeTx 需要 data 带 0x 前缀
@@ -564,6 +758,12 @@ class RelayClientService(
             messageHash = safeTxHash
         )
 
+        // 调试 GS026：记录 EIP-712 structHash 与最终签名的 hash（可与 Safe.getTransactionHash 对比）
+        logger.debug(
+            "Safe exec 哈希: structHash=0x{}, hashToSign 将基于 prefix+structHash 的 keccak256",
+            safeTxStructuredHash.joinToString("") { "%02x".format(it) }
+        )
+
         // 注意：ethers.js 的 signMessage 会添加 EIP-191 前缀
         // 格式：\x19Ethereum Signed Message:\n<length><message>
         // 我们需要模拟这个行为以匹配 TypeScript 实现
@@ -578,16 +778,16 @@ class RelayClientService(
         val hashWithPrefix = ByteArray(keccak256.digestSize)
         keccak256.doFinal(hashWithPrefix, 0)
 
+        logger.debug(
+            "Safe exec hashToSign=0x{} (personal_sign 后签名的 32 字节)",
+            hashWithPrefix.joinToString("") { "%02x".format(it) }
+        )
+
         val ecKeyPair = org.web3j.crypto.ECKeyPair.create(privateKeyBigInt)
         val safeSignature = org.web3j.crypto.Sign.signMessage(hashWithPrefix, ecKeyPair, false)
 
         // 打包签名（参考 builder-relayer-client/src/utils/index.ts 的 splitAndPackSig）
         val packedSignature = splitAndPackSig(safeSignature)
-
-        // 调试日志（地址已遮蔽）
-        logger.debug("=== Builder Relayer 签名调试 ===")
-        logger.debug("Safe: ${proxyAddress.take(10)}..., From: ${fromAddress.take(10)}..., Nonce: $proxyNonce")
-        logger.debug("Signature Length: ${packedSignature.length}")
 
         // 构建 TransactionRequest（参考 builder-relayer-client/src/builder/safe.ts）
         // 注意：根据 TypeScript 实现，data 和 signature 都应该带 0x 前缀
@@ -607,16 +807,19 @@ class RelayClientService(
                 gasToken = gasToken,
                 refundReceiver = refundReceiver
             ),
-            metadata = "Redeem positions via Builder Relayer"
+            metadata = if (safeTx.operation == 1) {
+                "MultiSend redeem positions via Builder Relayer"
+            } else {
+                "Redeem positions via Builder Relayer"
+            }
         )
 
-        logger.debug("Request: type=${request.type}, dataLen=${request.data.length}, sigLen=${request.signature.length}, nonce=${request.nonce}")
-
-        // 调用 Builder Relayer API（认证头通过拦截器添加）
-        val response = relayerApi.submitTransaction(request)
+        // 调用 Builder Relayer API（认证头通过拦截器添加，遇 429 限流时重试）
+        val response = withBuilderRelayerRateLimitRetry { relayerApi.submitTransaction(request) }
 
         if (!response.isSuccessful || response.body() == null) {
             val errorBody = response.errorBody()?.string() ?: "未知错误"
+            updateQuotaBlockedFromErrorBody(errorBody)
             logger.error("Builder Relayer API 调用失败: code=${response.code()}, body=$errorBody")
             return Result.failure(Exception("Builder Relayer API 调用失败: ${response.code()} - $errorBody"))
         }
@@ -627,6 +830,104 @@ class RelayClientService(
 
         logger.info("Builder Relayer 执行成功: transactionID=${relayerResponse.transactionID}, txHash=$txHash")
         return Result.success(txHash)
+    }
+
+    /**
+     * 通过 Builder Relayer 部署 Safe 代理（SAFE-CREATE）
+     * 参考: builder-relayer-client client.ts deploy()、builder/create.ts buildSafeCreateTransactionRequest
+     *
+     * @param privateKey EOA 私钥
+     * @param proxyAddress 待部署的 Safe 代理地址（与 getProxyAddress 一致）
+     * @param fromAddress EOA 地址（from）
+     * @return 交易哈希
+     */
+    suspend fun deploySafeViaBuilderRelayer(
+        privateKey: String,
+        proxyAddress: String,
+        fromAddress: String
+    ): Result<String> {
+        return try {
+            val builderApiKey = systemConfigService.getBuilderApiKey()
+            val builderSecret = systemConfigService.getBuilderSecret()
+            val builderPassphrase = systemConfigService.getBuilderPassphrase()
+            if (!isBuilderRelayerEnabled(builderApiKey, builderSecret, builderPassphrase)) {
+                return Result.failure(IllegalStateException("Builder API Key 未配置，无法执行 Safe 部署"))
+            }
+            val relayerApi = retrofitFactory.createBuilderRelayerApi(
+                relayerUrl = PolymarketConstants.BUILDER_RELAYER_URL,
+                apiKey = builderApiKey!!,
+                secret = builderSecret!!,
+                passphrase = builderPassphrase!!
+            )
+            val zeroAddress = "0x0000000000000000000000000000000000000000"
+            val paymentToken = zeroAddress
+            val payment = "0"
+            val paymentReceiver = zeroAddress
+            val domainSeparator = Eip712Encoder.encodeSafeCreateDomain(
+                name = PolymarketConstants.SAFE_FACTORY_EIP712_NAME,
+                chainId = 137L,
+                verifyingContract = safeProxyFactoryAddress
+            )
+            val createProxyHash = Eip712Encoder.encodeCreateProxyMessage(
+                paymentToken = paymentToken,
+                payment = BigInteger.ZERO,
+                paymentReceiver = paymentReceiver
+            )
+            val digest = Eip712Encoder.hashStructuredData(domainSeparator, createProxyHash)
+            val cleanPrivateKey = privateKey.removePrefix("0x")
+            val privateKeyBigInt = BigInteger(cleanPrivateKey, 16)
+            val ecKeyPair = org.web3j.crypto.ECKeyPair.create(privateKeyBigInt)
+            val signature = org.web3j.crypto.Sign.signMessage(digest, ecKeyPair, false)
+            // SAFE-CREATE 使用标准 EIP-712 签名格式（0x + r + s + v，v 为 27/28），与 signTypedData 一致
+            val signatureHex = signatureToStandardHex(signature)
+            val request = BuilderRelayerApi.TransactionRequest(
+                type = RELAYER_TYPE_SAFE_CREATE,
+                from = fromAddress,
+                to = safeProxyFactoryAddress,
+                proxyWallet = proxyAddress,
+                data = "0x",
+                nonce = null,
+                signature = signatureHex,
+                signatureParams = BuilderRelayerApi.SignatureParams(
+                    paymentToken = paymentToken,
+                    payment = payment,
+                    paymentReceiver = paymentReceiver
+                ),
+                metadata = null
+            )
+            val response = withBuilderRelayerRateLimitRetry { relayerApi.submitTransaction(request) }
+            if (!response.isSuccessful || response.body() == null) {
+                val errorBody = response.errorBody()?.string() ?: "未知错误"
+                updateQuotaBlockedFromErrorBody(errorBody)
+                logger.error("Builder Relayer SAFE-CREATE 失败: code=${response.code()}, body=$errorBody")
+                return Result.failure(Exception("部署 Safe 失败: ${response.code()} - $errorBody"))
+            }
+            val relayerResponse = response.body()!!
+            val txHash = relayerResponse.transactionHash ?: relayerResponse.hash
+                ?: return Result.failure(Exception("Builder Relayer 返回的交易哈希为空"))
+            logger.info("Safe 部署成功: proxy=$proxyAddress, txHash=$txHash")
+            Result.success(txHash)
+        } catch (e: Exception) {
+            logger.error("部署 Safe 失败: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 将 SignatureData 转为标准 hex 签名（0x + r(64) + s(64) + v(2)，v 为 27/28）
+     * 用于 SAFE-CREATE，与 viem signTypedData 输出格式一致
+     */
+    private fun signatureToStandardHex(signature: org.web3j.crypto.Sign.SignatureData): String {
+        val rHex = org.web3j.utils.Numeric.toHexString(signature.r).removePrefix("0x").padStart(64, '0')
+        val sHex = org.web3j.utils.Numeric.toHexString(signature.s).removePrefix("0x").padStart(64, '0')
+        val vBytes = signature.v
+        val v = if (vBytes != null && vBytes.isNotEmpty()) {
+            vBytes[0].toInt() and 0xff
+        } else {
+            27
+        }
+        val vHex = String.format("%02x", v)
+        return "0x$rHex$sHex$vHex"
     }
 
     /**

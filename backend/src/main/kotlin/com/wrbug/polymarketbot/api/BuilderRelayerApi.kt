@@ -92,7 +92,7 @@ interface BuilderRelayerApi {
         val data: String,  // 调用数据（十六进制字符串，带 0x 前缀）
         
         @SerializedName("nonce")
-        val nonce: String,  // Safe nonce（字符串）
+        val nonce: String? = null,  // Safe nonce（SAFE 必填，SAFE-CREATE 不传）
         
         @SerializedName("signature")
         val signature: String,  // Safe 签名（packed signature，十六进制字符串，带 0x 前缀）
@@ -138,7 +138,17 @@ interface BuilderRelayerApi {
         val relayHub: String? = null,
         
         @SerializedName("relay")
-        val relay: String? = null
+        val relay: String? = null,
+
+        /** SAFE-CREATE 签名参数 */
+        @SerializedName("paymentToken")
+        val paymentToken: String? = null,
+
+        @SerializedName("payment")
+        val payment: String? = null,
+
+        @SerializedName("paymentReceiver")
+        val paymentReceiver: String? = null
     )
     
     /**

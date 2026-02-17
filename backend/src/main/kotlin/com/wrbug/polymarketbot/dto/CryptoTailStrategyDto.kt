@@ -15,8 +15,12 @@ data class CryptoTailStrategyCreateRequest(
     val maxPrice: String? = null,
     val amountMode: String = "RATIO",
     val amountValue: String = "0",
-    val minSpreadMode: String = "NONE",
-    val minSpreadValue: String? = null,
+    /** 价差模式: NONE, FIXED, AUTO */
+    val spreadMode: String = "NONE",
+    /** 价差数值 */
+    val spreadValue: String? = null,
+    /** 价差方向: MIN=最小价差, MAX=最大价差 */
+    val spreadDirection: String = "MIN",
     val enabled: Boolean = true
 )
 
@@ -32,8 +36,12 @@ data class CryptoTailStrategyUpdateRequest(
     val maxPrice: String? = null,
     val amountMode: String? = null,
     val amountValue: String? = null,
-    val minSpreadMode: String? = null,
-    val minSpreadValue: String? = null,
+    /** 价差模式: NONE, FIXED, AUTO */
+    val spreadMode: String? = null,
+    /** 价差数值 */
+    val spreadValue: String? = null,
+    /** 价差方向: MIN=最小价差, MAX=最大价差 */
+    val spreadDirection: String? = null,
     val enabled: Boolean? = null
 )
 
@@ -61,8 +69,12 @@ data class CryptoTailStrategyDto(
     val maxPrice: String = "1",
     val amountMode: String = "RATIO",
     val amountValue: String = "0",
-    val minSpreadMode: String = "NONE",
-    val minSpreadValue: String? = null,
+    /** 价差模式: NONE, FIXED, AUTO */
+    val spreadMode: String = "NONE",
+    /** 价差数值 */
+    val spreadValue: String? = null,
+    /** 价差方向: MIN=最小价差（价差>=配置值触发）, MAX=最大价差（价差<=配置值触发） */
+    val spreadDirection: String = "MIN",
     val enabled: Boolean = true,
     val lastTriggerAt: Long? = null,
     /** 已实现总收益 USDC（已结算订单的 realizedPnl 之和） */
@@ -138,7 +150,7 @@ data class CryptoTailStrategyTriggerListResponse(
 )
 
 /**
- * 自动最小价差计算响应（按 30 根历史 K 线 + IQR 剔除后 × 0.7）
+ * 自动价差计算响应（按 30 根历史 K 线 + IQR 剔除后 × 0.7）
  */
 data class CryptoTailAutoMinSpreadResponse(
     val minSpreadUp: String = "0",

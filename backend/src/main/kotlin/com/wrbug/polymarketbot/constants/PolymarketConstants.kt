@@ -44,5 +44,14 @@ object PolymarketConstants {
      * 用于 Gasless 交易
      */
     const val BUILDER_RELAYER_URL = "https://relayer-v2.polymarket.com/"
+
+    /**
+     * Polymarket Safe 代理工厂合约地址（Polygon 主网）
+     * 用于 Safe 类型账户的代理部署（SAFE-CREATE）
+     */
+    const val SAFE_PROXY_FACTORY_ADDRESS = "0xaacFeEa03eb1561C4e67d661e40682Bd20E3541b"
+
+    /** SafeCreate 用 EIP-712 domain name，与 builder-relayer-client 一致 */
+    const val SAFE_FACTORY_EIP712_NAME = "Polymarket Contract Proxy Factory"
 }
 

@@ -215,13 +215,28 @@ export const apiService = {
     /**
      * 导入账户
      */
-    import: (data: any) => 
+    import: (data: any) =>
       apiClient.post<ApiResponse<any>>('/accounts/import', data),
+    
+    /**
+     * 检查账户设置状态
+     */
+    checkSetupStatus: (accountId: number) =>
+      apiClient.post<ApiResponse<any>>('/accounts/check-setup-status', { accountId }),
+
+    /**
+     * 执行设置步骤（步骤1 返回跳转 URL，步骤2/3 由后端执行）
+     */
+    executeSetupStep: (accountId: number, step: number) =>
+      apiClient.post<ApiResponse<{ success: boolean; redirectUrl?: string; transactionHash?: string }>>(
+        '/accounts/execute-setup-step',
+        { accountId, step }
+      ),
     
     /**
      * 更新账户
      */
-    update: (data: any) => 
+    update: (data: any) =>
       apiClient.post<ApiResponse<any>>('/accounts/update', data),
     
     /**
@@ -447,8 +462,9 @@ export const apiService = {
       maxPrice?: string
       amountMode: string
       amountValue: string
-      minSpreadMode?: string
-      minSpreadValue?: string | null
+      spreadMode?: string
+      spreadValue?: string | null
+      spreadDirection?: string
       enabled?: boolean
     }) =>
       apiClient.post<ApiResponse<import('../types').CryptoTailStrategyDto>>('/crypto-tail-strategy/create', data),
@@ -461,8 +477,9 @@ export const apiService = {
       maxPrice?: string
       amountMode?: string
       amountValue?: string
-      minSpreadMode?: string
-      minSpreadValue?: string | null
+      spreadMode?: string
+      spreadValue?: string | null
+      spreadDirection?: string
       enabled?: boolean
     }) =>
       apiClient.post<ApiResponse<import('../types').CryptoTailStrategyDto>>('/crypto-tail-strategy/update', data),

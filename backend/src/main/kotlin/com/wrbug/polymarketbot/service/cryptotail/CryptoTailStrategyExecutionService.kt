@@ -6,6 +6,8 @@ import com.wrbug.polymarketbot.api.PolymarketClobApi
 import com.wrbug.polymarketbot.entity.Account
 import com.wrbug.polymarketbot.entity.CryptoTailStrategy
 import com.wrbug.polymarketbot.entity.CryptoTailStrategyTrigger
+import com.wrbug.polymarketbot.enums.SpreadMode
+import com.wrbug.polymarketbot.enums.SpreadDirection
 import com.wrbug.polymarketbot.repository.AccountRepository
 import com.wrbug.polymarketbot.repository.CryptoTailStrategyRepository
 import com.wrbug.polymarketbot.repository.CryptoTailStrategyTriggerRepository
@@ -33,6 +35,9 @@ import java.util.regex.Pattern
 
 /** 尾盘策略固定下单价格（最高价 0.99），不再在触发时拉取最优价 */
 private const val TRIGGER_FIXED_PRICE = "0.99"
+
+/** 最大价差模式（MAX）时，买入价格调整系数（加在触发价格上） */
+private const val SPREAD_MAX_PRICE_ADJUSTMENT = "0.02"
 
 /** 数量小数位数，与 OrderSigningService 的 roundConfig.size 一致 */
 private const val SIZE_DECIMAL_SCALE = 2
@@ -190,51 +195,58 @@ class CryptoTailStrategyExecutionService(
                 val closePrice = oc?.second?.toPlainString() ?: "-"
                 val strategyName = strategy.name?.takeIf { it.isNotBlank() } ?: "尾盘策略-${strategy.marketSlugPrefix}"
                 val direction = if (outcomeIndex == 0) "Up" else "Down"
+                val modeStr = if (strategy.spreadDirection == SpreadDirection.MAX) "最大价差" else "最小价差"
                 logger.info(
                     "尾盘策略首次满足条件: strategyName=$strategyName, strategyId=${strategy.id}, " +
                         "openPrice=$openPrice, closePrice=$closePrice, marketPrice=${bestBid.toPlainString()}, " +
-                        "direction=$direction, outcomeIndex=$outcomeIndex"
+                        "direction=$direction, outcomeIndex=$outcomeIndex, spreadMode=$modeStr"
                 )
             }
-            if (!passMinSpreadCheck(strategy, periodStartUnix, outcomeIndex)) return@withLock
+            if (!passSpreadCheck(strategy, periodStartUnix, outcomeIndex)) return@withLock
             ensurePeriodContext(strategy, periodStartUnix, tokenIds, marketTitle)
             placeOrderForTrigger(strategy, periodStartUnix, marketTitle, tokenIds, outcomeIndex, bestBid)
         }
     }
 
-    private fun passMinSpreadCheck(strategy: CryptoTailStrategy, periodStartUnix: Long, outcomeIndex: Int): Boolean {
-        val mode = strategy.minSpreadMode.uppercase()
-        if (mode == "NONE") return true
+    private fun passSpreadCheck(strategy: CryptoTailStrategy, periodStartUnix: Long, outcomeIndex: Int): Boolean {
+        if (strategy.spreadMode == SpreadMode.NONE) return true
         val oc = binanceKlineService.getCurrentOpenClose(strategy.intervalSeconds, periodStartUnix)
             ?: return false
         val (openP, closeP) = oc
         val spreadAbs = closeP.subtract(openP).abs()
-        when (mode) {
-            "FIXED" -> {
-                val effectiveMinSpread = strategy.minSpreadValue?.takeIf { it > BigDecimal.ZERO }
-                if (effectiveMinSpread == null || effectiveMinSpread <= BigDecimal.ZERO) return true
-                return spreadAbs >= effectiveMinSpread
+        
+        // 获取有效价差
+        val effectiveSpread = when (strategy.spreadMode) {
+            SpreadMode.FIXED -> {
+                strategy.spreadValue?.takeIf { it > BigDecimal.ZERO } ?: return true
             }
-            "AUTO" -> {
-                val result = computeAutoEffectiveMinSpread(strategy, periodStartUnix, outcomeIndex) ?: return true
-                val effectiveMinSpread = result.effectiveMinSpread
-                if (effectiveMinSpread <= BigDecimal.ZERO) return true
-                return spreadAbs >= effectiveMinSpread
+            SpreadMode.AUTO -> {
+                val result = computeAutoEffectiveSpread(strategy, periodStartUnix, outcomeIndex) ?: return true
+                result.effectiveSpread.takeIf { it > BigDecimal.ZERO } ?: return true
             }
-            else -> return true
+            SpreadMode.NONE -> return true
+        }
+        
+        // 根据价差方向判断
+        return if (strategy.spreadDirection == SpreadDirection.MAX) {
+            // 最大价差模式：价差 <= 配置值时触发
+            spreadAbs <= effectiveSpread
+        } else {
+            // 最小价差模式：价差 >= 配置值时触发
+            spreadAbs >= effectiveSpread
         }
     }
 
     /**
-     * AUTO 模式：取 100% 基准价差，按窗口内毫秒进度计算动态系数（100%→50%）得到有效最小价差。
+     * AUTO 模式：取 100% 基准价差，按窗口内毫秒进度计算动态系数（100%→50%）得到有效价差。
      */
     private data class AutoSpreadResult(
         val baseSpread: BigDecimal,
         val coefficient: BigDecimal,
-        val effectiveMinSpread: BigDecimal
+        val effectiveSpread: BigDecimal
     )
 
-    private fun computeAutoEffectiveMinSpread(strategy: CryptoTailStrategy, periodStartUnix: Long, outcomeIndex: Int): AutoSpreadResult? {
+    private fun computeAutoEffectiveSpread(strategy: CryptoTailStrategy, periodStartUnix: Long, outcomeIndex: Int): AutoSpreadResult? {
         val baseSpread = binanceKlineAutoSpreadService.getAutoMinSpreadBase(strategy.intervalSeconds, periodStartUnix, outcomeIndex)
             ?: binanceKlineAutoSpreadService.computeAndCache(strategy.intervalSeconds, periodStartUnix)?.let { if (outcomeIndex == 0) it.first else it.second }
             ?: return null
@@ -251,8 +263,8 @@ class CryptoTailStrategyExecutionService(
                 .let { p -> maxOf(BigDecimal.ZERO, minOf(BigDecimal.ONE, p)) }
             BigDecimal.ONE.subtract(progress.multi("0.5"))
         }
-        val effectiveMinSpread = baseSpread.multi(coefficient).setScale(8, RoundingMode.HALF_UP)
-        return AutoSpreadResult(baseSpread, coefficient, effectiveMinSpread)
+        val effectiveSpread = baseSpread.multi(coefficient).setScale(8, RoundingMode.HALF_UP)
+        return AutoSpreadResult(baseSpread, coefficient, effectiveSpread)
     }
 
     private suspend fun placeOrderForTrigger(
@@ -284,7 +296,15 @@ class CryptoTailStrategyExecutionService(
                 return
             }
 
-            val price = BigDecimal(TRIGGER_FIXED_PRICE)
+            // 根据价差方向确定下单价格
+            val price = if (strategy.spreadDirection == SpreadDirection.MAX) {
+                // 最大价差模式：触发价格 + 0.02
+                triggerPrice.add(BigDecimal(SPREAD_MAX_PRICE_ADJUSTMENT)).setScale(8, RoundingMode.HALF_UP)
+            } else {
+                // 最小价差模式：固定价格 0.99
+                BigDecimal(TRIGGER_FIXED_PRICE)
+            }
+            val priceStr = price.toPlainString()
             val size = computeSize(amountUsdc, price)
             val feeRateBps = ctx.feeRateByTokenId[tokenId] ?: "0"
             val signedOrder = orderSigningService.createAndSignOrder(
@@ -292,7 +312,7 @@ class CryptoTailStrategyExecutionService(
                 makerAddress = ctx.account.proxyAddress,
                 tokenId = tokenId,
                 side = "BUY",
-                price = TRIGGER_FIXED_PRICE,
+                price = priceStr,
                 size = size,
                 signatureType = ctx.signatureType,
                 nonce = "0",
@@ -335,7 +355,7 @@ class CryptoTailStrategyExecutionService(
                 failReason = body.errorMsg ?: "unknown"
             } else {
                 val errorBody = response.errorBody()?.string().orEmpty()
-                failReason = "HTTP ${response.code()} $errorBody"
+                failReason = errorBody.ifEmpty { "请求失败" }
             }
         } catch (e: Exception) {
             failReason = e.message ?: e.toString()
@@ -380,7 +400,16 @@ class CryptoTailStrategyExecutionService(
             saveTriggerRecord(strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, amountUsdc, null, "fail", "tokenIds 越界")
             return
         }
-        val price = BigDecimal(TRIGGER_FIXED_PRICE)
+
+        // 根据价差方向确定下单价格
+        val price = if (strategy.spreadDirection == SpreadDirection.MAX) {
+            // 最大价差模式：触发价格 + 0.02
+            triggerPrice.add(BigDecimal(SPREAD_MAX_PRICE_ADJUSTMENT)).setScale(8, RoundingMode.HALF_UP)
+        } else {
+            // 最小价差模式：固定价格 0.99
+            BigDecimal(TRIGGER_FIXED_PRICE)
+        }
+        val priceStr = price.toPlainString()
         val size = computeSize(amountUsdc, price)
 
         val decryptedKey = try {
@@ -405,7 +434,7 @@ class CryptoTailStrategyExecutionService(
             makerAddress = account.proxyAddress,
             tokenId = tokenId,
             side = "BUY",
-            price = TRIGGER_FIXED_PRICE,
+            price = priceStr,
             size = size,
             signatureType = signatureType,
             nonce = "0",
