@@ -539,7 +539,7 @@ const CryptoTailStrategyList: React.FC = () => {
   const getGuideUrl = () => {
     const { githubRepoUrl } = getVersionInfo()
     const lang = i18n.language === 'zh-CN' || i18n.language === 'zh-TW' ? 'zh' : 'en'
-    return `${githubRepoUrl}/blob/main/docs/${lang}/crypto-tail-strategy-user-guide.md`
+    return `${githubRepoUrl}/blob/main/docs/crypto-tail-strategy/${lang}/crypto-tail-strategy-user-guide.md`
   }
 
   return (

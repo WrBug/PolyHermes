@@ -120,16 +120,24 @@ Cycle Start → Within Time Window → Price Enters Range → Auto Order
 - Minimum order amount: At least 1 USDC
 - If account balance is insufficient, order will fail and record failure reason
 
-### 3.5 Minimum Spread (Advanced Feature)
+### 3.5 Spread Filter (Advanced Feature)
 
-The minimum spread feature filters market volatility, only triggering when Binance BTC/USDC price movement reaches a certain magnitude.
+The spread filter controls whether to trigger based on Binance BTC/USDC K-line volatility. It supports two directions: **Minimum spread** and **Maximum spread**.
 
 | Parameter | Description | Required | Example |
 |-----------|-------------|----------|---------|
-| **Minimum Spread Mode** | Choose spread validation method | ✅ | None / Fixed / Auto |
-| **Minimum Spread Value** | Fill when using Fixed mode | Conditionally required | 30 |
+| **Spread Mode** | Choose spread validation method | ✅ | None / Fixed / Auto |
+| **Spread Direction** | Min spread (trigger when ≥) or Max spread (trigger when ≤) | ✅ | Min spread / Max spread |
+| **Spread Value** | Fill when using Fixed mode (unit: USDC) | Conditionally required | 30 |
 
-**Three Mode Explanations**:
+**Spread Direction**:
+
+- **Min spread**: Triggers only when Binance K-line spread **≥** the set value  
+  - Use when you want to trade only when volatility is "large enough" (avoid entering when volatility is too small).
+- **Max spread**: Triggers only when Binance K-line spread **≤** the set value  
+  - Use when you want to trade only when volatility is "small enough" (avoid entering when volatility is too high).
+
+**Three Spread Modes**:
 
 **Mode 1: None (NONE)**
 - No spread validation
@@ -137,26 +145,28 @@ The minimum spread feature filters market volatility, only triggering when Binan
 - **Suitable for**: Not concerned about Binance price volatility, only watching Polymarket price
 
 **Mode 2: Fixed (FIXED)**
-- Set a fixed minimum spread value (unit: USDC)
-- Only triggers when Binance BTC/USDC K-line spread (|close price - open price|) ≥ set value
-- **Example**: Set to 30
-  - Binance K-line spread ≥ 30 in cycle: Triggered ✅
-  - Binance K-line spread < 30 in cycle: Not triggered
-- **Suitable for**: You know the expected spread threshold
+- Set a fixed spread value (unit: USDC)
+- **Min spread**: Triggers when K-line spread ≥ set value  
+  - Example: Set 30, spread ≥ 30 → triggered ✅, spread < 30 → not triggered
+- **Max spread**: Triggers when K-line spread ≤ set value  
+  - Example: Set 50, spread ≤ 50 → triggered ✅, spread > 50 → not triggered
+- **Suitable for**: You have a clear spread threshold in mind
 
 **Mode 3: Auto (AUTO)**
-- System automatically calculates minimum spread based on historical 20 K-lines
+- System automatically calculates an effective spread from the last 20 K-lines
 - Calculation logic:
   1. Get recent 20 K-lines (matching strategy cycle)
   2. Filter by direction (Up direction only looks at rising K-lines, Down direction only looks at falling K-lines)
   3. Remove outliers (using IQR method)
-  4. Calculate average spread × 0.8 as minimum spread
-- **Suitable for**: Want automatic adjustment based on historical data, no manual setup needed
+  4. Calculate average spread × 0.8 as effective spread
+- **Min spread**: Triggers when K-line spread ≥ effective spread  
+- **Max spread**: Triggers when K-line spread ≤ effective spread
+- **Suitable for**: Want automatic adjustment based on historical data without setting a specific value
 
 **Spread Explanation**:
-- Spread = |close price - open price|
+- Spread = |close price - open price| (Binance BTC/USDC for that K-line)
 - Example: Open price 50000, close price 50030, spread = 30
-- Larger spread indicates greater price volatility in that cycle
+- Larger spread means greater price volatility in that cycle
 
 ---
 
@@ -176,7 +186,7 @@ Minimum Price: 0.00
 Maximum Price: 0.60
 Investment Mode: Fixed Amount
 Fixed Amount: 10 USDC
-Minimum Spread Mode: None
+Spread Mode: None
 Enabled: On
 ```
 
@@ -200,7 +210,7 @@ Minimum Price: 0.40
 Maximum Price: 0.70
 Investment Mode: By Ratio
 Ratio: 15%
-Minimum Spread Mode: None
+Spread Mode: None
 Enabled: On
 ```
 
@@ -224,15 +234,16 @@ Minimum Price: 0.50
 Maximum Price: 0.80
 Investment Mode: Fixed Amount
 Fixed Amount: 20 USDC
-Minimum Spread Mode: Fixed
-Minimum Spread Value: 50
+Spread Mode: Fixed
+Spread Direction: Min spread
+Spread Value: 50
 Enabled: On
 ```
 
 **Explanation**:
 - 10 ~ 14 minutes after cycle start: Only triggers when both conditions are met:
   1. Price is between 0.50 ~ 0.80 ✅
-  2. Binance BTC/USDC spread ≥ 50 ✅
+  2. Spread direction is "Min spread" and Binance spread ≥ 50 ✅
 - If spread is only 30, won't trigger even if price condition is met
 
 ---
@@ -251,15 +262,16 @@ Minimum Price: 0.30
 Maximum Price: 0.90
 Investment Mode: By Ratio
 Ratio: 20%
-Minimum Spread Mode: Auto
+Spread Mode: Auto
+Spread Direction: Min spread
 Enabled: On
 ```
 
 **Explanation**:
-- System automatically calculates minimum spread based on historical 20 K-lines
+- System automatically calculates effective spread from the last 20 K-lines
 - 2 ~ 8 minutes after cycle start: Only triggers when both conditions are met:
   1. Price is between 0.30 ~ 0.90 ✅
-  2. Binance BTC/USDC spread ≥ system-calculated minimum spread ✅
+  2. Spread direction is "Min spread" and Binance spread ≥ system-calculated effective spread ✅
 
 ---
 
@@ -271,7 +283,7 @@ Enabled: On
 1. ✅ Current time is within the time window
 2. ✅ Market price is within [Minimum Price, Maximum Price] range
 3. ✅ This cycle hasn't triggered yet (maximum one trigger per cycle)
-4. ✅ If minimum spread is set, Binance spread must also meet the condition
+4. ✅ If spread filter is set, Binance spread and spread direction must both be satisfied
 
 ### Q2: Why didn't my strategy trigger?
 
@@ -279,7 +291,7 @@ Enabled: On
 1. **Time window incorrect**: Current time is not within the set time window
 2. **Price not in range**: Market price is not within [Minimum Price, Maximum Price] range
 3. **Already triggered this cycle**: This cycle has already triggered once, won't trigger again
-4. **Spread not met**: If minimum spread is set, Binance spread hasn't reached the requirement
+4. **Spread not met**: If spread filter is set, Binance spread or spread direction requirement is not satisfied
 5. **Insufficient account balance**: Account balance is less than the set investment amount
 6. **Strategy not enabled**: Check if strategy's enabled status is "On"
 
@@ -305,18 +317,22 @@ Enabled: On
 - Example: Set 10%, when account has 100 USDC, invest 10 USDC, after balance becomes 90 USDC, next trigger invests 9 USDC
 - Automatically adapts to balance changes
 
-### Q5: What's the use of the minimum spread feature?
+### Q5: What's the use of the spread filter feature?
 
-**A**: Minimum spread filters market volatility, only triggering when Binance BTC/USDC price movement reaches a certain magnitude.
+**A**: The spread filter decides whether to trigger based on Binance BTC/USDC K-line volatility. It supports two directions.
 
-**Scenario**:
-- If market volatility is small (spread < set value), may not be worth trading
-- By setting minimum spread, can avoid triggering when volatility is too small
+**Min spread** (trigger when spread **≥** set value):
+- Avoids triggering when volatility is too small
+- Example: Set 30, only triggers when spread ≥ 30
+
+**Max spread** (trigger when spread **≤** set value):
+- Avoids triggering when volatility is too high (lower risk)
+- Example: Set 50, only triggers when spread ≤ 50
 
 **Three mode selection suggestions**:
 - **None**: Not concerned about Binance price volatility, only watching Polymarket price
-- **Fixed**: You know the expected spread threshold (e.g., at least 30 USDC movement is worth trading)
-- **Auto**: Want automatic adjustment based on historical data, no manual setup needed
+- **Fixed**: You know the expected spread threshold (use with Min or Max spread direction)
+- **Auto**: Want effective spread calculated from historical data without setting a specific value
 
 ### Q6: Why is it recommended to use a separate wallet?
 
@@ -375,11 +391,12 @@ Enabled: On
 - ⚠️ Ensure sufficient account balance to avoid order failures
 - ⚠️ Ratio mode: Note the impact of account balance changes on investment amount
 
-### 6.5 Minimum Spread Settings
+### 6.5 Spread Filter Settings
 
-- ⚠️ Fixed mode: Need to fill reasonable spread value (unit: USDC)
-- ⚠️ Auto mode: System automatically calculates at cycle start, no manual setup needed
-- ⚠️ Setting spread too large may make strategy difficult to trigger
+- ⚠️ Spread direction: Min spread means "trigger when ≥"; Max spread means "trigger when ≤". Choose according to your need.
+- ⚠️ Fixed mode: Need to fill a reasonable spread value (unit: USDC)
+- ⚠️ Auto mode: System calculates effective spread within the window, no manual value needed
+- ⚠️ Overly strict spread (min spread too high or max spread too low) may make the strategy rarely trigger
 
 ### 6.6 Other Notes
 
@@ -420,7 +437,7 @@ You can modify strategy parameters at any time:
 - Time window
 - Price range
 - Investment mode
-- Minimum spread settings
+- Spread filter (mode, direction, value)
 - Enabled status
 
 **Note**: Modified strategies take effect in the next cycle.
@@ -441,7 +458,7 @@ Crypto Tail Strategy is a powerful automated trading tool that can help you:
 1. **Automated Trading**: No need for manual monitoring, system executes automatically
 2. **Precise Control**: Precisely control trigger conditions through time windows and price ranges
 3. **Flexible Configuration**: Supports both ratio and fixed amount investment modes
-4. **Risk Filtering**: Filter market volatility through minimum spread feature
+4. **Risk Filtering**: Control volatility conditions through spread filter (min spread / max spread)
 
 **Usage Recommendations**:
 - For first-time users, start with simple strategies (no spread filter)
