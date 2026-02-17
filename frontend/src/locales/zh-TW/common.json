@@ -13,6 +13,7 @@
     "success": "成功",
     "failed": "失敗",
     "confirm": "確認",
+    "later": "稍後",
     "submit": "提交",
     "reset": "重置",
     "close": "關閉",
@@ -236,6 +237,51 @@
       "error": "獲取失敗",
       "select": "選擇此代理地址"
     }
+  },
+  "accountSetup": {
+    "title": "帳戶設置檢查",
+    "completed": "已完成",
+    "pending": "待完成",
+    "refresh": "刷新狀態",
+    "allCompleted": {
+      "title": "所有設置已完成",
+      "description": "您的帳戶已準備就緒，可以開始使用所有功能。"
+    },
+    "incomplete": {
+      "title": "帳戶設置未完成",
+      "description": "請完成以下設置步驟，以確保帳戶可以正常使用。"
+    },
+    "step1": {
+      "title": "部署代理錢包",
+      "description": "代理錢包是您在 Polymarket 上進行交易的必要組件。Safe 帳戶可點擊下方按鈕由系統一鍵部署；Magic 帳戶將跳轉至 Polymarket 完成。",
+      "action": "部署代理錢包"
+    },
+    "step2": {
+      "title": "啟用交易",
+      "description": "需要配置 API 憑證才能進行交易。點擊下方按鈕由系統自動獲取並保存 API Key。",
+      "action": "一鍵啟用交易"
+    },
+    "step3": {
+      "title": "批准代幣",
+      "description": "需要授權代理錢包使用您的 USDC 代幣。點擊下方按鈕由系統自動完成代幣授權。",
+      "action": "一鍵批准代幣"
+    },
+    "approvalDetails": {
+      "title": "代幣授權詳情",
+      "CTF_CONTRACT": "CTF 合約",
+      "CTF_EXCHANGE": "CTF 交易所",
+      "NEG_RISK_EXCHANGE": "負風險交易所",
+      "NEG_RISK_ADAPTER": "負風險適配器",
+      "notApproved": "未授權",
+      "unlimited": "無限"
+    },
+    "error": {
+      "title": "檢查失敗",
+      "description": "無法檢查帳戶設置狀態，請稍後重試。"
+    },
+    "actionSuccess": "操作成功",
+    "actionFailed": "操作失敗，請稍後重試",
+    "help": "提示：完成設置後，點擊「刷新狀態」按鈕更新檢查結果。如果所有步驟都已完成，您可以正常使用帳戶功能。"
   },
   "leader": {
     "title": "Leader 管理",
@@ -1452,13 +1498,17 @@
       "update": "更新",
       "timeWindowStartLEEnd": "時間區間開始不能大於結束",
       "timeWindowExceed": "時間區間不能超過週期長度",
-      "minSpreadMode": "最小價差",
-      "minSpreadModeTip": "依當前週期開盤價與收盤價的價差決定是否下單。自動：系統依歷史 20 根 K 線計算建議價差（每週期更新）；固定：您輸入一個數值（如 30），僅當價差 ≥ 該值時才下單；無：不校驗價差，滿足價格區間即下單。",
-      "minSpreadModeNone": "無",
-      "minSpreadModeFixed": "固定",
-      "minSpreadModeAuto": "自動",
-      "minSpreadValue": "最小價差數值 (USDC)",
-      "minSpreadValuePlaceholder": "如 30"
+      "spreadMode": "價差",
+      "spreadModeTip": "依當前週期開盤價與收盤價的價差決定是否下單。自動：系統依歷史 20 根 K 線計算建議價差（每週期更新）；固定：您輸入一個數值（如 30）；無：不校驗價差，滿足價格區間即下單。",
+      "spreadModeNone": "無",
+      "spreadModeFixed": "固定",
+      "spreadModeAuto": "自動",
+      "spreadValue": "價差數值 (USDC)",
+      "spreadValuePlaceholder": "如 30",
+      "spreadDirection": "價差方向",
+      "spreadDirectionTip": "最小價差：價差 ≥ 配置值時觸發，買入價固定 0.99；最大價差：價差 ≤ 配置值時觸發，買入價 = 觸發價 + 0.02（適合低價買入）。",
+      "spreadDirectionMin": "最小價差",
+      "spreadDirectionMax": "最大價差"
     },
     "redeemRequiredModal": {
       "title": "請先配置自動贖回",

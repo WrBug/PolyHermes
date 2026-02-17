@@ -5,6 +5,7 @@ import com.wrbug.polymarketbot.api.EthereumRpcApi
 import com.wrbug.polymarketbot.api.JsonRpcRequest
 import com.wrbug.polymarketbot.constants.PolymarketConstants
 import com.wrbug.polymarketbot.enums.WalletType
+import com.wrbug.polymarketbot.util.Eip712Encoder
 import com.wrbug.polymarketbot.util.EthereumUtils
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.createClient
@@ -58,6 +59,10 @@ class RelayClientService(
     // Builder Relayer API 交易类型常量
     private val RELAYER_TYPE_PROXY = "PROXY"
     private val RELAYER_TYPE_SAFE = "SAFE"
+    private val RELAYER_TYPE_SAFE_CREATE = "SAFE-CREATE"
+
+    // Safe 代理工厂（用于 SAFE-CREATE 部署）
+    private val safeProxyFactoryAddress = PolymarketConstants.SAFE_PROXY_FACTORY_ADDRESS
 
     private val polygonRpcApi: EthereumRpcApi by lazy {
         val rpcUrl = rpcNodeService.getHttpUrl()
@@ -295,6 +300,23 @@ class RelayClientService(
         val callData = "0x" + functionSelector.removePrefix("0x") + encodedTo + encodedAmount
         return SafeTransaction(
             to = negRiskWrappedCollateralAddress,
+            operation = 0,  // CALL
+            data = callData,
+            value = "0"
+        )
+    }
+
+    /**
+     * 创建 USDC approve 交易（ERC20 approve(spender, amount)）
+     * 用于 Polymarket 设置步骤3：代币授权
+     */
+    fun createUsdcApproveTx(spender: String, amount: BigInteger): SafeTransaction {
+        val functionSelector = EthereumUtils.getFunctionSelector("approve(address,uint256)")
+        val encodedSpender = EthereumUtils.encodeAddress(spender)
+        val encodedAmount = EthereumUtils.encodeUint256(amount)
+        val callData = "0x" + functionSelector.removePrefix("0x") + encodedSpender + encodedAmount
+        return SafeTransaction(
+            to = usdcContractAddress,
             operation = 0,  // CALL
             data = callData,
             value = "0"
@@ -694,6 +716,17 @@ class RelayClientService(
         }
         val proxyNonce = BigInteger(nonceResponse.body()!!.nonce)
 
+        // 调试 GS026：记录 nonce 与交易参数，便于与 relayer/链上对比
+        logger.debug(
+            "Safe exec 签名参数: nonce={}, to={}, value={}, dataLen={}, operation={}, proxyWallet={}",
+            proxyNonce,
+            safeTx.to,
+            safeTx.value,
+            redeemCallData.removePrefix("0x").length / 2,
+            safeTx.operation,
+            proxyAddress
+        )
+
         // 构建 Safe 交易哈希并签名
         // 注意：encodeSafeTx 需要 data 带 0x 前缀
         val safeTxGas = BigInteger.ZERO
@@ -725,6 +758,12 @@ class RelayClientService(
             messageHash = safeTxHash
         )
 
+        // 调试 GS026：记录 EIP-712 structHash 与最终签名的 hash（可与 Safe.getTransactionHash 对比）
+        logger.debug(
+            "Safe exec 哈希: structHash=0x{}, hashToSign 将基于 prefix+structHash 的 keccak256",
+            safeTxStructuredHash.joinToString("") { "%02x".format(it) }
+        )
+
         // 注意：ethers.js 的 signMessage 会添加 EIP-191 前缀
         // 格式：\x19Ethereum Signed Message:\n<length><message>
         // 我们需要模拟这个行为以匹配 TypeScript 实现
@@ -738,6 +777,11 @@ class RelayClientService(
         keccak256.update(messageWithPrefix, 0, messageWithPrefix.size)
         val hashWithPrefix = ByteArray(keccak256.digestSize)
         keccak256.doFinal(hashWithPrefix, 0)
+
+        logger.debug(
+            "Safe exec hashToSign=0x{} (personal_sign 后签名的 32 字节)",
+            hashWithPrefix.joinToString("") { "%02x".format(it) }
+        )
 
         val ecKeyPair = org.web3j.crypto.ECKeyPair.create(privateKeyBigInt)
         val safeSignature = org.web3j.crypto.Sign.signMessage(hashWithPrefix, ecKeyPair, false)
@@ -786,6 +830,104 @@ class RelayClientService(
 
         logger.info("Builder Relayer 执行成功: transactionID=${relayerResponse.transactionID}, txHash=$txHash")
         return Result.success(txHash)
+    }
+
+    /**
+     * 通过 Builder Relayer 部署 Safe 代理（SAFE-CREATE）
+     * 参考: builder-relayer-client client.ts deploy()、builder/create.ts buildSafeCreateTransactionRequest
+     *
+     * @param privateKey EOA 私钥
+     * @param proxyAddress 待部署的 Safe 代理地址（与 getProxyAddress 一致）
+     * @param fromAddress EOA 地址（from）
+     * @return 交易哈希
+     */
+    suspend fun deploySafeViaBuilderRelayer(
+        privateKey: String,
+        proxyAddress: String,
+        fromAddress: String
+    ): Result<String> {
+        return try {
+            val builderApiKey = systemConfigService.getBuilderApiKey()
+            val builderSecret = systemConfigService.getBuilderSecret()
+            val builderPassphrase = systemConfigService.getBuilderPassphrase()
+            if (!isBuilderRelayerEnabled(builderApiKey, builderSecret, builderPassphrase)) {
+                return Result.failure(IllegalStateException("Builder API Key 未配置，无法执行 Safe 部署"))
+            }
+            val relayerApi = retrofitFactory.createBuilderRelayerApi(
+                relayerUrl = PolymarketConstants.BUILDER_RELAYER_URL,
+                apiKey = builderApiKey!!,
+                secret = builderSecret!!,
+                passphrase = builderPassphrase!!
+            )
+            val zeroAddress = "0x0000000000000000000000000000000000000000"
+            val paymentToken = zeroAddress
+            val payment = "0"
+            val paymentReceiver = zeroAddress
+            val domainSeparator = Eip712Encoder.encodeSafeCreateDomain(
+                name = PolymarketConstants.SAFE_FACTORY_EIP712_NAME,
+                chainId = 137L,
+                verifyingContract = safeProxyFactoryAddress
+            )
+            val createProxyHash = Eip712Encoder.encodeCreateProxyMessage(
+                paymentToken = paymentToken,
+                payment = BigInteger.ZERO,
+                paymentReceiver = paymentReceiver
+            )
+            val digest = Eip712Encoder.hashStructuredData(domainSeparator, createProxyHash)
+            val cleanPrivateKey = privateKey.removePrefix("0x")
+            val privateKeyBigInt = BigInteger(cleanPrivateKey, 16)
+            val ecKeyPair = org.web3j.crypto.ECKeyPair.create(privateKeyBigInt)
+            val signature = org.web3j.crypto.Sign.signMessage(digest, ecKeyPair, false)
+            // SAFE-CREATE 使用标准 EIP-712 签名格式（0x + r + s + v，v 为 27/28），与 signTypedData 一致
+            val signatureHex = signatureToStandardHex(signature)
+            val request = BuilderRelayerApi.TransactionRequest(
+                type = RELAYER_TYPE_SAFE_CREATE,
+                from = fromAddress,
+                to = safeProxyFactoryAddress,
+                proxyWallet = proxyAddress,
+                data = "0x",
+                nonce = null,
+                signature = signatureHex,
+                signatureParams = BuilderRelayerApi.SignatureParams(
+                    paymentToken = paymentToken,
+                    payment = payment,
+                    paymentReceiver = paymentReceiver
+                ),
+                metadata = null
+            )
+            val response = withBuilderRelayerRateLimitRetry { relayerApi.submitTransaction(request) }
+            if (!response.isSuccessful || response.body() == null) {
+                val errorBody = response.errorBody()?.string() ?: "未知错误"
+                updateQuotaBlockedFromErrorBody(errorBody)
+                logger.error("Builder Relayer SAFE-CREATE 失败: code=${response.code()}, body=$errorBody")
+                return Result.failure(Exception("部署 Safe 失败: ${response.code()} - $errorBody"))
+            }
+            val relayerResponse = response.body()!!
+            val txHash = relayerResponse.transactionHash ?: relayerResponse.hash
+                ?: return Result.failure(Exception("Builder Relayer 返回的交易哈希为空"))
+            logger.info("Safe 部署成功: proxy=$proxyAddress, txHash=$txHash")
+            Result.success(txHash)
+        } catch (e: Exception) {
+            logger.error("部署 Safe 失败: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 将 SignatureData 转为标准 hex 签名（0x + r(64) + s(64) + v(2)，v 为 27/28）
+     * 用于 SAFE-CREATE，与 viem signTypedData 输出格式一致
+     */
+    private fun signatureToStandardHex(signature: org.web3j.crypto.Sign.SignatureData): String {
+        val rHex = org.web3j.utils.Numeric.toHexString(signature.r).removePrefix("0x").padStart(64, '0')
+        val sHex = org.web3j.utils.Numeric.toHexString(signature.s).removePrefix("0x").padStart(64, '0')
+        val vBytes = signature.v
+        val v = if (vBytes != null && vBytes.isNotEmpty()) {
+            vBytes[0].toInt() and 0xff
+        } else {
+            27
+        }
+        val vHex = String.format("%02x", v)
+        return "0x$rHex$sHex$vHex"
     }
 
     /**

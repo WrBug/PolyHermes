@@ -3,6 +3,7 @@ package com.wrbug.polymarketbot.service.cryptotail
 import com.wrbug.polymarketbot.api.GammaEventBySlugResponse
 import com.wrbug.polymarketbot.constants.PolymarketConstants
 import com.wrbug.polymarketbot.entity.CryptoTailStrategy
+import com.wrbug.polymarketbot.enums.SpreadMode
 import com.wrbug.polymarketbot.event.CryptoTailStrategyChangedEvent
 import com.wrbug.polymarketbot.repository.CryptoTailStrategyRepository
 import com.wrbug.polymarketbot.service.binance.BinanceKlineAutoSpreadService
@@ -225,7 +226,7 @@ class CryptoTailOrderbookWsService(
             }
             if (oldTokenIds == tokenIds.toSet()) {
                 scheduleRefreshAtPeriodEnd(newMap)
-                precomputeAutoMinSpreadForCurrentPeriods(newMap)
+                precomputeAutoSpreadForCurrentPeriods(newMap)
                 return
             }
             closeWebSocketAndReconnect()
@@ -244,7 +245,7 @@ class CryptoTailOrderbookWsService(
             return
         }
         scheduleRefreshAtPeriodEnd(newMap)
-        precomputeAutoMinSpreadForCurrentPeriods(newMap)
+        precomputeAutoSpreadForCurrentPeriods(newMap)
     }
 
     /**
@@ -264,11 +265,11 @@ class CryptoTailOrderbookWsService(
     }
 
     /**
-     * AUTO 模式：在周期开始（刷新订阅）时预拉历史 30 根 K 线并计算该周期最小价差，触发时直接用缓存。
+     * AUTO 模式：在周期开始（刷新订阅）时预拉历史 30 根 K 线并计算该周期价差，触发时直接用缓存。
      */
-    private fun precomputeAutoMinSpreadForCurrentPeriods(newMap: Map<String, List<WsBookEntry>>) {
+    private fun precomputeAutoSpreadForCurrentPeriods(newMap: Map<String, List<WsBookEntry>>) {
         val autoPeriods = newMap.values.asSequence().flatten()
-            .filter { it.strategy.minSpreadMode.uppercase() == "AUTO" }
+            .filter { it.strategy.spreadMode == SpreadMode.AUTO }
             .distinctBy { "${it.strategy.intervalSeconds}-${it.periodStartUnix}" }
             .map { it.strategy.intervalSeconds to it.periodStartUnix }
             .toList()

@@ -15,6 +15,7 @@ import {
 import { useMediaQuery } from 'react-responsive'
 import { apiService } from '../services/api'
 import type { ProxyOption } from '../types'
+import AccountSetupGuideModal from './AccountSetupGuideModal'
 
 type ImportType = 'privateKey' | 'mnemonic'
 
@@ -41,6 +42,9 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
   const [selectedProxyType, setSelectedProxyType] = useState<string>('')
   const [loadingProxyOptions, setLoadingProxyOptions] = useState<boolean>(false)
   const [step, setStep] = useState<'input' | 'select'>('input') // 步骤：输入 -> 选择代理地址
+  const [setupModalVisible, setSetupModalVisible] = useState<boolean>(false)
+  const [setupStatus, setSetupStatus] = useState<any>(null)
+  const [importedAccountId, setImportedAccountId] = useState<number | undefined>(undefined)
   
   // 当私钥输入时，自动推导地址（不支持换行，自动去除换行符）
   const handlePrivateKeyChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -254,11 +258,34 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
       
       // 获取新添加的账户ID（通过API获取，因为store可能还没更新）
       const accountsResponse = await apiService.accounts.list()
+      let accountId: number | undefined = undefined
       if (accountsResponse.data.code === 0 && accountsResponse.data.data) {
         const newAccounts = accountsResponse.data.data.list || []
         const newAccount = newAccounts.find((acc: any) => acc.walletAddress === walletAddress)
-        if (newAccount && onSuccess) {
-          onSuccess(newAccount.id)
+        if (newAccount) {
+          accountId = newAccount.id
+          setImportedAccountId(accountId)
+          
+          // 检查账户设置状态
+          let willShowSetupModal = false
+          try {
+            const setupResponse = await apiService.accounts.checkSetupStatus(accountId)
+            if (setupResponse.data.code === 0 && setupResponse.data.data) {
+              const status = setupResponse.data.data
+              setSetupStatus(status)
+              const hasIncomplete = !status.proxyDeployed || !status.tradingEnabled || !status.tokensApproved
+              if (hasIncomplete) {
+                setSetupModalVisible(true)
+                willShowSetupModal = true
+              }
+            }
+          } catch (error) {
+            console.error('检查账户设置状态失败:', error)
+          }
+          // 未展示设置弹窗时才调用 onSuccess，避免父组件关闭导入弹窗导致设置弹窗被卸载
+          if (!willShowSetupModal && onSuccess) {
+            onSuccess(accountId)
+          }
         } else if (onSuccess) {
           onSuccess(0)
         }
@@ -551,6 +578,37 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
           </Space>
         </Form.Item>
       </Form>
+
+      {/* 账户设置引导弹窗 */}
+      <AccountSetupGuideModal
+        visible={setupModalVisible}
+        setupStatus={setupStatus}
+        accountId={importedAccountId}
+        onClose={() => {
+          setSetupModalVisible(false)
+          onSuccess?.(importedAccountId ?? 0)
+        }}
+        onComplete={async () => {
+          // 刷新设置状态
+          if (importedAccountId) {
+            try {
+              const setupResponse = await apiService.accounts.checkSetupStatus(importedAccountId)
+              if (setupResponse.data.code === 0 && setupResponse.data.data) {
+                setSetupStatus(setupResponse.data.data)
+                const status = setupResponse.data.data
+                // 如果所有步骤都完成了，关闭弹窗并通知父组件
+                if (status.proxyDeployed && status.tradingEnabled && status.tokensApproved) {
+                  setSetupModalVisible(false)
+                  message.success(t('accountSetup.allCompleted.title'))
+                  onSuccess?.(importedAccountId ?? 0)
+                }
+              }
+            } catch (error) {
+              console.error('刷新设置状态失败:', error)
+            }
+          }
+        }}
+      />
     </div>
   )
 }

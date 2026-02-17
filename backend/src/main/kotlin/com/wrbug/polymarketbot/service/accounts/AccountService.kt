@@ -362,6 +362,215 @@ class AccountService(
     }
 
     /**
+     * Polymarket 代币批准检查：USDC.e 需授权的 spender 合约地址（Polygon 主网）
+     * 来源：Polymarket/magic-safe-builder-example README §6 Token Approvals
+     * 及 neg-risk-ctf-adapter 仓库 addresses.json (chainId 137)
+     */
+    private val setupApprovalSpenders = mapOf(
+        "CTF_CONTRACT" to "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045",           // Conditional Tokens
+        "CTF_EXCHANGE" to "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E",             // 普通市场交易所
+        "NEG_RISK_EXCHANGE" to "0xC5d563A36AE78145C45a50134d48A1215220f80a",         // 负风险市场交易所
+        "NEG_RISK_ADAPTER" to "0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296"          // 负风险适配器（非 WCOL 地址）
+    )
+
+    /** USDC 精度（6 位小数） */
+    private val usdcDecimals = java.math.BigDecimal("1000000")
+
+    /** ERC20 无限授权额度（type(uint256).max），Polymarket 默认使用无限授权 */
+    private val unlimitedAllowance = BigInteger("115792089237316195423570985008687907853269984665640564039457584007913129639935")
+
+    /**
+     * 检查账户设置状态（代理部署、交易启用、代币批准）
+     * @param accountId 账户 ID
+     * @return AccountSetupStatusDto
+     */
+    suspend fun checkAccountSetupStatus(accountId: Long): Result<AccountSetupStatusDto> {
+        return try {
+            if (accountId <= 0) {
+                return Result.failure(IllegalArgumentException("账户 ID 无效"))
+            }
+            val account = accountRepository.findById(accountId).orElse(null)
+                ?: return Result.failure(IllegalArgumentException("账户不存在"))
+
+            val proxyAddress = account.proxyAddress
+            if (proxyAddress.isBlank()) {
+                return Result.success(
+                    AccountSetupStatusDto(
+                        proxyDeployed = false,
+                        tradingEnabled = account.apiKey != null && account.apiSecret != null && account.apiPassphrase != null,
+                        tokensApproved = false,
+                        approvalDetails = null,
+                        error = "代理地址为空"
+                    )
+                )
+            }
+
+            // 步骤1：代理钱包是否已部署
+            val proxyDeployed = blockchainService.isProxyDeployed(proxyAddress)
+
+            // 步骤2：交易是否已启用（API 凭证是否已配置）
+            val tradingEnabled = account.apiKey != null &&
+                    account.apiSecret != null &&
+                    account.apiPassphrase != null
+
+            // 步骤3：代币是否已批准（USDC 对各 spender 的 allowance，默认无限授权）
+            val approvalDetails = mutableMapOf<String, String>()
+            var tokensApproved = true
+            for ((name, spender) in setupApprovalSpenders) {
+                val allowanceResult = blockchainService.getUsdcAllowance(proxyAddress, spender)
+                val allowance = allowanceResult.getOrNull() ?: BigInteger.ZERO
+                val displayAmount = if (allowance >= unlimitedAllowance) {
+                    "unlimited"
+                } else {
+                    java.math.BigDecimal(allowance).divide(usdcDecimals, 6, java.math.RoundingMode.DOWN).toPlainString()
+                }
+                approvalDetails[name] = displayAmount
+                if (allowance <= BigInteger.ZERO) {
+                    tokensApproved = false
+                }
+            }
+
+            Result.success(
+                AccountSetupStatusDto(
+                    proxyDeployed = proxyDeployed,
+                    tradingEnabled = tradingEnabled,
+                    tokensApproved = tokensApproved,
+                    approvalDetails = approvalDetails,
+                    error = null
+                )
+            )
+        } catch (e: Exception) {
+            logger.error("检查账户设置状态失败: accountId=$accountId, ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    /** 步骤1 跳转 URL（代理部署需在 Polymarket 完成） */
+    private val setupStep1RedirectUrl = "https://polymarket.com/settings/wallet"
+
+    /**
+     * 执行设置步骤（由后端实现或返回跳转）
+     * 步骤1：仅返回跳转 URL，由用户前往 Polymarket 完成部署
+     * 步骤2：创建/派生 API Key 并更新账户
+     * 步骤3：通过代理钱包批量执行 USDC 授权
+     */
+    suspend fun executeSetupStep(accountId: Long, step: Int): Result<ExecuteSetupStepResponse> {
+        return try {
+            if (accountId <= 0) {
+                return Result.failure(IllegalArgumentException("账户 ID 无效"))
+            }
+            val account = accountRepository.findById(accountId).orElse(null)
+                ?: return Result.failure(IllegalArgumentException("账户不存在"))
+
+            when (step) {
+                1 -> {
+                    val walletType = WalletType.fromStringOrDefault(account.walletType, WalletType.MAGIC)
+                    if (walletType == WalletType.MAGIC) {
+                        Result.success(
+                            ExecuteSetupStepResponse(
+                                success = false,
+                                redirectUrl = setupStep1RedirectUrl
+                            )
+                        )
+                    } else {
+                        val proxyAddress = account.proxyAddress
+                        if (proxyAddress.isBlank()) {
+                            return Result.failure(IllegalArgumentException("代理地址为空"))
+                        }
+                        val alreadyDeployed = blockchainService.isProxyDeployed(proxyAddress)
+                        if (alreadyDeployed) {
+                            Result.success(ExecuteSetupStepResponse(success = true))
+                        } else {
+                            val privateKey = decryptPrivateKey(account)
+                            val deployResult = relayClientService.deploySafeViaBuilderRelayer(
+                                privateKey = privateKey,
+                                proxyAddress = proxyAddress,
+                                fromAddress = account.walletAddress
+                            )
+                            deployResult.fold(
+                                onSuccess = { txHash ->
+                                    Result.success(
+                                        ExecuteSetupStepResponse(
+                                            success = true,
+                                            transactionHash = txHash
+                                        )
+                                    )
+                                },
+                                onFailure = { e ->
+                                    logger.error("Safe 部署失败: accountId=$accountId, ${e.message}", e)
+                                    Result.failure(e)
+                                }
+                            )
+                        }
+                    }
+                }
+                2 -> {
+                    val privateKey = decryptPrivateKey(account)
+                    val result = apiKeyService.createOrDeriveApiKey(
+                        privateKey = privateKey,
+                        walletAddress = account.walletAddress,
+                        chainId = 137L
+                    )
+                    if (result.isFailure) {
+                        val e = result.exceptionOrNull()
+                        logger.error("启用交易（API Key）失败: accountId=$accountId, ${e?.message}", e)
+                        return Result.failure(e ?: IllegalStateException("获取 API Key 失败"))
+                    }
+                    val creds = result.getOrNull()
+                        ?: return Result.failure(IllegalStateException("API Key 返回为空"))
+                    val encryptedSecret = creds.secret?.let { cryptoUtils.encrypt(it) }
+                    val encryptedPassphrase = creds.passphrase?.let { cryptoUtils.encrypt(it) }
+                    val updated = account.copy(
+                        apiKey = creds.apiKey,
+                        apiSecret = encryptedSecret,
+                        apiPassphrase = encryptedPassphrase,
+                        updatedAt = System.currentTimeMillis()
+                    )
+                    accountRepository.save(updated)
+                    orderPushService.refreshSubscriptions()
+                    Result.success(ExecuteSetupStepResponse(success = true))
+                }
+                3 -> {
+                    val proxyAddress = account.proxyAddress
+                    if (proxyAddress.isBlank()) {
+                        return Result.failure(IllegalArgumentException("代理地址为空，请先完成步骤1"))
+                    }
+                    val privateKey = decryptPrivateKey(account)
+                    val walletType = WalletType.fromStringOrDefault(account.walletType, WalletType.SAFE)
+                    val approveTxs = setupApprovalSpenders.values.map { spender ->
+                        relayClientService.createUsdcApproveTx(spender, unlimitedAllowance)
+                    }
+                    val multiSendTx = relayClientService.createMultiSendTx(approveTxs)
+                    val executeResult = relayClientService.execute(
+                        privateKey = privateKey,
+                        proxyAddress = proxyAddress,
+                        safeTx = multiSendTx,
+                        walletType = walletType
+                    )
+                    executeResult.fold(
+                        onSuccess = { txHash ->
+                            Result.success(
+                                ExecuteSetupStepResponse(
+                                    success = true,
+                                    transactionHash = txHash
+                                )
+                            )
+                        },
+                        onFailure = { e ->
+                            logger.error("代币授权执行失败: accountId=$accountId, ${e.message}", e)
+                            Result.failure(e)
+                        }
+                    )
+                }
+                else -> Result.failure(IllegalArgumentException("无效的步骤: $step，应为 1、2 或 3"))
+            }
+        } catch (e: Exception) {
+            logger.error("执行设置步骤失败: accountId=$accountId, step=$step, ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
      * 更新账户信息
      */
     @Transactional

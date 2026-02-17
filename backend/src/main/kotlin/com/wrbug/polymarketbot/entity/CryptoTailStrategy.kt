@@ -1,8 +1,11 @@
 package com.wrbug.polymarketbot.entity
 
+import com.wrbug.polymarketbot.enums.SpreadDirection
+import com.wrbug.polymarketbot.enums.SpreadDirectionConverter
+import com.wrbug.polymarketbot.enums.SpreadMode
+import com.wrbug.polymarketbot.enums.SpreadModeConverter
 import jakarta.persistence.*
 import java.math.BigDecimal
-import com.wrbug.polymarketbot.util.toSafeBigDecimal
 
 /**
  * 加密市场尾盘策略实体
@@ -45,11 +48,19 @@ data class CryptoTailStrategy(
     @Column(name = "amount_value", nullable = false, precision = 20, scale = 8)
     val amountValue: BigDecimal = BigDecimal.ZERO,
 
-    @Column(name = "min_spread_mode", nullable = false, length = 16)
-    val minSpreadMode: String = "NONE",
+    /** 价差模式: NONE=不校验, FIXED=固定值, AUTO=历史计算 */
+    @Convert(converter = SpreadModeConverter::class)
+    @Column(name = "spread_mode", nullable = false, columnDefinition = "TINYINT")
+    val spreadMode: SpreadMode = SpreadMode.NONE,
 
-    @Column(name = "min_spread_value", precision = 20, scale = 8)
-    val minSpreadValue: BigDecimal? = null,
+    /** 价差数值（FIXED 时必填；AUTO 时可存计算值） */
+    @Column(name = "spread_value", precision = 20, scale = 8)
+    val spreadValue: BigDecimal? = null,
+
+    /** 价差方向: MIN=最小价差（价差>=配置值触发），MAX=最大价差（价差<=配置值触发） */
+    @Convert(converter = SpreadDirectionConverter::class)
+    @Column(name = "spread_direction", nullable = false, columnDefinition = "TINYINT")
+    val spreadDirection: SpreadDirection = SpreadDirection.MIN,
 
     @Column(name = "enabled", nullable = false)
     val enabled: Boolean = true,
