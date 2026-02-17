@@ -247,6 +247,62 @@ class BlockchainService(
             false
         }
     }
+
+    /**
+     * 检查代理钱包是否已部署（链上有合约代码）
+     * @param proxyAddress 代理钱包地址
+     * @return 已部署返回 true
+     */
+    suspend fun isProxyDeployed(proxyAddress: String): Boolean {
+        if (proxyAddress.isBlank() || !proxyAddress.startsWith("0x") || proxyAddress.length != 42) {
+            return false
+        }
+        return isContract(proxyAddress)
+    }
+
+    /**
+     * 查询 ERC20 USDC 授权额度 allowance(owner, spender)
+     * @param owner 代币持有者地址（代理钱包地址）
+     * @param spender 被授权方地址（如 CTF Exchange）
+     * @return 授权额度（原始值，USDC 为 6 位小数，需除以 1e6 为显示值）
+     */
+    suspend fun getUsdcAllowance(owner: String, spender: String): Result<BigInteger> {
+        return try {
+            if (owner.isBlank() || spender.isBlank()) {
+                return Result.failure(IllegalArgumentException("owner 或 spender 不能为空"))
+            }
+            val rpcApi = polygonRpcApi
+            // ERC20 allowance(address owner, address spender) 选择器
+            val functionSelector = "0xdd62ed3e"
+            val ownerEncoded = EthereumUtils.encodeAddress(owner)
+            val spenderEncoded = EthereumUtils.encodeAddress(spender)
+            val data = functionSelector + ownerEncoded + spenderEncoded
+            val rpcRequest = JsonRpcRequest(
+                method = "eth_call",
+                params = listOf(
+                    mapOf(
+                        "to" to usdcContractAddress,
+                        "data" to data
+                    ),
+                    "latest"
+                )
+            )
+            val response = rpcApi.call(rpcRequest)
+            if (!response.isSuccessful || response.body() == null) {
+                return Result.failure(Exception("RPC 请求失败: ${response.code()} ${response.message()}"))
+            }
+            val rpcResponse = response.body()!!
+            if (rpcResponse.error != null) {
+                return Result.failure(Exception("RPC 错误: ${rpcResponse.error.message}"))
+            }
+            val hexResult = rpcResponse.result?.asString ?: return Result.failure(Exception("RPC 响应 result 为空"))
+            val allowance = EthereumUtils.decodeUint256(hexResult)
+            Result.success(allowance)
+        } catch (e: Exception) {
+            logger.warn("查询 USDC 授权额度失败: ${e.message}")
+            Result.failure(e)
+        }
+    }
     
     /**
      * 查询账户 USDC 余额

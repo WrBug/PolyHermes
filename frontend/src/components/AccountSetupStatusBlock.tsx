@@ -10,7 +10,6 @@ import {
   ReloadOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
-import { useMediaQuery } from 'react-responsive'
 import { apiService } from '../services/api'
 
 const { Paragraph, Text } = Typography
@@ -47,7 +46,6 @@ const AccountSetupStatusBlock: React.FC<AccountSetupStatusBlockProps> = ({
   embedded = false
 }) => {
   const { t } = useTranslation()
-  const isMobile = useMediaQuery({ maxWidth: 768 })
   const [setupStatus, setSetupStatus] = useState<SetupStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)

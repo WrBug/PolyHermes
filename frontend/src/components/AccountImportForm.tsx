@@ -269,7 +269,7 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
           // 检查账户设置状态
           let willShowSetupModal = false
           try {
-            const setupResponse = await apiService.accounts.checkSetupStatus(accountId)
+            const setupResponse = await apiService.accounts.checkSetupStatus(newAccount.id)
             if (setupResponse.data.code === 0 && setupResponse.data.data) {
               const status = setupResponse.data.data
               setSetupStatus(status)
@@ -284,7 +284,7 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
           }
           // 未展示设置弹窗时才调用 onSuccess，避免父组件关闭导入弹窗导致设置弹窗被卸载
           if (!willShowSetupModal && onSuccess) {
-            onSuccess(accountId)
+            onSuccess(newAccount.id)
           }
         } else if (onSuccess) {
           onSuccess(0)

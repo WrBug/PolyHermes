@@ -400,8 +400,6 @@ class RpcUrlReplaceInterceptor(
     private val fixedBaseUrl: String,
     private val actualRpcUrl: String
 ) : Interceptor {
-    private val logger = LoggerFactory.getLogger(RpcUrlReplaceInterceptor::class.java)
-    
     @Throws(IOException::class)
     override fun intercept(chain: Interceptor.Chain): Response {
         val originalRequest = chain.request()
@@ -414,8 +412,6 @@ class RpcUrlReplaceInterceptor(
         // 使用 HttpUrl 解析新 URL，确保格式正确
         val newUrl = newUrlString.toHttpUrlOrNull()
             ?: throw IllegalArgumentException("无效的 RPC URL: $newUrlString")
-        
-        logger.debug("RPC URL 替换: $originalUrlString -> $newUrlString")
         
         val newRequest = originalRequest.newBuilder()
             .url(newUrl)
