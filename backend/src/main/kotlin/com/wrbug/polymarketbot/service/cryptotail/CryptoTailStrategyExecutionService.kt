@@ -28,6 +28,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import jakarta.annotation.PreDestroy
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.util.concurrent.ConcurrentHashMap
@@ -83,10 +84,25 @@ class CryptoTailStrategyExecutionService(
     /** 按 (strategyId, periodStartUnix) 加锁，避免同一周期被调度器与 WebSocket 等多路并发重复下单 */
     private val triggerMutexMap = ConcurrentHashMap<String, Mutex>()
 
+    /** 过期锁 key 保留时间（秒），超过则清理，防止 map 无界增长 */
+    private val triggerMutexExpireSeconds = 3600L
+
     private fun triggerLockKey(strategyId: Long, periodStartUnix: Long): String = "$strategyId-$periodStartUnix"
 
-    private fun getTriggerMutex(strategyId: Long, periodStartUnix: Long): Mutex =
-        triggerMutexMap.getOrPut(triggerLockKey(strategyId, periodStartUnix)) { Mutex() }
+    private fun getTriggerMutex(strategyId: Long, periodStartUnix: Long): Mutex {
+        cleanExpiredTriggerMutexKeys()
+        return triggerMutexMap.getOrPut(triggerLockKey(strategyId, periodStartUnix)) { Mutex() }
+    }
+
+    /** 清理已过期的 (strategyId, periodStartUnix) 锁，避免内存泄漏 */
+    private fun cleanExpiredTriggerMutexKeys() {
+        val nowSeconds = System.currentTimeMillis() / 1000
+        val expireThreshold = nowSeconds - triggerMutexExpireSeconds
+        val keysToRemove = triggerMutexMap.keys.filter { key ->
+            key.substringAfterLast('-').toLongOrNull()?.let { it < expireThreshold } ?: false
+        }
+        keysToRemove.forEach { triggerMutexMap.remove(it) }
+    }
 
     /** 周期预置上下文缓存：(strategyId-periodStartUnix) -> PeriodContext，过期周期在读取时剔除 */
     private val periodContextCache = ConcurrentHashMap<String, PeriodContext>()
@@ -165,9 +181,18 @@ class CryptoTailStrategyExecutionService(
         val ctx = periodContextCache[key] ?: return null
         if (periodStartUnix + strategy.intervalSeconds <= nowSeconds) {
             periodContextCache.remove(key)
+            cleanExpiredPeriodContextCache(nowSeconds)
             return null
         }
         return ctx
+    }
+
+    /** 清理已过期的周期上下文缓存，避免内存泄漏 */
+    private fun cleanExpiredPeriodContextCache(nowSeconds: Long) {
+        val keysToRemove = periodContextCache.entries
+            .filter { (_, ctx) -> ctx.periodStartUnix + ctx.strategy.intervalSeconds <= nowSeconds }
+            .map { it.key }
+        keysToRemove.forEach { periodContextCache.remove(it) }
     }
 
     /**
@@ -190,7 +215,7 @@ class CryptoTailStrategyExecutionService(
             val logKey = triggerLockKey(strategy.id!!, periodStartUnix)
             if (conditionLoggedCache.getIfPresent(logKey) == null) {
                 conditionLoggedCache.put(logKey, periodStartUnix + strategy.intervalSeconds)
-                val oc = binanceKlineService.getCurrentOpenClose(strategy.intervalSeconds, periodStartUnix)
+                val oc = binanceKlineService.getCurrentOpenClose(strategy.marketSlugPrefix, strategy.intervalSeconds, periodStartUnix)
                 val openPrice = oc?.first?.toPlainString() ?: "-"
                 val closePrice = oc?.second?.toPlainString() ?: "-"
                 val strategyName = strategy.name?.takeIf { it.isNotBlank() } ?: "尾盘策略-${strategy.marketSlugPrefix}"
@@ -210,7 +235,7 @@ class CryptoTailStrategyExecutionService(
 
     private fun passSpreadCheck(strategy: CryptoTailStrategy, periodStartUnix: Long, outcomeIndex: Int): Boolean {
         if (strategy.spreadMode == SpreadMode.NONE) return true
-        val oc = binanceKlineService.getCurrentOpenClose(strategy.intervalSeconds, periodStartUnix)
+        val oc = binanceKlineService.getCurrentOpenClose(strategy.marketSlugPrefix, strategy.intervalSeconds, periodStartUnix)
             ?: return false
         val (openP, closeP) = oc
         val spreadAbs = closeP.subtract(openP).abs()
@@ -247,8 +272,8 @@ class CryptoTailStrategyExecutionService(
     )
 
     private fun computeAutoEffectiveSpread(strategy: CryptoTailStrategy, periodStartUnix: Long, outcomeIndex: Int): AutoSpreadResult? {
-        val baseSpread = binanceKlineAutoSpreadService.getAutoMinSpreadBase(strategy.intervalSeconds, periodStartUnix, outcomeIndex)
-            ?: binanceKlineAutoSpreadService.computeAndCache(strategy.intervalSeconds, periodStartUnix)?.let { if (outcomeIndex == 0) it.first else it.second }
+        val baseSpread = binanceKlineAutoSpreadService.getAutoMinSpreadBase(strategy.marketSlugPrefix, strategy.intervalSeconds, periodStartUnix, outcomeIndex)
+            ?: binanceKlineAutoSpreadService.computeAndCache(strategy.marketSlugPrefix, strategy.intervalSeconds, periodStartUnix)?.let { if (outcomeIndex == 0) it.first else it.second }
             ?: return null
         if (baseSpread <= BigDecimal.ZERO) return null
         val windowStartMs = (periodStartUnix + strategy.windowStartSeconds) * 1000L
@@ -494,5 +519,14 @@ class CryptoTailStrategyExecutionService(
             failReason = failReason
         )
         triggerRepository.save(record)
+    }
+
+    @PreDestroy
+    fun destroy() {
+        // 清理所有周期上下文缓存，避免敏感信息（明文私钥、API Secret）在内存中保留
+        periodContextCache.clear()
+        // 清理所有锁，避免内存泄漏
+        triggerMutexMap.clear()
+        logger.debug("尾盘策略执行服务已清理缓存和锁")
     }
 }

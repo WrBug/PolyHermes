@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import jakarta.annotation.PreDestroy
 import java.math.BigDecimal
 import java.math.RoundingMode
 
@@ -44,7 +45,8 @@ class CryptoTailSettlementService(
     private val triggerFixedPrice = BigDecimal("0.99")
     private val pnlScale = 8
 
-    private val settlementScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val settlementScopeJob = SupervisorJob()
+    private val settlementScope = CoroutineScope(Dispatchers.IO + settlementScopeJob)
 
     /** 跟踪上一轮结算任务的 Job，防止并发执行（与 OrderStatusUpdateService 一致） */
     @Volatile
@@ -272,5 +274,12 @@ class CryptoTailSettlementService(
         } else {
             amountUsdc.negate()
         }
+    }
+
+    @PreDestroy
+    fun destroy() {
+        settlementJob?.cancel()
+        settlementJob = null
+        settlementScopeJob.cancel()
     }
 }

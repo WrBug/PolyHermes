@@ -26,7 +26,7 @@ import {
 } from 'antd'
 import type { Dayjs } from 'dayjs'
 import dayjs from 'dayjs'
-import { PlusOutlined, EditOutlined, UnorderedListOutlined, InfoCircleOutlined, WarningOutlined, CalendarOutlined, ArrowUpOutlined, ArrowDownOutlined, FileTextOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, UnorderedListOutlined, InfoCircleOutlined, WarningOutlined, CalendarOutlined, FileTextOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useMediaQuery } from 'react-responsive'
 import { apiService } from '../services/api'
@@ -555,7 +555,7 @@ const CryptoTailStrategyList: React.FC = () => {
           {t('cryptoTailStrategy.list.configGuide')}
         </Button>
       </div>
-      {binanceUnhealthy.length > 0 && (
+      {binanceUnhealthy.length > 0 && list.some((s) => s.enabled) && (
         <Alert
           type="error"
           showIcon
@@ -960,9 +960,9 @@ const CryptoTailStrategyList: React.FC = () => {
                         align: 'center',
                         render: (i: number) =>
                           i === 0 ? (
-                            <Tag icon={<ArrowUpOutlined />} color="green">{t('cryptoTailStrategy.triggerRecords.up')}</Tag>
+                            <Tag color="green">{t('cryptoTailStrategy.triggerRecords.up')}</Tag>
                           ) : (
-                            <Tag icon={<ArrowDownOutlined />} color="volcano">{t('cryptoTailStrategy.triggerRecords.down')}</Tag>
+                            <Tag color="volcano">{t('cryptoTailStrategy.triggerRecords.down')}</Tag>
                           )
                       },
                       {
@@ -1035,9 +1035,9 @@ const CryptoTailStrategyList: React.FC = () => {
                         align: 'center',
                         render: (i: number) =>
                           i === 0 ? (
-                            <Tag icon={<ArrowUpOutlined />} color="green">{t('cryptoTailStrategy.triggerRecords.up')}</Tag>
+                            <Tag color="green">{t('cryptoTailStrategy.triggerRecords.up')}</Tag>
                           ) : (
-                            <Tag icon={<ArrowDownOutlined />} color="volcano">{t('cryptoTailStrategy.triggerRecords.down')}</Tag>
+                            <Tag color="volcano">{t('cryptoTailStrategy.triggerRecords.down')}</Tag>
                           )
                       },
                       {

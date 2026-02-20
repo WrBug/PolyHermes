@@ -243,7 +243,14 @@ class ApiHealthCheckService(
                     name = "币安 WebSocket",
                     url = binanceWsUrl,
                     status = "success",
-                    message = "连接正常 (5m、15m)"
+                    message = "连接正常 (按策略订阅)"
+                )
+            } else if (total == 0) {
+                ApiHealthCheckDto(
+                    name = "币安 WebSocket",
+                    url = binanceWsUrl,
+                    status = "success",
+                    message = "无尾盘策略，未订阅"
                 )
             } else if (connected > 0) {
                 val which = statuses.filter { it.value }.keys.joinToString("、")

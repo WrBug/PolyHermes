@@ -7,6 +7,7 @@ import com.wrbug.polymarketbot.enums.SpreadMode
 import com.wrbug.polymarketbot.event.CryptoTailStrategyChangedEvent
 import com.wrbug.polymarketbot.repository.CryptoTailStrategyRepository
 import com.wrbug.polymarketbot.service.binance.BinanceKlineAutoSpreadService
+import com.wrbug.polymarketbot.service.binance.BinanceKlineService
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.createClient
 import com.wrbug.polymarketbot.util.fromJson
@@ -28,6 +29,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.context.event.EventListener
 import org.springframework.stereotype.Service
 import jakarta.annotation.PostConstruct
+import jakarta.annotation.PreDestroy
 import java.math.BigDecimal
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
@@ -40,12 +42,14 @@ class CryptoTailOrderbookWsService(
     private val strategyRepository: CryptoTailStrategyRepository,
     private val executionService: CryptoTailStrategyExecutionService,
     private val retrofitFactory: RetrofitFactory,
-    private val binanceKlineAutoSpreadService: BinanceKlineAutoSpreadService
+    private val binanceKlineAutoSpreadService: BinanceKlineAutoSpreadService,
+    private val binanceKlineService: BinanceKlineService
 ) {
 
     private val logger = LoggerFactory.getLogger(CryptoTailOrderbookWsService::class.java)
 
-    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private val scopeJob = SupervisorJob()
+    private val scope = CoroutineScope(Dispatchers.Default + scopeJob)
 
     /** tokenId -> list of (strategy, periodStartUnix, marketTitle, tokenIds, outcomeIndex) */
     private val tokenToEntries = AtomicReference<Map<String, List<WsBookEntry>>>(emptyMap())
@@ -66,6 +70,12 @@ class CryptoTailOrderbookWsService(
     /** 保护 connect() 的互斥锁，避免多线程并发创建连接 */
     private val connectLock = Any()
 
+    /** 保护 refreshAndSubscribe() 的互斥锁，避免多线程并发刷新订阅 */
+    private val refreshLock = Any()
+
+    /** 标记是否正在刷新订阅，避免重复调用 */
+    private val isRefreshing = AtomicBoolean(false)
+
     data class WsBookEntry(
         val strategy: CryptoTailStrategy,
         val periodStartUnix: Long,
@@ -77,6 +87,26 @@ class CryptoTailOrderbookWsService(
     @PostConstruct
     fun init() {
         if (strategyRepository.findAllByEnabledTrue().isNotEmpty()) connect()
+    }
+
+    @PreDestroy
+    fun destroy() {
+        periodEndCountdownJob?.cancel()
+        periodEndCountdownJob = null
+        reconnectJob?.cancel()
+        reconnectJob = null
+        synchronized(precomputeJobs) {
+            precomputeJobs.forEach { it.cancel() }
+            precomputeJobs.clear()
+        }
+        closedForNoStrategies.set(true)
+        try {
+            webSocket?.close(1000, "shutdown")
+        } catch (e: Exception) {
+            logger.debug("关闭尾盘策略 WebSocket 时异常: ${e.message}")
+        }
+        webSocket = null
+        scopeJob.cancel()
     }
 
     private fun connect() {
@@ -171,16 +201,14 @@ class CryptoTailOrderbookWsService(
             if (nowSeconds < windowStart || nowSeconds >= windowEnd) continue
             scope.launch {
                 try {
-                    runBlocking {
-                        executionService.tryTriggerWithPriceFromWs(
-                            strategy = e.strategy,
-                            periodStartUnix = e.periodStartUnix,
-                            marketTitle = e.marketTitle,
-                            tokenIds = e.tokenIds,
-                            outcomeIndex = e.outcomeIndex,
-                            bestBid = bestBid
-                        )
-                    }
+                    executionService.tryTriggerWithPriceFromWs(
+                        strategy = e.strategy,
+                        periodStartUnix = e.periodStartUnix,
+                        marketTitle = e.marketTitle,
+                        tokenIds = e.tokenIds,
+                        outcomeIndex = e.outcomeIndex,
+                        bestBid = bestBid
+                    )
                 } catch (ex: Exception) {
                     logger.error("WS 触发下单异常: strategyId=${e.strategy.id}, ${ex.message}", ex)
                 }
@@ -213,42 +241,56 @@ class CryptoTailOrderbookWsService(
     }
 
     private fun refreshAndSubscribe(fromConnect: Boolean = false) {
-        periodEndCountdownJob?.cancel()
-        periodEndCountdownJob = null
-        val oldTokenIds = tokenToEntries.get().keys.toSet()
-        val (tokenIds, newMap) = buildSubscriptionMap()
-        tokenToEntries.set(newMap)
-        if (tokenIds.isEmpty()) {
-            closeWebSocketForNoStrategies()
-            return
-        }
-        if (!fromConnect) {
-            if (webSocket == null) {
-                connect()
+        synchronized(refreshLock) {
+            // 如果正在刷新，直接返回，避免重复调用
+            if (isRefreshing.get()) {
+                logger.debug("尾盘策略订阅刷新已在进行中，跳过本次调用")
                 return
             }
-            if (oldTokenIds == tokenIds.toSet()) {
-                scheduleRefreshAtPeriodEnd(newMap)
-                precomputeAutoSpreadForCurrentPeriods(newMap)
-                return
-            }
-            closeWebSocketAndReconnect()
-            return
+            isRefreshing.set(true)
         }
-        val marketSlugs = newMap.values.asSequence().flatten()
-            .distinctBy { "${it.strategy.marketSlugPrefix}-${it.periodStartUnix}" }
-            .map { "${it.strategy.marketSlugPrefix}-${it.periodStartUnix}" }
-            .toList()
-        val msg = """{"type":"MARKET","assets_ids":${tokenIds.toJson()}}"""
         try {
-            webSocket?.send(msg)
-            logger.info("尾盘策略订单簿订阅: ${tokenIds.size} 个 token, 市场: $marketSlugs")
-        } catch (e: Exception) {
-            logger.warn("发送订阅失败: ${e.message}")
-            return
+            val strategies = strategyRepository.findAllByEnabledTrue()
+            binanceKlineService.updateSubscriptions(strategies.map { it.marketSlugPrefix }.toSet())
+            periodEndCountdownJob?.cancel()
+            periodEndCountdownJob = null
+            val oldTokenIds = tokenToEntries.get().keys.toSet()
+            val (tokenIds, newMap) = buildSubscriptionMap()
+            tokenToEntries.set(newMap)
+            if (tokenIds.isEmpty()) {
+                closeWebSocketForNoStrategies()
+                return
+            }
+            if (!fromConnect) {
+                if (webSocket == null) {
+                    connect()
+                    return
+                }
+                if (oldTokenIds == tokenIds.toSet()) {
+                    scheduleRefreshAtPeriodEnd(newMap)
+                    precomputeAutoSpreadForCurrentPeriods(newMap)
+                    return
+                }
+                closeWebSocketAndReconnect()
+                return
+            }
+            val marketSlugs = newMap.values.asSequence().flatten()
+                .distinctBy { "${it.strategy.marketSlugPrefix}-${it.periodStartUnix}" }
+                .map { "${it.strategy.marketSlugPrefix}-${it.periodStartUnix}" }
+                .toList()
+            val msg = """{"type":"MARKET","assets_ids":${tokenIds.toJson()}}"""
+            try {
+                webSocket?.send(msg)
+                logger.info("尾盘策略订单簿订阅: ${tokenIds.size} 个 token, 市场: $marketSlugs")
+            } catch (e: Exception) {
+                logger.warn("发送订阅失败: ${e.message}")
+                return
+            }
+            scheduleRefreshAtPeriodEnd(newMap)
+            precomputeAutoSpreadForCurrentPeriods(newMap)
+        } finally {
+            isRefreshing.set(false)
         }
-        scheduleRefreshAtPeriodEnd(newMap)
-        precomputeAutoSpreadForCurrentPeriods(newMap)
     }
 
     /**
@@ -267,30 +309,38 @@ class CryptoTailOrderbookWsService(
         }
     }
 
+    /** 跟踪预计算价差的协程 Job，用于在关闭时取消 */
+    private val precomputeJobs = mutableSetOf<Job>()
+
     /**
      * AUTO 模式：在周期开始（刷新订阅）时预拉历史 30 根 K 线并计算该周期价差，触发时直接用缓存。
      */
     private fun precomputeAutoSpreadForCurrentPeriods(newMap: Map<String, List<WsBookEntry>>) {
         val autoPeriods = newMap.values.asSequence().flatten()
             .filter { it.strategy.spreadMode == SpreadMode.AUTO }
-            .distinctBy { "${it.strategy.intervalSeconds}-${it.periodStartUnix}" }
-            .map { it.strategy.intervalSeconds to it.periodStartUnix }
+            .distinctBy { "${it.strategy.marketSlugPrefix}-${it.strategy.intervalSeconds}-${it.periodStartUnix}" }
+            .map { Triple(it.strategy.marketSlugPrefix, it.strategy.intervalSeconds, it.periodStartUnix) }
             .toList()
         if (autoPeriods.isEmpty()) return
-        scope.launch {
-            for ((intervalSeconds, periodStartUnix) in autoPeriods) {
+        val job = scope.launch {
+            for ((marketPrefix, intervalSeconds, periodStartUnix) in autoPeriods) {
                 try {
-                    val pair = binanceKlineAutoSpreadService.computeAndCache(intervalSeconds, periodStartUnix)
+                    val pair = binanceKlineAutoSpreadService.computeAndCache(marketPrefix, intervalSeconds, periodStartUnix)
                     if (pair != null) {
                         logger.info(
-                            "周期开始初始价差: interval=${intervalSeconds}s periodStartUnix=$periodStartUnix " +
+                            "周期开始初始价差: market=$marketPrefix interval=${intervalSeconds}s periodStartUnix=$periodStartUnix " +
                                     "baseSpreadUp=${pair.first.toPlainString()} baseSpreadDown=${pair.second.toPlainString()}"
                         )
                     }
                 } catch (e: Exception) {
-                    logger.warn("周期开始预计算 AUTO 价差失败: interval=$intervalSeconds periodStartUnix=$periodStartUnix ${e.message}")
+                    logger.warn("周期开始预计算 AUTO 价差失败: market=$marketPrefix interval=$intervalSeconds periodStartUnix=$periodStartUnix ${e.message}")
                 }
             }
+        }
+        synchronized(precomputeJobs) {
+            precomputeJobs.add(job)
+            // 清理已完成的 Job，避免集合无限增长
+            precomputeJobs.removeIf { !it.isActive }
         }
     }
 
@@ -345,7 +395,7 @@ class CryptoTailOrderbookWsService(
                 continue
             }
             val slug = "${strategy.marketSlugPrefix}-$periodStartUnix"
-            val event = fetchEventBySlugWithRetry(slug).getOrNull()
+            val event = runBlocking { fetchEventBySlugWithRetry(slug).getOrNull() }
             if (event == null) {
                 logger.warn("尾盘策略跳过（拉取事件失败）: strategyId=${strategy.id}, slug=$slug，请确认 Gamma 是否存在该 slug 或稍后重试")
                 continue
@@ -372,21 +422,21 @@ class CryptoTailOrderbookWsService(
     }
 
     /** 拉取事件，失败时重试最多 2 次（间隔 1s），避免瞬时失败导致多策略只订阅到其中一个 */
-    private fun fetchEventBySlugWithRetry(slug: String, maxAttempts: Int = 3): Result<GammaEventBySlugResponse> {
+    private suspend fun fetchEventBySlugWithRetry(slug: String, maxAttempts: Int = 3): Result<GammaEventBySlugResponse> {
         var lastFailure: Exception? = null
         repeat(maxAttempts) { attempt ->
             val result = fetchEventBySlug(slug)
             if (result.isSuccess) return result
             lastFailure = result.exceptionOrNull() as? Exception
-            if (attempt < maxAttempts - 1) runBlocking { delay(1000L) }
+            if (attempt < maxAttempts - 1) delay(1000L)
         }
         return Result.failure(lastFailure ?: Exception("fetchEventBySlug failed"))
     }
 
-    private fun fetchEventBySlug(slug: String): Result<GammaEventBySlugResponse> {
+    private suspend fun fetchEventBySlug(slug: String): Result<GammaEventBySlugResponse> {
         return try {
             val api = retrofitFactory.createGammaApi()
-            val response = runBlocking { api.getEventBySlug(slug) }
+            val response = api.getEventBySlug(slug)
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
             } else {

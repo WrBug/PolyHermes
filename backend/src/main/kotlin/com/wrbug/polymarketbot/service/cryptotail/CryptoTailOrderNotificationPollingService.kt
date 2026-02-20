@@ -19,6 +19,7 @@ import org.springframework.context.ApplicationContextAware
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import jakarta.annotation.PreDestroy
 
 /**
  * 尾盘策略订单 TG 通知轮询服务（与跟单一致）
@@ -36,7 +37,8 @@ class CryptoTailOrderNotificationPollingService(
 ) : ApplicationContextAware {
 
     private val logger = LoggerFactory.getLogger(CryptoTailOrderNotificationPollingService::class.java)
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val scopeJob = SupervisorJob()
+    private val scope = CoroutineScope(Dispatchers.IO + scopeJob)
 
     private var applicationContext: ApplicationContext? = null
 
@@ -142,5 +144,12 @@ class CryptoTailOrderNotificationPollingService(
         )
         logger.info("尾盘订单 TG 通知已发送: orderId=$orderId, strategyId=${strategy.id}, triggerId=${trigger.id}")
         return true
+    }
+
+    @PreDestroy
+    fun destroy() {
+        notificationJob?.cancel()
+        notificationJob = null
+        scopeJob.cancel()
     }
 }

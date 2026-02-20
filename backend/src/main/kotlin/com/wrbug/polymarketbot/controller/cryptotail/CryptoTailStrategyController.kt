@@ -146,7 +146,13 @@ class CryptoTailStrategyController(
         return try {
             val options = listOf(
                 CryptoTailMarketOptionDto(slug = "btc-updown-5m", title = "Bitcoin Up or Down - 5 minute", intervalSeconds = 300, periodStartUnix = 0L, endDate = null),
-                CryptoTailMarketOptionDto(slug = "btc-updown-15m", title = "Bitcoin Up or Down - 15 minute", intervalSeconds = 900, periodStartUnix = 0L, endDate = null)
+                CryptoTailMarketOptionDto(slug = "btc-updown-15m", title = "Bitcoin Up or Down - 15 minute", intervalSeconds = 900, periodStartUnix = 0L, endDate = null),
+                CryptoTailMarketOptionDto(slug = "eth-updown-5m", title = "Ethereum Up or Down - 5 minute", intervalSeconds = 300, periodStartUnix = 0L, endDate = null),
+                CryptoTailMarketOptionDto(slug = "eth-updown-15m", title = "Ethereum Up or Down - 15 minute", intervalSeconds = 900, periodStartUnix = 0L, endDate = null),
+                CryptoTailMarketOptionDto(slug = "sol-updown-5m", title = "Solana Up or Down - 5 minute", intervalSeconds = 300, periodStartUnix = 0L, endDate = null),
+                CryptoTailMarketOptionDto(slug = "sol-updown-15m", title = "Solana Up or Down - 15 minute", intervalSeconds = 900, periodStartUnix = 0L, endDate = null),
+                CryptoTailMarketOptionDto(slug = "xrp-updown-5m", title = "XRP Up or Down - 5 minute", intervalSeconds = 300, periodStartUnix = 0L, endDate = null),
+                CryptoTailMarketOptionDto(slug = "xrp-updown-15m", title = "XRP Up or Down - 15 minute", intervalSeconds = 900, periodStartUnix = 0L, endDate = null)
             )
             ResponseEntity.ok(ApiResponse.success(options))
         } catch (e: Exception) {
@@ -168,7 +174,9 @@ class CryptoTailStrategyController(
             }
             val periodStartUnix = (request["periodStartUnix"] as? Number)?.toLong()
                 ?: (System.currentTimeMillis() / 1000 / intervalSeconds) * intervalSeconds
-            val pair = binanceKlineAutoSpreadService.computeAndCache(intervalSeconds, periodStartUnix)
+            // 默认使用 BTC 市场（向后兼容）
+            val marketSlugPrefix = (request["marketSlugPrefix"] as? String) ?: "btc-updown"
+            val pair = binanceKlineAutoSpreadService.computeAndCache(marketSlugPrefix, intervalSeconds, periodStartUnix)
                 ?: return ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, "fetch_failed", messageSource))
             val body = CryptoTailAutoMinSpreadResponse(
                 minSpreadUp = pair.first.toPlainString(),
