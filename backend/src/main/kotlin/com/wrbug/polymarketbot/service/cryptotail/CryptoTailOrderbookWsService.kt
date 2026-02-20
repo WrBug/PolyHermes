@@ -66,6 +66,12 @@ class CryptoTailOrderbookWsService(
     /** 保护 connect() 的互斥锁，避免多线程并发创建连接 */
     private val connectLock = Any()
 
+    /** 保护 refreshAndSubscribe() 的互斥锁，避免多线程并发刷新订阅 */
+    private val refreshLock = Any()
+
+    /** 标记是否正在刷新订阅，避免重复调用 */
+    private val isRefreshing = AtomicBoolean(false)
+
     data class WsBookEntry(
         val strategy: CryptoTailStrategy,
         val periodStartUnix: Long,
@@ -213,42 +219,54 @@ class CryptoTailOrderbookWsService(
     }
 
     private fun refreshAndSubscribe(fromConnect: Boolean = false) {
-        periodEndCountdownJob?.cancel()
-        periodEndCountdownJob = null
-        val oldTokenIds = tokenToEntries.get().keys.toSet()
-        val (tokenIds, newMap) = buildSubscriptionMap()
-        tokenToEntries.set(newMap)
-        if (tokenIds.isEmpty()) {
-            closeWebSocketForNoStrategies()
-            return
-        }
-        if (!fromConnect) {
-            if (webSocket == null) {
-                connect()
+        synchronized(refreshLock) {
+            // 如果正在刷新，直接返回，避免重复调用
+            if (isRefreshing.get()) {
+                logger.debug("尾盘策略订阅刷新已在进行中，跳过本次调用")
                 return
             }
-            if (oldTokenIds == tokenIds.toSet()) {
-                scheduleRefreshAtPeriodEnd(newMap)
-                precomputeAutoSpreadForCurrentPeriods(newMap)
-                return
-            }
-            closeWebSocketAndReconnect()
-            return
+            isRefreshing.set(true)
         }
-        val marketSlugs = newMap.values.asSequence().flatten()
-            .distinctBy { "${it.strategy.marketSlugPrefix}-${it.periodStartUnix}" }
-            .map { "${it.strategy.marketSlugPrefix}-${it.periodStartUnix}" }
-            .toList()
-        val msg = """{"type":"MARKET","assets_ids":${tokenIds.toJson()}}"""
         try {
-            webSocket?.send(msg)
-            logger.info("尾盘策略订单簿订阅: ${tokenIds.size} 个 token, 市场: $marketSlugs")
-        } catch (e: Exception) {
-            logger.warn("发送订阅失败: ${e.message}")
-            return
+            periodEndCountdownJob?.cancel()
+            periodEndCountdownJob = null
+            val oldTokenIds = tokenToEntries.get().keys.toSet()
+            val (tokenIds, newMap) = buildSubscriptionMap()
+            tokenToEntries.set(newMap)
+            if (tokenIds.isEmpty()) {
+                closeWebSocketForNoStrategies()
+                return
+            }
+            if (!fromConnect) {
+                if (webSocket == null) {
+                    connect()
+                    return
+                }
+                if (oldTokenIds == tokenIds.toSet()) {
+                    scheduleRefreshAtPeriodEnd(newMap)
+                    precomputeAutoSpreadForCurrentPeriods(newMap)
+                    return
+                }
+                closeWebSocketAndReconnect()
+                return
+            }
+            val marketSlugs = newMap.values.asSequence().flatten()
+                .distinctBy { "${it.strategy.marketSlugPrefix}-${it.periodStartUnix}" }
+                .map { "${it.strategy.marketSlugPrefix}-${it.periodStartUnix}" }
+                .toList()
+            val msg = """{"type":"MARKET","assets_ids":${tokenIds.toJson()}}"""
+            try {
+                webSocket?.send(msg)
+                logger.info("尾盘策略订单簿订阅: ${tokenIds.size} 个 token, 市场: $marketSlugs")
+            } catch (e: Exception) {
+                logger.warn("发送订阅失败: ${e.message}")
+                return
+            }
+            scheduleRefreshAtPeriodEnd(newMap)
+            precomputeAutoSpreadForCurrentPeriods(newMap)
+        } finally {
+            isRefreshing.set(false)
         }
-        scheduleRefreshAtPeriodEnd(newMap)
-        precomputeAutoSpreadForCurrentPeriods(newMap)
     }
 
     /**
