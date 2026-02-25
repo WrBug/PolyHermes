@@ -12,6 +12,7 @@ import com.wrbug.polymarketbot.service.binance.BinanceKlineAutoSpreadService
 import com.wrbug.polymarketbot.service.binance.BinanceKlineService
 import com.wrbug.polymarketbot.service.common.WebSocketSubscriptionService
 import com.wrbug.polymarketbot.util.RetrofitFactory
+import com.wrbug.polymarketbot.util.createClient
 import com.wrbug.polymarketbot.util.fromJson
 import com.wrbug.polymarketbot.util.toJson
 import com.wrbug.polymarketbot.util.toSafeBigDecimal
@@ -58,6 +59,7 @@ class CryptoTailMonitorService(
 
     /** 当前周期 token 映射 */
     private val currentPeriodTokenToStrategy = AtomicReference<Map<String, List<MonitorEntry>>>(emptyMap())
+
     /** 下一周期 token 映射 */
     private val nextPeriodTokenToStrategy = AtomicReference<Map<String, List<MonitorEntry>>>(emptyMap())
 
@@ -70,7 +72,10 @@ class CryptoTailMonitorService(
     private var currentPeriodWebSocket: WebSocket? = null
     private var nextPeriodWebSocket: WebSocket? = null
     private val wsUrl = PolymarketConstants.RTDS_WS_URL + "/ws/market"
-    private val client = OkHttpClient.Builder().build()
+
+    private val client by lazy {
+        createClient().build()
+    }
 
     private val reconnectDelayMs = 3_000L
     private var reconnectJob: Job? = null
@@ -144,14 +149,22 @@ class CryptoTailMonitorService(
             val tokenIds = parseClobTokenIds(market?.clobTokenIds)
 
             // 获取开盘价（币安 K 线 open = BTC 价格 USDC）
-            val openClose = binanceKlineService.getCurrentOpenClose(strategy.marketSlugPrefix, strategy.intervalSeconds, periodStartUnix)
+            val openClose = binanceKlineService.getCurrentOpenClose(
+                strategy.marketSlugPrefix,
+                strategy.intervalSeconds,
+                periodStartUnix
+            )
             val openPriceBtc = openClose?.first
 
             // 获取自动计算的最小价差
             var autoMinSpreadUp: BigDecimal? = null
             var autoMinSpreadDown: BigDecimal? = null
             if (strategy.spreadMode.name.uppercase() == "AUTO") {
-                val autoSpreads = binanceKlineAutoSpreadService.computeAndCache(strategy.marketSlugPrefix, strategy.intervalSeconds, periodStartUnix)
+                val autoSpreads = binanceKlineAutoSpreadService.computeAndCache(
+                    strategy.marketSlugPrefix,
+                    strategy.intervalSeconds,
+                    periodStartUnix
+                )
                 autoMinSpreadUp = autoSpreads?.first
                 autoMinSpreadDown = autoSpreads?.second
             }
@@ -202,7 +215,6 @@ class CryptoTailMonitorService(
     fun subscribe(sessionId: String, strategyId: Long, callback: (CryptoTailMonitorPushData) -> Unit) {
         // 增加订阅计数
         val count = strategySubscribers.merge(strategyId, 1) { old, inc -> old + inc } ?: 1
-        logger.info("策略 $strategyId 订阅数: $count")
 
         // 注册推送回调
         webSocketSubscriptionService.registerMonitorCallback(sessionId, strategyId, callback)
@@ -230,15 +242,20 @@ class CryptoTailMonitorService(
      */
     fun unsubscribe(sessionId: String, strategyId: Long) {
         // 减少订阅计数
-        val count = strategySubscribers.merge(strategyId, -1) { old, dec -> (old - dec).coerceAtLeast(0) } ?: 0
-        logger.info("策略 $strategyId 订阅数: $count")
+        val currentCount = strategySubscribers[strategyId] ?: 0
+        val newCount = (currentCount - 1).coerceAtLeast(0)
+
+        if (newCount == 0) {
+            strategySubscribers.remove(strategyId)
+        } else {
+            strategySubscribers[strategyId] = newCount
+        }
 
         // 移除回调
         webSocketSubscriptionService.unregisterMonitorCallback(sessionId, strategyId)
 
         // 如果没有订阅者，关闭 WebSocket 和定时推送
-        if (count == 0) {
-            strategySubscribers.remove(strategyId)
+        if (newCount == 0) {
             scope.launch {
                 refreshSubscription()
             }
@@ -277,7 +294,11 @@ class CryptoTailMonitorService(
     /**
      * 发送当前数据（含历史补全，用于中途进入时填充分时图）
      */
-    private suspend fun sendCurrentData(sessionId: String, strategyId: Long, callback: (CryptoTailMonitorPushData) -> Unit) {
+    private suspend fun sendCurrentData(
+        sessionId: String,
+        strategyId: Long,
+        callback: (CryptoTailMonitorPushData) -> Unit
+    ) {
         val strategy = strategyRepository.findById(strategyId).orElse(null) ?: return
         val priceData = strategyPriceData[strategyId] ?: StrategyPriceData()
 
@@ -298,7 +319,6 @@ class CryptoTailMonitorService(
      */
     private suspend fun refreshSubscription() {
         if (!refreshSubscriptionMutex.tryLock()) {
-            logger.debug("refreshSubscription 正在执行，跳过本次并发调用")
             return
         }
         try {
@@ -334,7 +354,8 @@ class CryptoTailMonitorService(
             nextPeriodWebSocket = null
             val nextMap = nextPeriodTokenToStrategy.get()
             currentPeriodTokenToStrategy.set(nextMap)
-            val nextPeriodByStrategy = nextMap.values.flatten().distinctBy { it.strategyId }.associate { it.strategyId to it.periodStartUnix }
+            val nextPeriodByStrategy =
+                nextMap.values.flatten().distinctBy { it.strategyId }.associate { it.strategyId to it.periodStartUnix }
             logger.info("周期切换：下一周期连接晋升为当前")
             for ((strategyId, periodStartUnix) in nextPeriodByStrategy) {
                 updateStrategyPriceDataForPeriod(listOf(strategyId), periodStartUnix, pushDefault = true)
@@ -405,14 +426,24 @@ class CryptoTailMonitorService(
         val map = mutableMapOf<String, MutableList<MonitorEntry>>()
 
         for (strategy in strategies) {
-            if (!strategy.enabled || strategy.id == null) continue
+            if (!strategy.enabled || strategy.id == null) {
+                continue
+            }
             val currentPeriod = (nowSeconds / strategy.intervalSeconds) * strategy.intervalSeconds
             val nextPeriod = currentPeriod + strategy.intervalSeconds
             val slug = "${strategy.marketSlugPrefix}-$nextPeriod"
-            val event = fetchEventBySlug(slug).getOrNull() ?: continue
-            val market = event.markets?.firstOrNull() ?: continue
+            val event = fetchEventBySlug(slug).getOrNull()
+            if (event == null) {
+                continue
+            }
+            val market = event.markets?.firstOrNull()
+            if (market == null) {
+                continue
+            }
             val tokenIds = parseClobTokenIds(market.clobTokenIds)
-            if (tokenIds.size < 2) continue
+            if (tokenIds.size < 2) {
+                continue
+            }
             for (i in tokenIds.indices) {
                 tokenIdSet.add(tokenIds[i])
                 map.getOrPut(tokenIds[i]) { mutableListOf() }.add(
@@ -424,11 +455,19 @@ class CryptoTailMonitorService(
     }
 
     /** 更新策略价格数据为指定周期（开盘价、价差线等），可选是否推送默认 0.5 */
-    private suspend fun updateStrategyPriceDataForPeriod(strategyIds: List<Long>, periodStartUnix: Long, pushDefault: Boolean) {
+    private suspend fun updateStrategyPriceDataForPeriod(
+        strategyIds: List<Long>,
+        periodStartUnix: Long,
+        pushDefault: Boolean
+    ) {
         val strategies = strategyRepository.findAllById(strategyIds)
         for (strategy in strategies) {
             if (strategy.id == null) continue
-            val openClose = binanceKlineService.getCurrentOpenClose(strategy.marketSlugPrefix, strategy.intervalSeconds, periodStartUnix)
+            val openClose = binanceKlineService.getCurrentOpenClose(
+                strategy.marketSlugPrefix,
+                strategy.intervalSeconds,
+                periodStartUnix
+            )
             val openPriceBtc = openClose?.first
             var minSpreadLineUp: BigDecimal? = null
             var minSpreadLineDown: BigDecimal? = null
@@ -437,8 +476,13 @@ class CryptoTailMonitorService(
                     minSpreadLineUp = strategy.spreadValue?.toSafeBigDecimal()
                     minSpreadLineDown = strategy.spreadValue?.toSafeBigDecimal()
                 }
+
                 "AUTO" -> {
-                    val autoSpreads = binanceKlineAutoSpreadService.computeAndCache(strategy.marketSlugPrefix, strategy.intervalSeconds, periodStartUnix)
+                    val autoSpreads = binanceKlineAutoSpreadService.computeAndCache(
+                        strategy.marketSlugPrefix,
+                        strategy.intervalSeconds,
+                        periodStartUnix
+                    )
                     minSpreadLineUp = autoSpreads?.first
                     minSpreadLineDown = autoSpreads?.second
                 }
@@ -479,7 +523,7 @@ class CryptoTailMonitorService(
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
-                handleMessage(webSocket, text, isFromCurrentPeriod = true)
+                handleMessage(webSocket, text)
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
@@ -499,7 +543,9 @@ class CryptoTailMonitorService(
     }
 
     private fun connectNextPeriod(tokenIds: List<String>, map: Map<String, List<MonitorEntry>>) {
-        if (nextPeriodWebSocket != null) return
+        if (nextPeriodWebSocket != null) {
+            return
+        }
         val request = Request.Builder().url(wsUrl).build()
         nextPeriodWebSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: okhttp3.Response) {
@@ -517,7 +563,7 @@ class CryptoTailMonitorService(
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
-                handleMessage(webSocket, text, isFromCurrentPeriod = false)
+                handleMessage(webSocket, text)
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
@@ -551,10 +597,9 @@ class CryptoTailMonitorService(
         logger.info("尾盘监控 WebSocket 已全部关闭（无订阅者）")
     }
 
-    private fun handleMessage(webSocket: WebSocket, text: String, isFromCurrentPeriod: Boolean) {
+    private fun handleMessage(webSocket: WebSocket, text: String) {
         if (text == "pong" || text.isEmpty()) return
         if (closedForNoSubscribers.get()) return
-        if (!isFromCurrentPeriod) return
 
         maybeRefreshSubscriptionIfPeriodChanged()
 
@@ -563,14 +608,6 @@ class CryptoTailMonitorService(
         val map = currentPeriodTokenToStrategy.get()
 
         when (eventType) {
-            "book" -> {
-                val assetId = (json.get("asset_id") as? com.google.gson.JsonPrimitive)?.asString ?: return
-                val bids = json.get("bids") as? com.google.gson.JsonArray
-                if (bids == null || bids.isEmpty) return
-                val firstBid = bids.get(0) as? com.google.gson.JsonObject
-                val bestBid = (firstBid?.get("price") as? com.google.gson.JsonPrimitive)?.asString?.toSafeBigDecimal()
-                if (bestBid != null) onPriceUpdate(assetId, bestBid, map)
-            }
             "price_change" -> {
                 val priceChanges = json.get("price_changes") as? com.google.gson.JsonArray ?: return
                 for (i in 0 until priceChanges.size()) {
@@ -657,7 +694,11 @@ class CryptoTailMonitorService(
         val inTimeWindow = nowSeconds >= windowStart && nowSeconds < windowEnd
 
         // 币安 K 线：open = 周期开盘价，close = 当前最新价（实时更新）
-        val openClose = binanceKlineService.getCurrentOpenClose(strategy.marketSlugPrefix, strategy.intervalSeconds, periodStartUnix)
+        val openClose = binanceKlineService.getCurrentOpenClose(
+            strategy.marketSlugPrefix,
+            strategy.intervalSeconds,
+            periodStartUnix
+        )
         val openPriceBtc = priceData.openPriceBtc ?: openClose?.first
         val currentPriceBtc = openClose?.second
         // K 线数据回来后更新缓存，供后续使用
@@ -672,9 +713,9 @@ class CryptoTailMonitorService(
         val currentUp = priceData.currentPriceUp
         val currentDown = priceData.currentPriceDown
         val inPriceRangeUp = currentUp != null &&
-            currentUp >= strategy.minPrice && currentUp <= strategy.maxPrice
+                currentUp >= strategy.minPrice && currentUp <= strategy.maxPrice
         val inPriceRangeDown = currentDown != null &&
-            currentDown >= strategy.minPrice && currentDown <= strategy.maxPrice
+                currentDown >= strategy.minPrice && currentDown <= strategy.maxPrice
 
         return CryptoTailMonitorPushData(
             strategyId = strategy.id!!,

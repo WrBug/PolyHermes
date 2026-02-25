@@ -66,22 +66,21 @@ class WebSocketSubscriptionService(
      * 注销会话
      */
     fun unregisterSession(sessionId: String) {
-        
         // 取消所有订阅
         val channels = sessionSubscriptions.remove(sessionId) ?: emptySet()
         channels.forEach { channel ->
             unsubscribe(sessionId, channel)
         }
-        
+
         // 清理 order 频道的回调
         orderChannelCallbacks.remove(sessionId)
-        
+
         // 清理尾盘监控频道的回调
         val monitorCallbacks = monitorChannelCallbacks.remove(sessionId)
         monitorCallbacks?.keys?.forEach { strategyId ->
             cryptoTailMonitorService?.unsubscribe(sessionId, strategyId)
         }
-        
+
         sessionCallbacks.remove(sessionId)
     }
     
