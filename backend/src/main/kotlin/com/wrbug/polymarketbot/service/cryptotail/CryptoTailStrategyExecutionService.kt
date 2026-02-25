@@ -135,13 +135,17 @@ class CryptoTailStrategyExecutionService(
             return null
         }
         val apiSecret = try {
-            account.apiSecret?.let { cryptoUtils.decrypt(it) } ?: ""
-        } catch (e: Exception) { "" }
+            account.apiSecret.let { cryptoUtils.decrypt(it) }
+        } catch (e: Exception) {
+            ""
+        }
         val apiPassphrase = try {
-            account.apiPassphrase?.let { cryptoUtils.decrypt(it) } ?: ""
-        } catch (e: Exception) { "" }
+            account.apiPassphrase.let { cryptoUtils.decrypt(it) }
+        } catch (e: Exception) {
+            ""
+        }
 
-        val clobApi = retrofitFactory.createClobApi(account.apiKey!!, apiSecret, apiPassphrase, account.walletAddress)
+        val clobApi = retrofitFactory.createClobApi(account.apiKey, apiSecret, apiPassphrase, account.walletAddress)
         val feeRateByTokenId = tokenIds.associate { tokenId ->
             tokenId to (clobService.getFeeRate(tokenId).getOrNull()?.toString() ?: "0")
         }
@@ -211,11 +215,19 @@ class CryptoTailStrategyExecutionService(
 
         val mutex = getTriggerMutex(strategy.id!!, periodStartUnix)
         mutex.withLock {
-            if (triggerRepository.findByStrategyIdAndPeriodStartUnix(strategy.id!!, periodStartUnix) != null) return@withLock
+            if (triggerRepository.findByStrategyIdAndPeriodStartUnix(
+                    strategy.id!!,
+                    periodStartUnix
+                ) != null
+            ) return@withLock
             val logKey = triggerLockKey(strategy.id!!, periodStartUnix)
             if (conditionLoggedCache.getIfPresent(logKey) == null) {
                 conditionLoggedCache.put(logKey, periodStartUnix + strategy.intervalSeconds)
-                val oc = binanceKlineService.getCurrentOpenClose(strategy.marketSlugPrefix, strategy.intervalSeconds, periodStartUnix)
+                val oc = binanceKlineService.getCurrentOpenClose(
+                    strategy.marketSlugPrefix,
+                    strategy.intervalSeconds,
+                    periodStartUnix
+                )
                 val openPrice = oc?.first?.toPlainString() ?: "-"
                 val closePrice = oc?.second?.toPlainString() ?: "-"
                 val strategyName = strategy.name?.takeIf { it.isNotBlank() } ?: "尾盘策略-${strategy.marketSlugPrefix}"
@@ -223,8 +235,8 @@ class CryptoTailStrategyExecutionService(
                 val modeStr = if (strategy.spreadDirection == SpreadDirection.MAX) "最大价差" else "最小价差"
                 logger.info(
                     "尾盘策略首次满足条件: strategyName=$strategyName, strategyId=${strategy.id}, " +
-                        "openPrice=$openPrice, closePrice=$closePrice, marketPrice=${bestBid.toPlainString()}, " +
-                        "direction=$direction, outcomeIndex=$outcomeIndex, spreadMode=$modeStr"
+                            "openPrice=$openPrice, closePrice=$closePrice, marketPrice=${bestBid.toPlainString()}, " +
+                            "direction=$direction, outcomeIndex=$outcomeIndex, spreadMode=$modeStr"
                 )
             }
             if (!passSpreadCheck(strategy, periodStartUnix, outcomeIndex)) return@withLock
@@ -235,23 +247,29 @@ class CryptoTailStrategyExecutionService(
 
     private fun passSpreadCheck(strategy: CryptoTailStrategy, periodStartUnix: Long, outcomeIndex: Int): Boolean {
         if (strategy.spreadMode == SpreadMode.NONE) return true
-        val oc = binanceKlineService.getCurrentOpenClose(strategy.marketSlugPrefix, strategy.intervalSeconds, periodStartUnix)
+        val oc = binanceKlineService.getCurrentOpenClose(
+            strategy.marketSlugPrefix,
+            strategy.intervalSeconds,
+            periodStartUnix
+        )
             ?: return false
         val (openP, closeP) = oc
         val spreadAbs = closeP.subtract(openP).abs()
-        
+
         // 获取有效价差
         val effectiveSpread = when (strategy.spreadMode) {
             SpreadMode.FIXED -> {
                 strategy.spreadValue?.takeIf { it > BigDecimal.ZERO } ?: return true
             }
+
             SpreadMode.AUTO -> {
                 val result = computeAutoEffectiveSpread(strategy, periodStartUnix, outcomeIndex) ?: return true
                 result.effectiveSpread.takeIf { it > BigDecimal.ZERO } ?: return true
             }
+
             SpreadMode.NONE -> return true
         }
-        
+
         // 根据价差方向判断
         return if (strategy.spreadDirection == SpreadDirection.MAX) {
             // 最大价差模式：价差 <= 配置值时触发
@@ -271,9 +289,22 @@ class CryptoTailStrategyExecutionService(
         val effectiveSpread: BigDecimal
     )
 
-    private fun computeAutoEffectiveSpread(strategy: CryptoTailStrategy, periodStartUnix: Long, outcomeIndex: Int): AutoSpreadResult? {
-        val baseSpread = binanceKlineAutoSpreadService.getAutoMinSpreadBase(strategy.marketSlugPrefix, strategy.intervalSeconds, periodStartUnix, outcomeIndex)
-            ?: binanceKlineAutoSpreadService.computeAndCache(strategy.marketSlugPrefix, strategy.intervalSeconds, periodStartUnix)?.let { if (outcomeIndex == 0) it.first else it.second }
+    private fun computeAutoEffectiveSpread(
+        strategy: CryptoTailStrategy,
+        periodStartUnix: Long,
+        outcomeIndex: Int
+    ): AutoSpreadResult? {
+        val baseSpread = binanceKlineAutoSpreadService.getAutoMinSpreadBase(
+            strategy.marketSlugPrefix,
+            strategy.intervalSeconds,
+            periodStartUnix,
+            outcomeIndex
+        )
+            ?: binanceKlineAutoSpreadService.computeAndCache(
+                strategy.marketSlugPrefix,
+                strategy.intervalSeconds,
+                periodStartUnix
+            )?.let { if (outcomeIndex == 0) it.first else it.second }
             ?: return null
         if (baseSpread <= BigDecimal.ZERO) return null
         val windowStartMs = (periodStartUnix + strategy.windowStartSeconds) * 1000L
@@ -306,18 +337,40 @@ class CryptoTailStrategyExecutionService(
             val amountUsdc = when (strategy.amountMode.uppercase()) {
                 "RATIO" -> {
                     val balanceResult = accountService.getAccountBalance(ctx.account.id)
-                    val availableBalance = balanceResult.getOrNull()?.availableBalance?.toSafeBigDecimal() ?: BigDecimal.ZERO
+                    val availableBalance =
+                        balanceResult.getOrNull()?.availableBalance?.toSafeBigDecimal() ?: BigDecimal.ZERO
                     availableBalance.multiply(strategy.amountValue).divide(BigDecimal("100"), 18, RoundingMode.DOWN)
                 }
+
                 else -> strategy.amountValue
             }
             if (amountUsdc < BigDecimal("1")) {
-                saveTriggerRecord(strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, amountUsdc, null, "fail", "投入金额不足")
+                saveTriggerRecord(
+                    strategy,
+                    periodStartUnix,
+                    marketTitle,
+                    outcomeIndex,
+                    triggerPrice,
+                    amountUsdc,
+                    null,
+                    "fail",
+                    "投入金额不足"
+                )
                 return
             }
 
             val tokenId = tokenIds.getOrNull(outcomeIndex) ?: run {
-                saveTriggerRecord(strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, amountUsdc, null, "fail", "tokenIds 越界")
+                saveTriggerRecord(
+                    strategy,
+                    periodStartUnix,
+                    marketTitle,
+                    outcomeIndex,
+                    triggerPrice,
+                    amountUsdc,
+                    null,
+                    "fail",
+                    "tokenIds 越界"
+                )
                 return
             }
 
@@ -350,7 +403,16 @@ class CryptoTailStrategyExecutionService(
                 orderType = "FAK",
                 deferExec = false
             )
-            submitOrderAndSaveRecord(ctx.clobApi, strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, amountUsdc, orderRequest)
+            submitOrderAndSaveRecord(
+                ctx.clobApi,
+                strategy,
+                periodStartUnix,
+                marketTitle,
+                outcomeIndex,
+                triggerPrice,
+                amountUsdc,
+                orderRequest
+            )
             return
         }
 
@@ -373,7 +435,17 @@ class CryptoTailStrategyExecutionService(
             if (response.isSuccessful && response.body() != null) {
                 val body = response.body()!!
                 if (body.success && body.orderId != null) {
-                    saveTriggerRecord(strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, amountUsdc, body.orderId, "success", null)
+                    saveTriggerRecord(
+                        strategy,
+                        periodStartUnix,
+                        marketTitle,
+                        outcomeIndex,
+                        triggerPrice,
+                        amountUsdc,
+                        body.orderId,
+                        "success",
+                        null
+                    )
                     logger.info("尾盘策略下单成功: strategyId=${strategy.id}, periodStartUnix=$periodStartUnix, outcomeIndex=$outcomeIndex, orderId=${body.orderId}")
                     return
                 }
@@ -386,7 +458,17 @@ class CryptoTailStrategyExecutionService(
             failReason = e.message ?: e.toString()
             logger.error("尾盘策略下单异常: strategyId=${strategy.id}, periodStartUnix=$periodStartUnix", e)
         }
-        saveTriggerRecord(strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, amountUsdc, null, "fail", failReason)
+        saveTriggerRecord(
+            strategy,
+            periodStartUnix,
+            marketTitle,
+            outcomeIndex,
+            triggerPrice,
+            amountUsdc,
+            null,
+            "fail",
+            failReason
+        )
         logger.error("尾盘策略下单失败: strategyId=${strategy.id}, periodStartUnix=$periodStartUnix, reason=$failReason")
     }
 
@@ -401,12 +483,32 @@ class CryptoTailStrategyExecutionService(
     ) {
         val account = accountRepository.findById(strategy.accountId).orElse(null) ?: run {
             logger.warn("账户不存在: accountId=${strategy.accountId}")
-            saveTriggerRecord(strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, BigDecimal.ZERO, null, "fail", "账户不存在")
+            saveTriggerRecord(
+                strategy,
+                periodStartUnix,
+                marketTitle,
+                outcomeIndex,
+                triggerPrice,
+                BigDecimal.ZERO,
+                null,
+                "fail",
+                "账户不存在"
+            )
             return
         }
         if (account.apiKey == null || account.apiSecret == null || account.apiPassphrase == null) {
             logger.warn("账户未配置 API 凭证: accountId=${account.id}")
-            saveTriggerRecord(strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, BigDecimal.ZERO, null, "fail", "账户未配置API凭证")
+            saveTriggerRecord(
+                strategy,
+                periodStartUnix,
+                marketTitle,
+                outcomeIndex,
+                triggerPrice,
+                BigDecimal.ZERO,
+                null,
+                "fail",
+                "账户未配置API凭证"
+            )
             return
         }
 
@@ -417,12 +519,32 @@ class CryptoTailStrategyExecutionService(
             else -> strategy.amountValue
         }
         if (amountUsdc < BigDecimal("1")) {
-            saveTriggerRecord(strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, amountUsdc, null, "fail", "投入金额不足")
+            saveTriggerRecord(
+                strategy,
+                periodStartUnix,
+                marketTitle,
+                outcomeIndex,
+                triggerPrice,
+                amountUsdc,
+                null,
+                "fail",
+                "投入金额不足"
+            )
             return
         }
 
         val tokenId = tokenIds.getOrNull(outcomeIndex) ?: run {
-            saveTriggerRecord(strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, amountUsdc, null, "fail", "tokenIds 越界")
+            saveTriggerRecord(
+                strategy,
+                periodStartUnix,
+                marketTitle,
+                outcomeIndex,
+                triggerPrice,
+                amountUsdc,
+                null,
+                "fail",
+                "tokenIds 越界"
+            )
             return
         }
 
@@ -441,16 +563,30 @@ class CryptoTailStrategyExecutionService(
             cryptoUtils.decrypt(account.privateKey) ?: ""
         } catch (e: Exception) {
             logger.error("解密私钥失败: accountId=${account.id}", e)
-            saveTriggerRecord(strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, amountUsdc, null, "fail", "解密私钥失败")
+            saveTriggerRecord(
+                strategy,
+                periodStartUnix,
+                marketTitle,
+                outcomeIndex,
+                triggerPrice,
+                amountUsdc,
+                null,
+                "fail",
+                "解密私钥失败"
+            )
             return
         }
         val apiSecret = try {
-            account.apiSecret?.let { cryptoUtils.decrypt(it) } ?: ""
-        } catch (e: Exception) { "" }
+            account.apiSecret.let { cryptoUtils.decrypt(it) }
+        } catch (e: Exception) {
+            ""
+        }
         val apiPassphrase = try {
-            account.apiPassphrase?.let { cryptoUtils.decrypt(it) } ?: ""
-        } catch (e: Exception) { "" }
-        val clobApi = retrofitFactory.createClobApi(account.apiKey!!, apiSecret, apiPassphrase, account.walletAddress)
+            account.apiPassphrase.let { cryptoUtils.decrypt(it) }
+        } catch (e: Exception) {
+            ""
+        }
+        val clobApi = retrofitFactory.createClobApi(account.apiKey, apiSecret, apiPassphrase, account.walletAddress)
         val feeRateBps = clobService.getFeeRate(tokenId).getOrNull()?.toString() ?: "0"
         val signatureType = orderSigningService.getSignatureTypeForWalletType(account.walletType)
 
@@ -472,7 +608,16 @@ class CryptoTailStrategyExecutionService(
             orderType = "FAK",
             deferExec = false
         )
-        submitOrderAndSaveRecord(clobApi, strategy, periodStartUnix, marketTitle, outcomeIndex, triggerPrice, amountUsdc, orderRequest)
+        submitOrderAndSaveRecord(
+            clobApi,
+            strategy,
+            periodStartUnix,
+            marketTitle,
+            outcomeIndex,
+            triggerPrice,
+            amountUsdc,
+            orderRequest
+        )
     }
 
     private suspend fun fetchEventBySlug(slug: String): Result<GammaEventBySlugResponse> {

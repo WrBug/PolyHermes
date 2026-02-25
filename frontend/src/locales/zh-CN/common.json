@@ -312,6 +312,7 @@
     "templates": "跟单模板",
     "copyTradingConfig": "跟单配置",
     "cryptoTailStrategy": "尾盘策略",
+    "cryptoTailMonitor": "尾盘监控",
     "positions": "仓位管理",
     "backtest": "回测",
     "statistics": "统计信息",
@@ -1539,6 +1540,58 @@
       "emptySuccess": "暂无成功记录",
       "emptyFail": "暂无失败记录",
       "totalCount": "共 {count} 条"
+    }
+  },
+  "cryptoTailMonitor": {
+    "title": "尾盘策略监控",
+    "selectStrategy": "选择策略",
+    "selectStrategyPlaceholder": "请选择要监控的策略",
+    "direction": "监控方向",
+    "directionUp": "Up",
+    "directionDown": "Down",
+    "noData": "请选择一个策略开始监控",
+    "priceRange": "价格区间",
+    "timeWindow": "时间窗口",
+    "stat": {
+      "openPrice": "开盘价",
+      "currentPrice": "最新价",
+      "spread": "价差",
+      "remainingTime": "剩余时间",
+      "configuredSpread": "配置价差",
+      "configuredSpreadMin": "最小价差",
+      "configuredSpreadMax": "最大价差",
+      "status": "状态",
+      "minSpreadLine": "最小价差线",
+      "periodSpreadMinMax": "周期内价差",
+      "periodSpreadMin": "周期内最小价差",
+      "periodSpreadMax": "周期内最大价差",
+      "minSpread": "最小",
+      "maxSpread": "最大"
+    },
+    "status": {
+      "triggered": "已触发",
+      "periodEnded": "周期结束",
+      "inCondition": "满足条件",
+      "waiting": "等待中"
+    },
+    "chart": {
+      "title": "分时图",
+      "btcTitle": "BTC 分时图",
+      "marketTitle": "市场分时图",
+      "price": "BTC 价格",
+      "openPrice": "开盘价",
+      "spread": "价差",
+      "minSpreadLine": "最小价差线",
+      "marketUp": "Up",
+      "marketDown": "Down",
+      "time": "时间"
+    },
+    "strategyInfo": {
+      "title": "策略信息",
+      "market": "市场",
+      "interval": "周期",
+      "account": "账户",
+      "spreadMode": "价差模式"
     }
   }
 }

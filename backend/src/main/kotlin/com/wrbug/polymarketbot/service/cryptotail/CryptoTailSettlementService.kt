@@ -228,11 +228,11 @@ class CryptoTailSettlementService(
             val match = activities.firstOrNull { a ->
                 a.type == "TRADE" &&
                     a.conditionId == conditionId &&
-                    a.outcomeIndex != null && a.outcomeIndex!! in 0..1 &&
+                    a.outcomeIndex != null && a.outcomeIndex in 0..1 &&
                     a.outcomeIndex == trigger.outcomeIndex &&
                     a.side?.uppercase() == "BUY" &&
-                    a.price != null && a.price!! > 0 &&
-                    a.size != null && a.size!! > 0
+                    a.price != null && a.price > 0 &&
+                    a.size != null && a.size > 0
             } ?: run {
                 logger.debug("尾盘结算 activity 无匹配成交: triggerId=${trigger.id}, conditionId=$conditionId, outcomeIndex=${trigger.outcomeIndex}, 条数=${activities.size}")
                 return null

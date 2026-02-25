@@ -102,16 +102,16 @@ class CryptoTailOrderNotificationPollingService(
             return false
         }
         val apiSecret = try {
-            cryptoUtils.decrypt(account.apiSecret) ?: return false
+            cryptoUtils.decrypt(account.apiSecret)
         } catch (e: Exception) {
             logger.warn("解密 API Secret 失败: accountId=${account.id}", e)
             return false
         }
         val apiPassphrase = try {
-            cryptoUtils.decrypt(account.apiPassphrase) ?: ""
+            cryptoUtils.decrypt(account.apiPassphrase)
         } catch (e: Exception) { "" }
         val clobApi = retrofitFactory.createClobApi(
-            account.apiKey!!,
+            account.apiKey,
             apiSecret,
             apiPassphrase,
             account.walletAddress

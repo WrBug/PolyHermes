@@ -11,9 +11,12 @@ import com.wrbug.polymarketbot.dto.CryptoTailStrategyTriggerListResponse
 import com.wrbug.polymarketbot.dto.CryptoTailStrategyUpdateRequest
 import com.wrbug.polymarketbot.dto.CryptoTailMarketOptionDto
 import com.wrbug.polymarketbot.dto.CryptoTailAutoMinSpreadResponse
+import com.wrbug.polymarketbot.dto.CryptoTailMonitorInitRequest
+import com.wrbug.polymarketbot.dto.CryptoTailMonitorInitResponse
 import com.wrbug.polymarketbot.enums.ErrorCode
 import com.wrbug.polymarketbot.service.binance.BinanceKlineAutoSpreadService
 import com.wrbug.polymarketbot.service.cryptotail.CryptoTailStrategyService
+import com.wrbug.polymarketbot.service.cryptotail.CryptoTailMonitorService
 import org.slf4j.LoggerFactory
 import org.springframework.context.MessageSource
 import org.springframework.http.ResponseEntity
@@ -26,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/api/crypto-tail-strategy")
 class CryptoTailStrategyController(
     private val cryptoTailStrategyService: CryptoTailStrategyService,
+    private val cryptoTailMonitorService: CryptoTailMonitorService,
     private val binanceKlineAutoSpreadService: BinanceKlineAutoSpreadService,
     private val messageSource: MessageSource
 ) {
@@ -173,7 +177,7 @@ class CryptoTailStrategyController(
                 return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ERROR, messageSource = messageSource))
             }
             val periodStartUnix = (request["periodStartUnix"] as? Number)?.toLong()
-                ?: (System.currentTimeMillis() / 1000 / intervalSeconds) * intervalSeconds
+                ?: ((System.currentTimeMillis() / 1000 / intervalSeconds) * intervalSeconds)
             // 默认使用 BTC 市场（向后兼容）
             val marketSlugPrefix = (request["marketSlugPrefix"] as? String) ?: "btc-updown"
             val pair = binanceKlineAutoSpreadService.computeAndCache(marketSlugPrefix, intervalSeconds, periodStartUnix)
@@ -185,6 +189,30 @@ class CryptoTailStrategyController(
             ResponseEntity.ok(ApiResponse.success(body))
         } catch (e: Exception) {
             logger.error("计算自动最小价差异常: ${e.message}", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
+        }
+    }
+
+    /**
+     * 初始化尾盘策略监控
+     * 返回策略信息、开盘价、tokenIds等初始化数据
+     */
+    @PostMapping("/monitor/init")
+    fun initMonitor(@RequestBody request: CryptoTailMonitorInitRequest): ResponseEntity<ApiResponse<CryptoTailMonitorInitResponse>> {
+        return try {
+            if (request.strategyId <= 0) {
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.CRYPTO_TAIL_STRATEGY_NOT_FOUND, messageSource = messageSource))
+            }
+            val result = cryptoTailMonitorService.initMonitor(request)
+            result.fold(
+                onSuccess = { ResponseEntity.ok(ApiResponse.success(it)) },
+                onFailure = { e ->
+                    logger.error("初始化尾盘监控失败: ${e.message}", e)
+                    ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
+                }
+            )
+        } catch (e: Exception) {
+            logger.error("初始化尾盘监控异常: ${e.message}", e)
             ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
         }
     }

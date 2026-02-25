@@ -1107,3 +1107,97 @@ export interface CryptoTailMarketOptionDto {
   periodStartUnix: number
   endDate?: string
 }
+
+/**
+ * 尾盘策略监控初始化响应
+ */
+export interface CryptoTailMonitorInitResponse {
+  /** 策略ID */
+  strategyId: number
+  /** 策略名称 */
+  name: string
+  /** 账户ID */
+  accountId: number
+  /** 账户名称 */
+  accountName: string
+  /** 市场 slug 前缀 */
+  marketSlugPrefix: string
+  /** 市场标题 */
+  marketTitle: string
+  /** 周期秒数 (300=5m, 900=15m) */
+  intervalSeconds: number
+  /** 当前周期开始时间 (Unix 秒) */
+  periodStartUnix: number
+  /** 时间窗口开始秒数 */
+  windowStartSeconds: number
+  /** 时间窗口结束秒数 */
+  windowEndSeconds: number
+  /** 最低价格 */
+  minPrice: string
+  /** 最高价格 */
+  maxPrice: string
+  /** 最小价差模式: NONE, FIXED, AUTO */
+  minSpreadMode: string
+  /** 价差方向: MIN（显示周期内最小价差）, MAX（显示周期内最大价差） */
+  spreadDirection?: string
+  /** 最小价差数值 (FIXED 时有值) */
+  minSpreadValue?: string
+  /** 自动计算的最小价差 (Up方向) */
+  autoMinSpreadUp?: string
+  /** 自动计算的最小价差 (Down方向) */
+  autoMinSpreadDown?: string
+  /** BTC 开盘价 USDC（来自币安 K 线） */
+  openPriceBtc?: string
+  /** Up tokenId */
+  tokenIdUp?: string
+  /** Down tokenId */
+  tokenIdDown?: string
+  /** 当前时间 (毫秒时间戳) */
+  currentTimestamp: number
+  /** 是否启用 */
+  enabled: boolean
+}
+
+/**
+ * 尾盘策略监控实时推送数据
+ */
+export interface CryptoTailMonitorPushData {
+  /** 策略ID */
+  strategyId: number
+  /** 推送时间 (毫秒时间戳) */
+  timestamp: number
+  /** 当前周期开始时间 (Unix 秒) */
+  periodStartUnix: number
+  /** 当前价格 (Up方向，来自订单簿) */
+  currentPriceUp?: string
+  /** 当前价格 (Down方向，来自订单簿) */
+  currentPriceDown?: string
+  /** 当前价差 (Up方向: 1 - currentPriceUp) */
+  spreadUp?: string
+  /** 当前价差 (Down方向: currentPriceUp) */
+  spreadDown?: string
+  /** 最小价差线 (Up方向，USDC) */
+  minSpreadLineUp?: string
+  /** 最小价差线 (Down方向，USDC) */
+  minSpreadLineDown?: string
+  /** BTC 开盘价 USDC */
+  openPriceBtc?: string
+  /** BTC 最新价 USDC */
+  currentPriceBtc?: string
+  /** BTC 价差 USDC（currentPriceBtc - openPriceBtc） */
+  spreadBtc?: string
+  /** 周期剩余秒数 */
+  remainingSeconds: number
+  /** 是否在时间窗口内 */
+  inTimeWindow: boolean
+  /** 是否在价格区间内 (Up方向) */
+  inPriceRangeUp: boolean
+  /** 是否在价格区间内 (Down方向) */
+  inPriceRangeDown: boolean
+  /** 是否已触发 */
+  triggered: boolean
+  /** 触发方向: UP, DOWN, null */
+  triggerDirection?: string
+  /** 周期是否已结束 */
+  periodEnded: boolean
+}

@@ -313,6 +313,7 @@
     "templates": "Templates",
     "copyTradingConfig": "Copy Trading Config",
     "cryptoTailStrategy": "Tail Strategy",
+    "cryptoTailMonitor": "Tail Monitor",
     "positions": "Position Management",
     "backtest": "Backtest",
     "statistics": "Statistics",
@@ -1540,6 +1541,58 @@
       "emptySuccess": "No success records",
       "emptyFail": "No failed records",
       "totalCount": "{count} record(s)"
+    }
+  },
+  "cryptoTailMonitor": {
+    "title": "Tail Strategy Monitor",
+    "selectStrategy": "Strategy",
+    "selectStrategyPlaceholder": "Select a strategy to monitor",
+    "direction": "Direction",
+    "directionUp": "Up",
+    "directionDown": "Down",
+    "noData": "Select a strategy to start monitoring",
+    "priceRange": "Price Range",
+    "timeWindow": "Time Window",
+    "stat": {
+      "openPrice": "Open Price",
+      "currentPrice": "Current Price",
+      "spread": "Spread",
+      "remainingTime": "Remaining",
+      "configuredSpread": "Configured Spread",
+      "configuredSpreadMin": "Min Spread",
+      "configuredSpreadMax": "Max Spread",
+      "status": "Status",
+      "minSpreadLine": "Min Spread",
+      "periodSpreadMinMax": "Period Spread",
+      "periodSpreadMin": "Period Min Spread",
+      "periodSpreadMax": "Period Max Spread",
+      "minSpread": "Min",
+      "maxSpread": "Max"
+    },
+    "status": {
+      "triggered": "Triggered",
+      "periodEnded": "Period Ended",
+      "inCondition": "In Condition",
+      "waiting": "Waiting"
+    },
+    "chart": {
+      "title": "Price Chart",
+      "btcTitle": "BTC Price Chart",
+      "marketTitle": "Market Price Chart",
+      "price": "BTC Price",
+      "openPrice": "Open",
+      "spread": "Spread",
+      "minSpreadLine": "Min Spread Line",
+      "marketUp": "Up",
+      "marketDown": "Down",
+      "time": "Time"
+    },
+    "strategyInfo": {
+      "title": "Strategy Info",
+      "market": "Market",
+      "interval": "Interval",
+      "account": "Account",
+      "spreadMode": "Spread Mode"
     }
   }
 }
