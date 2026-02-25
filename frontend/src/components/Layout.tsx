@@ -21,7 +21,9 @@ import {
   SendOutlined,
   ApiOutlined,
   NotificationOutlined,
-  LineChartOutlined
+  LineChartOutlined,
+  RocketOutlined,
+  DashboardOutlined
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 import type { ReactNode } from 'react'
@@ -75,6 +77,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     if (path.startsWith('/leaders') || path.startsWith('/templates') || path.startsWith('/copy-trading') || path.startsWith('/backtest')) {
       keys.push('/copy-trading-management')
     }
+    if (path.startsWith('/crypto-tail-strategy') || path.startsWith('/crypto-tail-monitor')) {
+      keys.push('/crypto-tail-management')
+    }
     if (path.startsWith('/system-settings')) {
       keys.push('/system-settings')
     }
@@ -89,6 +94,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     const keys: string[] = []
     if (path.startsWith('/leaders') || path.startsWith('/templates') || path.startsWith('/copy-trading') || path.startsWith('/backtest')) {
       keys.push('/copy-trading-management')
+    }
+    if (path.startsWith('/crypto-tail-strategy') || path.startsWith('/crypto-tail-monitor')) {
+      keys.push('/crypto-tail-management')
     }
     if (path.startsWith('/system-settings')) {
       keys.push('/system-settings')
@@ -158,14 +166,21 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       ]
     },
     {
-      key: '/crypto-tail-strategy',
+      key: '/crypto-tail-management',
       icon: <LineChartOutlined />,
-      label: t('menu.cryptoTailStrategy')
-    },
-    {
-      key: '/crypto-tail-monitor',
-      icon: <LineChartOutlined />,
-      label: t('menu.cryptoTailMonitor')
+      label: t('menu.cryptoTail'),
+      children: [
+        {
+          key: '/crypto-tail-strategy',
+          icon: <RocketOutlined />,
+          label: t('menu.cryptoTailStrategy')
+        },
+        {
+          key: '/crypto-tail-monitor',
+          icon: <DashboardOutlined />,
+          label: t('menu.cryptoTailMonitor')
+        }
+      ]
     },
     {
       key: '/positions',
@@ -235,7 +250,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   
   const handleMenuClick = ({ key }: { key: string }) => {
     // 如果是父菜单，不导航（但 /system-settings 作为子菜单项时可以导航）
-    if (key === '/copy-trading-management') {
+    if (key === '/copy-trading-management' || key === '/crypto-tail-management') {
       return
     }
     

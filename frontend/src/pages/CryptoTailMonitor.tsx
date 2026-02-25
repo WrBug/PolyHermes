@@ -9,9 +9,12 @@ import {
   Typography,
   Spin,
   Empty,
-  Alert
+  Alert,
+  Radio,
+  Button,
+  Tooltip
 } from 'antd'
-import { ClockCircleOutlined } from '@ant-design/icons'
+import { ClockCircleOutlined, SyncOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useMediaQuery } from 'react-responsive'
 import * as echarts from 'echarts'
@@ -58,10 +61,28 @@ const CryptoTailMonitor: React.FC = () => {
   const marketChartRef = useRef<HTMLDivElement>(null)
   const marketChartInstance = useRef<echarts.ECharts | null>(null)
   const lastPeriodStartRef = useRef<number | null>(null)
+
+  // localStorage key for period switch mode
+  const PERIOD_SWITCH_MODE_KEY = 'cryptoTailMonitor_periodSwitchMode'
+
   // 记录首次数据进入时间（用于中途进入时的横轴起点）
   const [firstDataTime, setFirstDataTime] = useState<number | null>(null)
   // 标记是否已切换过周期（切换后使用完整周期）
   const [hasSwitchedPeriod, setHasSwitchedPeriod] = useState<boolean>(false)
+  // 周期切换模式：auto（自动切换）| manual（手动切换），从 localStorage 读取缓存
+  const [periodSwitchMode, setPeriodSwitchMode] = useState<'auto' | 'manual'>(() => {
+    const cached = localStorage.getItem(PERIOD_SWITCH_MODE_KEY)
+    return (cached === 'auto' || cached === 'manual') ? cached : 'auto'
+  })
+  // 手动模式下，存储最新周期的数据（用户未切换时）
+  const [pendingPeriodData, setPendingPeriodData] = useState<{
+    periodStartUnix: number
+    priceHistory: PriceDataPoint[]
+    initData: CryptoTailMonitorInitResponse | null
+    pushData: CryptoTailMonitorPushData | null
+  } | null>(null)
+  // 标记当前是否在查看旧周期（手动模式下）
+  const [isViewingOldPeriod, setIsViewingOldPeriod] = useState<boolean>(false)
 
   // 获取策略列表
   useEffect(() => {
@@ -93,6 +114,8 @@ const CryptoTailMonitor: React.FC = () => {
       setPriceHistory([])
       setFirstDataTime(null)
       setHasSwitchedPeriod(false)
+      setPendingPeriodData(null)
+      setIsViewingOldPeriod(false)
       return
     }
 
@@ -101,6 +124,8 @@ const CryptoTailMonitor: React.FC = () => {
       setPriceHistory([])
       setFirstDataTime(null)
       setHasSwitchedPeriod(false)
+      setPendingPeriodData(null)
+      setIsViewingOldPeriod(false)
       try {
         const res = await apiService.cryptoTailStrategy.monitorInit(selectedStrategyId)
         if (res.data.code === 0 && res.data.data) {
@@ -121,7 +146,6 @@ const CryptoTailMonitor: React.FC = () => {
   // WebSocket 订阅
   const handlePushData = useCallback((data: CryptoTailMonitorPushData) => {
     if (data.strategyId !== selectedStrategyId) return
-    setPushData(data)
 
     const btcPrice = data.currentPriceBtc != null && data.currentPriceBtc !== ''
       ? parseFloat(data.currentPriceBtc)
@@ -148,36 +172,91 @@ const CryptoTailMonitor: React.FC = () => {
     const lastPeriod = lastPeriodStartRef.current
 
     if (pushPeriod != null && pushPeriod !== lastPeriod) {
-      // 新周期或首次推送：更新 ref 和 initData，清空历史
+      // 新周期到来
       lastPeriodStartRef.current = pushPeriod
-      // 如果之前已经有周期数据，说明是周期切换，标记为已切换
-      if (lastPeriod != null) {
-        setHasSwitchedPeriod(true)
-      }
-      // 周期切换时重置首次数据时间
-      setFirstDataTime(newPoint.time)
-      setInitData(prev => prev ? { ...prev, periodStartUnix: pushPeriod } : null)
-      setPriceHistory([newPoint])
-    } else {
-      // 同周期：追加数据（同周期内至少间隔 1s 才追加一点，避免 1s 内多条推送导致点过密）
-      setFirstDataTime(prev => {
-        if (prev == null) {
-          return newPoint.time
-        }
-        return prev
-      })
-      const minIntervalMs = 1_000
-      setPriceHistory(prev => {
-        const lastTime = prev.length > 0 ? prev[prev.length - 1].time : 0
-        if (prev.length > 0 && newPoint.time - lastTime < minIntervalMs) {
+
+      if (periodSwitchMode === 'manual' && lastPeriod != null) {
+        // 手动模式：保存新周期数据到 pending，保留当前显示
+        setPendingPeriodData({
+          periodStartUnix: pushPeriod,
+          priceHistory: [newPoint],
+          initData: null,
+          pushData: data
+        })
+        setIsViewingOldPeriod(true)
+        // 更新 pending 数据的 initData
+        setInitData(prev => {
+          if (prev) {
+            setPendingPeriodData(p => p ? { ...p, initData: { ...prev, periodStartUnix: pushPeriod, marketTitle: (data as { marketTitle?: string }).marketTitle ?? prev.marketTitle } } : null)
+          }
           return prev
+        })
+      } else {
+        // 自动模式或首次推送：直接切换
+        if (lastPeriod != null) {
+          setHasSwitchedPeriod(true)
         }
-        const maxPoints = 300
-        const newHistory = [...prev, newPoint]
-        return newHistory.slice(-maxPoints)
-      })
+        setFirstDataTime(newPoint.time)
+        setInitData(prev => prev ? { ...prev, periodStartUnix: pushPeriod, marketTitle: (data as { marketTitle?: string }).marketTitle ?? prev.marketTitle } : null)
+        setPriceHistory([newPoint])
+        setPushData(data)
+        setIsViewingOldPeriod(false)
+        setPendingPeriodData(null)
+        return
+      }
+    } else {
+      // 同周期：追加数据
+      if (periodSwitchMode === 'manual' && isViewingOldPeriod && pendingPeriodData) {
+        // 手动模式下，更新 pending 数据
+        const minIntervalMs = 1_000
+        setPendingPeriodData(prev => {
+          if (!prev) return null
+          const lastTime = prev.priceHistory.length > 0 ? prev.priceHistory[prev.priceHistory.length - 1].time : 0
+          if (prev.priceHistory.length > 0 && newPoint.time - lastTime < minIntervalMs) {
+            return { ...prev, pushData: data }
+          }
+          const maxPoints = 300
+          const newHistory = [...prev.priceHistory, newPoint].slice(-maxPoints)
+          return { ...prev, priceHistory: newHistory, pushData: data }
+        })
+      } else {
+        setFirstDataTime(prev => {
+          if (prev == null) {
+            return newPoint.time
+          }
+          return prev
+        })
+        const minIntervalMs = 1_000
+        setPriceHistory(prev => {
+          const lastTime = prev.length > 0 ? prev[prev.length - 1].time : 0
+          if (prev.length > 0 && newPoint.time - lastTime < minIntervalMs) {
+            return prev
+          }
+          const maxPoints = 300
+          const newHistory = [...prev, newPoint]
+          return newHistory.slice(-maxPoints)
+        })
+        setPushData(data)
+      }
     }
-  }, [selectedStrategyId])
+  }, [selectedStrategyId, periodSwitchMode, isViewingOldPeriod, pendingPeriodData])
+
+  // 手动切换到最新周期
+  const handleSwitchToLatestPeriod = useCallback(() => {
+    if (pendingPeriodData) {
+      setPriceHistory(pendingPeriodData.priceHistory)
+      setFirstDataTime(pendingPeriodData.priceHistory[0]?.time ?? null)
+      if (pendingPeriodData.initData) {
+        setInitData(pendingPeriodData.initData)
+      }
+      if (pendingPeriodData.pushData) {
+        setPushData(pendingPeriodData.pushData)
+      }
+      setHasSwitchedPeriod(true)
+      setIsViewingOldPeriod(false)
+      setPendingPeriodData(null)
+    }
+  }, [pendingPeriodData])
 
   const channel = selectedStrategyId ? `crypto_tail_monitor_${selectedStrategyId}` : ''
   useWebSocketSubscription(channel, handlePushData)
@@ -197,6 +276,18 @@ const CryptoTailMonitor: React.FC = () => {
       marketChartInstance.current = null
     }
   }, [])
+
+  // 切换策略时销毁并重新初始化图表实例
+  useEffect(() => {
+    if (chartInstance.current) {
+      chartInstance.current.dispose()
+      chartInstance.current = null
+    }
+    if (marketChartInstance.current) {
+      marketChartInstance.current.dispose()
+      marketChartInstance.current = null
+    }
+  }, [selectedStrategyId])
 
   // 更新图表：分时图为 BTC 价格 USDC
   useEffect(() => {
@@ -251,7 +342,7 @@ const CryptoTailMonitor: React.FC = () => {
       yMax = openBtcNum + halfRange
     }
 
-    const markLineData: Array<{ name: string; yAxis: number; lineStyle: { type: 'dashed'; color: string } }> = []
+    const markLineData: Array<{ name?: string; yAxis?: number; xAxis?: number; lineStyle: { type: 'dashed' | 'solid'; color: string }; label?: { show: boolean; formatter?: string }; emphasis?: { label?: { show?: boolean; formatter?: string } } }> = []
     if (openBtcNum != null && !Number.isNaN(openBtcNum)) {
       markLineData.push({
         name: t('cryptoTailMonitor.chart.openPrice'),
@@ -259,41 +350,70 @@ const CryptoTailMonitor: React.FC = () => {
         lineStyle: { type: 'dashed', color: '#999' }
       })
     }
+    const isMaxSpread = (initData.spreadDirection ?? 'MIN') === 'MAX'
+    const spreadLineLabelKey = isMaxSpread ? 'cryptoTailMonitor.chart.maxSpreadLine' : 'cryptoTailMonitor.chart.minSpreadLine'
     if (openBtcNum != null && minSpreadUp != null && !Number.isNaN(minSpreadUp)) {
       markLineData.push({
-        name: t('cryptoTailMonitor.chart.minSpreadLine') + ' Up',
+        name: t(spreadLineLabelKey) + ' Up',
         yAxis: openBtcNum + minSpreadUp,
         lineStyle: { type: 'dashed', color: '#ff4d4f' }
       })
     }
     if (openBtcNum != null && minSpreadDown != null && !Number.isNaN(minSpreadDown)) {
       markLineData.push({
-        name: t('cryptoTailMonitor.chart.minSpreadLine') + ' Down',
+        name: t(spreadLineLabelKey) + ' Down',
         yAxis: openBtcNum - minSpreadDown,
         lineStyle: { type: 'dashed', color: '#ff4d4f' }
       })
     }
+    // 时间窗口两条竖线：灰色虚线，悬停时显示标签
+    const windowStartMs = periodStartMs + (initData.windowStartSeconds ?? 0) * 1000
+    const windowEndMs = periodStartMs + (initData.windowEndSeconds ?? 0) * 1000
+    if (windowStartMs > xAxisMin && windowStartMs < periodEndMs) {
+      markLineData.push({
+        xAxis: windowStartMs,
+        lineStyle: { type: 'dashed', color: 'rgba(128, 128, 128, 0.9)' },
+        label: { show: false },
+        emphasis: { label: { show: true, formatter: t('cryptoTailMonitor.chart.timeWindowStart') } }
+      })
+    }
+    if (windowEndMs > xAxisMin && windowEndMs < periodEndMs && windowEndMs !== windowStartMs) {
+      markLineData.push({
+        xAxis: windowEndMs,
+        lineStyle: { type: 'dashed', color: 'rgba(128, 128, 128, 0.9)' },
+        label: { show: false },
+        emphasis: { label: { show: true, formatter: t('cryptoTailMonitor.chart.timeWindowEnd') } }
+      })
+    }
 
+    const periodStartUnixSec = initData.periodStartUnix ?? 0
     const option: EChartsOption = {
       tooltip: {
         trigger: 'axis',
+        confine: true,
+        padding: [6, 8],
         formatter: (params: unknown) => {
-          const arr = params as Array<{ seriesName: string; name: string; value: number | [number, number] }>
+          const arr = params as Array<{ seriesName: string; name: string | number; value: number | [number, number]; axisValue?: number }>
           const priceParam = arr.find(p => p.seriesName === t('cryptoTailMonitor.chart.price'))
           if (!priceParam) return ''
           const val = Array.isArray(priceParam.value) ? priceParam.value[1] : priceParam.value
           if (val == null || Number.isNaN(val)) return ''
-          const ts = priceParam.name as unknown as number
-          const offsetSec = Math.floor(ts / 1000) - (initData?.periodStartUnix ?? 0)
-          const mins = Math.floor(offsetSec / 60)
-          const secs = offsetSec % 60
-          const timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-          return `
-            <div>
-              <div>${t('cryptoTailMonitor.chart.time')}: ${timeStr}</div>
-              <div>${t('cryptoTailMonitor.chart.price')}: ${Number(val).toFixed(2)} USDC</div>
-            </div>
-          `
+          // 优先从 value[0] 取时间戳（毫秒），否则用 axisValue 或 name
+          const rawTime = Array.isArray(priceParam.value)
+            ? priceParam.value[0]
+            : (priceParam.axisValue ?? priceParam.name)
+          let timeStr = ''
+          if (typeof rawTime === 'number' && !Number.isNaN(rawTime)) {
+            const offsetSec = Math.floor(rawTime / 1000) - periodStartUnixSec
+            const mins = Math.floor(offsetSec / 60)
+            const secs = Math.abs(offsetSec) % 60
+            timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+          } else if (rawTime != null && rawTime !== '') {
+            timeStr = String(rawTime)
+          } else {
+            timeStr = '--'
+          }
+          return `<span style="font-size:12px">${timeStr} &nbsp; ${Number(val).toFixed(2)} USDC</span>`
         }
       },
       legend: {
@@ -311,12 +431,11 @@ const CryptoTailMonitor: React.FC = () => {
         type: 'time',
         min: xAxisMin,
         max: periodEndMs,
-        boundaryGap: false,
         axisLabel: {
           formatter: (val: number) => {
-            const offsetSec = Math.floor(val / 1000) - (initData.periodStartUnix ?? 0)
+            const offsetSec = Math.floor(val / 1000) - periodStartUnixSec
             const mins = Math.floor(offsetSec / 60)
-            const secs = offsetSec % 60
+            const secs = Math.abs(offsetSec) % 60
             return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
           }
         }
@@ -352,7 +471,46 @@ const CryptoTailMonitor: React.FC = () => {
               ]
             }
           },
-          markLine: markLineData.length > 0 ? { data: markLineData } : undefined
+          markLine: markLineData.length > 0 ? { symbol: ['none', 'none'], data: markLineData } : undefined,
+          // 添加满足条件的价差区域（浅绿色背景）
+          markArea: (() => {
+            if (openBtcNum == null) return undefined
+            const areas: Array<[{ yAxis: number }, { yAxis: number }]> = []
+            if (isMaxSpread) {
+              // 最大价差：价差 <= 配置值触发，满足条件为靠近开盘价的带状区域
+              if (minSpreadUp != null && !Number.isNaN(minSpreadUp)) {
+                areas.push([
+                  { yAxis: openBtcNum },
+                  { yAxis: openBtcNum + minSpreadUp }
+                ])
+              }
+              if (minSpreadDown != null && !Number.isNaN(minSpreadDown)) {
+                areas.push([
+                  { yAxis: openBtcNum - minSpreadDown },
+                  { yAxis: openBtcNum }
+                ])
+              }
+            } else {
+              // 最小价差：价差 >= 配置值触发，满足条件为远离开盘价的两侧
+              if (minSpreadUp != null && !Number.isNaN(minSpreadUp)) {
+                areas.push([
+                  { yAxis: openBtcNum + minSpreadUp },
+                  { yAxis: yMax ?? openBtcNum + minSpreadUp * 2 }
+                ])
+              }
+              if (minSpreadDown != null && !Number.isNaN(minSpreadDown)) {
+                areas.push([
+                  { yAxis: yMin ?? openBtcNum - minSpreadDown * 2 },
+                  { yAxis: openBtcNum - minSpreadDown }
+                ])
+              }
+            }
+            return areas.length > 0 ? {
+              silent: true,
+              data: areas,
+              itemStyle: { color: 'rgba(82, 196, 26, 0.12)' }
+            } : undefined
+          })()
         }
       ]
     }
@@ -378,12 +536,27 @@ const CryptoTailMonitor: React.FC = () => {
     const xAxisMin = isMidEntry ? firstDataMs : periodStartMs
 
     const toMs = (t: number) => (t > 0 && t < 1e12 ? t * 1000 : t)
-    const marketUpData: [number, number | null][] = priceHistory.length > 0
+    let marketUpData: [number, number | null][] = priceHistory.length > 0
       ? priceHistory.map(p => [toMs(p.time), p.marketPriceUp])
       : []
-    const marketDownData: [number, number | null][] = priceHistory.length > 0
+    let marketDownData: [number, number | null][] = priceHistory.length > 0
       ? priceHistory.map(p => [toMs(p.time), p.marketPriceDown])
       : []
+
+    // 若推送有最新价且与当前周期一致，追加到末端使曲线显示到最新价格
+    if (pushData && pushData.periodStartUnix === (initData.periodStartUnix ?? 0)) {
+      const ts = pushData.timestamp
+      const lastTime = marketUpData.length > 0 ? marketUpData[marketUpData.length - 1][0] : 0
+      const tsMs = ts > 0 && ts < 1e12 ? ts * 1000 : ts
+      if (tsMs >= lastTime) {
+        const up = pushData.currentPriceUp != null && pushData.currentPriceUp !== '' ? parseFloat(pushData.currentPriceUp) : null
+        const down = pushData.currentPriceDown != null && pushData.currentPriceDown !== '' ? parseFloat(pushData.currentPriceDown) : null
+        const upVal = up != null && !Number.isNaN(up) ? up : (down != null && !Number.isNaN(down) ? 1 - down : null)
+        const downVal = down != null && !Number.isNaN(down) ? down : (up != null && !Number.isNaN(up) ? 1 - up : null)
+        if (upVal != null) marketUpData = [...marketUpData, [tsMs, upVal]]
+        if (downVal != null) marketDownData = [...marketDownData, [tsMs, downVal]]
+      }
+    }
 
     const minPrice = parseFloat(initData.minPrice)
     const maxPrice = parseFloat(initData.maxPrice)
@@ -396,22 +569,48 @@ const CryptoTailMonitor: React.FC = () => {
     const finalMarketUp: [number, number][] = hasAnyMarketData ? validUp : [[placeholderTime, midPrice]]
     const finalMarketDown: [number, number][] = hasAnyMarketData ? validDown : [[placeholderTime, midPrice]]
 
+    const periodStartUnixSec = initData.periodStartUnix ?? 0
+    const windowStartMs = periodStartMs + (initData.windowStartSeconds ?? 0) * 1000
+    const windowEndMs = periodStartMs + (initData.windowEndSeconds ?? 0) * 1000
+    const timeWindowMarkLine: Array<{ xAxis: number; lineStyle: { type: 'dashed'; color: string }; label: { show: boolean }; emphasis: { label: { show: boolean; formatter: string } } }> = []
+    if (windowStartMs > xAxisMin && windowStartMs < periodEndMs) {
+      timeWindowMarkLine.push({
+        xAxis: windowStartMs,
+        lineStyle: { type: 'dashed', color: 'rgba(128, 128, 128, 0.9)' },
+        label: { show: false },
+        emphasis: { label: { show: true, formatter: t('cryptoTailMonitor.chart.timeWindowStart') } }
+      })
+    }
+    if (windowEndMs > xAxisMin && windowEndMs < periodEndMs && windowEndMs !== windowStartMs) {
+      timeWindowMarkLine.push({
+        xAxis: windowEndMs,
+        lineStyle: { type: 'dashed', color: 'rgba(128, 128, 128, 0.9)' },
+        label: { show: false },
+        emphasis: { label: { show: true, formatter: t('cryptoTailMonitor.chart.timeWindowEnd') } }
+      })
+    }
     const option: EChartsOption = {
       tooltip: {
         trigger: 'axis',
         formatter: (params: unknown) => {
-          const arr = params as Array<{ seriesName: string; name: string | number; value: number | [number, number] }>
+          const arr = params as Array<{ seriesName: string; name: string | number; value: number | [number, number]; axisValue?: number }>
           const upParam = arr.find(p => p.seriesName === t('cryptoTailMonitor.chart.marketUp'))
           const downParam = arr.find(p => p.seriesName === t('cryptoTailMonitor.chart.marketDown'))
-          const rawTime = arr[0]?.name
-          const timeStr = typeof rawTime === 'number' && initData
-            ? (() => {
-                const offsetSec = Math.floor(rawTime / 1000) - (initData.periodStartUnix ?? 0)
-                const mins = Math.floor(offsetSec / 60)
-                const secs = offsetSec % 60
-                return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-              })()
-            : String(rawTime ?? '')
+          const firstParam = arr[0]
+          const rawTime = firstParam && Array.isArray(firstParam.value)
+            ? firstParam.value[0]
+            : (firstParam?.axisValue ?? firstParam?.name)
+          let timeStr = ''
+          if (typeof rawTime === 'number' && !Number.isNaN(rawTime)) {
+            const offsetSec = Math.floor(rawTime / 1000) - periodStartUnixSec
+            const mins = Math.floor(offsetSec / 60)
+            const secs = Math.abs(offsetSec) % 60
+            timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+          } else if (rawTime != null && rawTime !== '') {
+            timeStr = String(rawTime)
+          } else {
+            timeStr = '--'
+          }
           let html = `<div><div>${t('cryptoTailMonitor.chart.time')}: ${timeStr}</div>`
           const upVal = Array.isArray(upParam?.value) ? upParam?.value[1] : upParam?.value
           const downVal = Array.isArray(downParam?.value) ? downParam?.value[1] : downParam?.value
@@ -437,12 +636,11 @@ const CryptoTailMonitor: React.FC = () => {
         type: 'time',
         min: xAxisMin,
         max: periodEndMs,
-        boundaryGap: false,
         axisLabel: {
           formatter: (val: number) => {
-            const offsetSec = Math.floor(val / 1000) - (initData.periodStartUnix ?? 0)
+            const offsetSec = Math.floor(val / 1000) - periodStartUnixSec
             const mins = Math.floor(offsetSec / 60)
-            const secs = offsetSec % 60
+            const secs = Math.abs(offsetSec) % 60
             return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
           }
         }
@@ -470,7 +668,8 @@ const CryptoTailMonitor: React.FC = () => {
             silent: true,
             itemStyle: { color: 'rgba(82, 196, 26, 0.12)' },
             data: [[{ yAxis: minPrice }, { yAxis: maxPrice }]]
-          }
+          },
+          markLine: timeWindowMarkLine.length > 0 ? { symbol: ['none', 'none'], data: timeWindowMarkLine } : undefined
         },
         {
           name: t('cryptoTailMonitor.chart.marketDown'),
@@ -489,7 +688,7 @@ const CryptoTailMonitor: React.FC = () => {
 
     marketChartInstance.current.setOption(option, true)
     marketChartInstance.current.resize()
-  }, [priceHistory, initData, firstDataTime, hasSwitchedPeriod, t])
+  }, [priceHistory, initData, pushData, firstDataTime, hasSwitchedPeriod, t])
 
   // 格式化剩余时间
   const formatRemainingTime = (seconds: number): string => {
@@ -533,6 +732,32 @@ const CryptoTailMonitor: React.FC = () => {
               }))}
             />
           </Space>
+          {selectedStrategyId && (
+            <Space>
+              <Text strong>{t('cryptoTailMonitor.periodSwitch.mode')}</Text>
+              <Radio.Group
+                value={periodSwitchMode}
+                onChange={(e) => {
+                  const newMode = e.target.value
+                  setPeriodSwitchMode(newMode)
+                  localStorage.setItem(PERIOD_SWITCH_MODE_KEY, newMode)
+                  if (newMode === 'auto' && isViewingOldPeriod && pendingPeriodData) {
+                    handleSwitchToLatestPeriod()
+                  }
+                }}
+                optionType="button"
+                buttonStyle="solid"
+                size="small"
+              >
+                <Tooltip title={t('cryptoTailMonitor.periodSwitch.autoDesc')}>
+                  <Radio.Button value="auto">{t('cryptoTailMonitor.periodSwitch.auto')}</Radio.Button>
+                </Tooltip>
+                <Tooltip title={t('cryptoTailMonitor.periodSwitch.manualDesc')}>
+                  <Radio.Button value="manual">{t('cryptoTailMonitor.periodSwitch.manual')}</Radio.Button>
+                </Tooltip>
+              </Radio.Group>
+            </Space>
+          )}
         </Space>
       </Card>
 
@@ -619,6 +844,30 @@ const CryptoTailMonitor: React.FC = () => {
             </Col>
           </Row>
 
+          {/* 手动模式下：周期结束提示 */}
+          {periodSwitchMode === 'manual' && isViewingOldPeriod && (
+            <Alert
+              type="warning"
+              showIcon
+              icon={<InfoCircleOutlined />}
+              style={{ marginBottom: 16 }}
+              message={t('cryptoTailMonitor.periodSwitch.periodEnded')}
+              description={
+                <Space direction="vertical" size="small">
+                  <Text>{t('cryptoTailMonitor.periodSwitch.newPeriodAvailable')}</Text>
+                  <Button
+                    type="primary"
+                    icon={<SyncOutlined />}
+                    onClick={handleSwitchToLatestPeriod}
+                    size="small"
+                  >
+                    {t('cryptoTailMonitor.periodSwitch.switchToLatest')}
+                  </Button>
+                </Space>
+              }
+            />
+          )}
+
           {/* 价格区间提示 */}
           <Alert
             type="info"
@@ -627,8 +876,8 @@ const CryptoTailMonitor: React.FC = () => {
             message={`${t('cryptoTailMonitor.priceRange')}: ${formatNumber(initData.minPrice, 2)} ~ ${formatNumber(initData.maxPrice, 2)} | ${t('cryptoTailMonitor.timeWindow')}: ${Math.floor(initData.windowStartSeconds / 60)}:${(initData.windowStartSeconds % 60).toString().padStart(2, '0')} ~ ${Math.floor(initData.windowEndSeconds / 60)}:${(initData.windowEndSeconds % 60).toString().padStart(2, '0')}`}
           />
 
-          {/* BTC 分时图 */}
-          <Card title={t('cryptoTailMonitor.chart.btcTitle')}>
+          {/* 价格分时图 */}
+          <Card title={`${initData.marketSlugPrefix || 'BTC'} ${t('cryptoTailMonitor.chart.priceChart')}`}>
             <div
               ref={chartRef}
               style={{
@@ -639,7 +888,23 @@ const CryptoTailMonitor: React.FC = () => {
           </Card>
 
           {/* 市场分时图 */}
-          <Card title={t('cryptoTailMonitor.chart.marketTitle')} style={{ marginTop: 16 }}>
+          <Card
+            title={t('cryptoTailMonitor.chart.marketTitle')}
+            extra={
+              pushData?.currentPriceUp != null || pushData?.currentPriceDown != null ? (
+                <Space size="middle">
+                  <Text type="secondary">{t('cryptoTailMonitor.chart.latestPrice')}:</Text>
+                  {pushData.currentPriceUp != null && pushData.currentPriceUp !== '' && (
+                    <Text>Up {formatNumber(pushData.currentPriceUp, 4)}</Text>
+                  )}
+                  {pushData.currentPriceDown != null && pushData.currentPriceDown !== '' && (
+                    <Text>Down {formatNumber(pushData.currentPriceDown, 4)}</Text>
+                  )}
+                </Space>
+              ) : null
+            }
+            style={{ marginTop: 16 }}
+          >
             <div
               ref={marketChartRef}
               style={{
@@ -654,7 +919,7 @@ const CryptoTailMonitor: React.FC = () => {
             <Row gutter={[16, 8]}>
               <Col span={12}>
                 <Text type="secondary">{t('cryptoTailMonitor.strategyInfo.market')}: </Text>
-                <Text>{initData.marketTitle}</Text>
+                <Text>{pushData?.marketTitle ?? initData.marketTitle}</Text>
               </Col>
               <Col span={12}>
                 <Text type="secondary">{t('cryptoTailMonitor.strategyInfo.interval')}: </Text>
@@ -670,6 +935,10 @@ const CryptoTailMonitor: React.FC = () => {
                 {initData.minSpreadMode === 'FIXED' && initData.minSpreadValue && (
                   <Text> ({formatNumber(initData.minSpreadValue, 4)})</Text>
                 )}
+              </Col>
+              <Col span={12}>
+                <Text type="secondary">{t('cryptoTailMonitor.strategyInfo.spreadDirection')}: </Text>
+                <Text>{(initData.spreadDirection ?? 'MIN') === 'MAX' ? t('cryptoTailMonitor.stat.configuredSpreadMax') : t('cryptoTailMonitor.stat.configuredSpreadMin')}</Text>
               </Col>
             </Row>
           </Card>

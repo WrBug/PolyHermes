@@ -1168,6 +1168,8 @@ export interface CryptoTailMonitorPushData {
   timestamp: number
   /** 当前周期开始时间 (Unix 秒) */
   periodStartUnix: number
+  /** 当前周期市场标题（周期切换时更新） */
+  marketTitle?: string
   /** 当前价格 (Up方向，来自订单簿) */
   currentPriceUp?: string
   /** 当前价格 (Down方向，来自订单簿) */

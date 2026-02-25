@@ -312,6 +312,7 @@
     "leaders": "Leader 管理",
     "templates": "跟单模板",
     "copyTradingConfig": "跟单配置",
+    "cryptoTail": "尾盘",
     "cryptoTailStrategy": "尾盘策略",
     "cryptoTailMonitor": "尾盘监控",
     "positions": "仓位管理",

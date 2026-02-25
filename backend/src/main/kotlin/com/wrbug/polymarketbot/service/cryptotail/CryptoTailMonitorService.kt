@@ -101,6 +101,9 @@ class CryptoTailMonitorService(
     private val lastPriceChangePushTime = ConcurrentHashMap<Long, Long>()
     private val priceChangePushThrottleMs = 1_000L
 
+    /** 当前周期/下一周期构建时缓存的市场标题，key = "strategyId-periodStartUnix"，供推送携带 */
+    private val marketTitleByStrategyPeriod = ConcurrentHashMap<String, String>()
+
     data class MonitorEntry(
         val strategyId: Long,
         val strategy: CryptoTailStrategy,
@@ -196,6 +199,7 @@ class CryptoTailMonitorService(
                 minPrice = strategy.minPrice.toPlainString(),
                 maxPrice = strategy.maxPrice.toPlainString(),
                 minSpreadMode = strategy.spreadMode.name,
+                spreadDirection = strategy.spreadDirection.name,
                 minSpreadValue = strategy.spreadValue?.toPlainString(),
                 autoMinSpreadUp = autoMinSpreadUp?.toPlainString(),
                 autoMinSpreadDown = autoMinSpreadDown?.toPlainString(),
@@ -409,6 +413,7 @@ class CryptoTailMonitorService(
             val strategyPeriod = (nowSeconds / strategy.intervalSeconds) * strategy.intervalSeconds
             val slug = "${strategy.marketSlugPrefix}-$strategyPeriod"
             val event = fetchEventBySlug(slug).getOrNull() ?: continue
+            marketTitleByStrategyPeriod["${strategy.id!!}-$strategyPeriod"] = event.title ?: strategy.marketSlugPrefix
             val market = event.markets?.firstOrNull() ?: continue
             val tokenIds = parseClobTokenIds(market.clobTokenIds)
             if (tokenIds.size < 2) continue
@@ -440,6 +445,7 @@ class CryptoTailMonitorService(
             if (event == null) {
                 continue
             }
+            marketTitleByStrategyPeriod["${strategy.id!!}-$nextPeriod"] = event.title ?: strategy.marketSlugPrefix
             val market = event.markets?.firstOrNull()
             if (market == null) {
                 continue
@@ -726,10 +732,13 @@ class CryptoTailMonitorService(
         val inPriceRangeDown = currentDown != null &&
                 currentDown >= strategy.minPrice && currentDown <= strategy.maxPrice
 
+        val marketTitle = marketTitleByStrategyPeriod["${strategy.id!!}-$periodStartUnix"] ?: strategy.marketSlugPrefix
+
         return CryptoTailMonitorPushData(
             strategyId = strategy.id!!,
             timestamp = System.currentTimeMillis(),
             periodStartUnix = periodStartUnix,
+            marketTitle = marketTitle,
             currentPriceUp = priceData.currentPriceUp?.setScale(4, RoundingMode.HALF_UP)?.toPlainString(),
             currentPriceDown = priceData.currentPriceDown?.setScale(4, RoundingMode.HALF_UP)?.toPlainString(),
             spreadUp = priceData.spreadUp?.setScale(4, RoundingMode.HALF_UP)?.toPlainString(),

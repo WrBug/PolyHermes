@@ -312,6 +312,7 @@
     "leaders": "Leader Management",
     "templates": "Templates",
     "copyTradingConfig": "Copy Trading Config",
+    "cryptoTail": "Crypto Tail",
     "cryptoTailStrategy": "Tail Strategy",
     "cryptoTailMonitor": "Tail Monitor",
     "positions": "Position Management",
