@@ -55,7 +55,7 @@ effectiveMinSpread = baseSpread × coefficient
 
 - 需要策略的 `windowStartSeconds`、`windowEndSeconds` 传入计算处；若窗口长度为 0，可退化为系数 = 1.0 或 0.5（需约定）。
 
-**优点**：与「尾盘只在窗口内触发」一致，时间语义清晰；毫秒级 progress 更精确。  
+**优点**：与「加密价差策略只在窗口内触发」一致，时间语义清晰；毫秒级 progress 更精确。  
 **缺点**：`getAutoMinSpread` 需要增加当前时间（毫秒）和窗口参数（或传整个 strategy）。
 
 ---

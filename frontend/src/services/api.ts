@@ -446,7 +446,7 @@ export const apiService = {
   },
 
   /**
-   * 尾盘策略 API
+   * 加密价差策略 API
    */
   cryptoTailStrategy: {
     list: (data: { accountId?: number; enabled?: boolean } = {}) =>

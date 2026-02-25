@@ -27,7 +27,7 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 
 /**
- * 尾盘策略结算轮询服务
+ * 加密价差策略结算轮询服务
  * 定时扫描「状态成功但未结算」的触发记录，通过 Gamma 获取 conditionId、链上查询结算结果，计算收益并回写。
  * 实际成交价与成交量使用 Data API 的 activity 接口获取（getUserActivity），比 CLOB getOrder 更准确；失败时回退为触发时的 amountUsdc + 固定价 0.99。
  */
@@ -60,14 +60,14 @@ class CryptoTailSettlementService(
     fun scheduledPollAndSettle() {
         val previousJob = settlementJob
         if (previousJob != null && previousJob.isActive) {
-            logger.debug("上一轮尾盘结算任务仍在执行，跳过本次调度")
+            logger.debug("上一轮加密价差策略结算任务仍在执行，跳过本次调度")
             return
         }
         settlementJob = settlementScope.launch {
             try {
                 doPollAndSettle()
             } catch (e: Exception) {
-                logger.error("尾盘策略结算定时任务异常: ${e.message}", e)
+                logger.error("加密价差策略结算定时任务异常: ${e.message}", e)
             } finally {
                 settlementJob = null
             }
@@ -91,11 +91,11 @@ class CryptoTailSettlementService(
             try {
                 if (settleOne(trigger)) settledCount++
             } catch (e: Exception) {
-                logger.warn("尾盘结算单条失败: triggerId=${trigger.id}, ${e.message}", e)
+                logger.warn("加密价差策略结算单条失败: triggerId=${trigger.id}, ${e.message}", e)
             }
         }
         if (settledCount > 0) {
-            logger.info("尾盘策略结算轮询完成: 处理=${pending.size}, 新结算=$settledCount")
+            logger.info("加密价差策略结算轮询完成: 处理=${pending.size}, 新结算=$settledCount")
         }
         return settledCount
     }
@@ -154,7 +154,7 @@ class CryptoTailSettlementService(
             settledAt = now
         )
         triggerRepository.save(updated)
-        logger.debug("尾盘结算已更新: triggerId=${trigger.id}, winnerOutcomeIndex=$winnerIndex, won=$won, pnl=$pnl")
+        logger.debug("加密价差策略结算已更新: triggerId=${trigger.id}, winnerOutcomeIndex=$winnerIndex, won=$won, pnl=$pnl")
         return true
     }
 
@@ -201,7 +201,7 @@ class CryptoTailSettlementService(
         conditionId: String
     ): ActivityFill? {
         val account = accountRepository.findById(strategy.accountId).orElse(null) ?: run {
-            logger.warn("尾盘结算未拉取 activity: 账户不存在, triggerId=${trigger.id}, accountId=${strategy.accountId}")
+            logger.warn("加密价差策略结算未拉取 activity: 账户不存在, triggerId=${trigger.id}, accountId=${strategy.accountId}")
             return null
         }
         val user = account.proxyAddress
@@ -220,7 +220,7 @@ class CryptoTailSettlementService(
                 sortDirection = "DESC"
             )
             if (!response.isSuccessful || response.body() == null) {
-                logger.warn("尾盘结算拉取 activity 失败: triggerId=${trigger.id}, code=${response.code()}")
+                logger.warn("加密价差策略结算拉取 activity 失败: triggerId=${trigger.id}, code=${response.code()}")
                 return null
             }
             val activities = response.body()!!
@@ -234,7 +234,7 @@ class CryptoTailSettlementService(
                     a.price != null && a.price > 0 &&
                     a.size != null && a.size > 0
             } ?: run {
-                logger.debug("尾盘结算 activity 无匹配成交: triggerId=${trigger.id}, conditionId=$conditionId, outcomeIndex=${trigger.outcomeIndex}, 条数=${activities.size}")
+                logger.debug("加密价差策略结算 activity 无匹配成交: triggerId=${trigger.id}, conditionId=$conditionId, outcomeIndex=${trigger.outcomeIndex}, 条数=${activities.size}")
                 return null
             }
             val price = match.price!!.toSafeBigDecimal()
@@ -243,11 +243,11 @@ class CryptoTailSettlementService(
             if (price.gt(BigDecimal.ZERO) && size.gt(BigDecimal.ZERO)) {
                 ActivityFill(price = price, size = size, usdcSize = usdcSize)
             } else {
-                logger.debug("尾盘结算 activity 成交数据无效: triggerId=${trigger.id}, price=$price, size=$size")
+                logger.debug("加密价差策略结算 activity 成交数据无效: triggerId=${trigger.id}, price=$price, size=$size")
                 null
             }
         } catch (e: Exception) {
-            logger.warn("尾盘结算拉取 activity 异常，触发价/投入金额不会更新: triggerId=${trigger.id}, error=${e.message}")
+            logger.warn("加密价差策略结算拉取 activity 异常，触发价/投入金额不会更新: triggerId=${trigger.id}, error=${e.message}")
             null
         }
     }

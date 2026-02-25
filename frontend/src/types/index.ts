@@ -1036,7 +1036,7 @@ export interface BacktestTaskDto {
 }
 
 /**
- * 尾盘策略
+ * 加密价差策略
  */
 export interface CryptoTailStrategyDto {
   id: number
@@ -1076,7 +1076,7 @@ export interface CryptoTailAutoMinSpreadResponse {
 }
 
 /**
- * 尾盘策略触发记录
+ * 加密价差策略触发记录
  */
 export interface CryptoTailStrategyTriggerDto {
   id: number
@@ -1098,7 +1098,7 @@ export interface CryptoTailStrategyTriggerDto {
 }
 
 /**
- * 尾盘策略市场选项
+ * 加密价差策略市场选项
  */
 export interface CryptoTailMarketOptionDto {
   slug: string
@@ -1109,7 +1109,7 @@ export interface CryptoTailMarketOptionDto {
 }
 
 /**
- * 尾盘策略监控初始化响应
+ * 加密价差策略监控初始化响应
  */
 export interface CryptoTailMonitorInitResponse {
   /** 策略ID */
@@ -1159,7 +1159,7 @@ export interface CryptoTailMonitorInitResponse {
 }
 
 /**
- * 尾盘策略监控实时推送数据
+ * 加密价差策略监控实时推送数据
  */
 export interface CryptoTailMonitorPushData {
   /** 策略ID */

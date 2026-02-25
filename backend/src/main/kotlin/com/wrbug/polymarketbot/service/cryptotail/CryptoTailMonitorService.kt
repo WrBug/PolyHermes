@@ -41,7 +41,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * 尾盘策略监控服务
+ * 加密价差策略监控服务
  * 负责实时推送监控数据到前端
  */
 @Service
@@ -526,7 +526,7 @@ class CryptoTailMonitorService(
                 val msg = """{"type":"MARKET","assets_ids":${tokenIds.toJson()}}"""
                 try {
                     webSocket.send(msg)
-                    logger.info("尾盘监控 WebSocket（当前周期）已连接并订阅: ${tokenIds.size} 个 token")
+                    logger.info("加密价差策略监控 WebSocket（当前周期）已连接并订阅: ${tokenIds.size} 个 token")
                 } catch (e: Exception) {
                     logger.warn("发送当前周期订阅失败: ${e.message}")
                 }
@@ -563,9 +563,9 @@ class CryptoTailMonitorService(
                 try {
                     webSocket.send(msg)
                     if (tokenIds.isEmpty()) {
-                        logger.info("尾盘监控 WebSocket（下一周期）已连接，暂无 token 订阅，等待周期切换后更新")
+                        logger.info("加密价差策略监控 WebSocket（下一周期）已连接，暂无 token 订阅，等待周期切换后更新")
                     } else {
-                        logger.info("尾盘监控 WebSocket（下一周期）已连接并订阅: ${tokenIds.size} 个 token")
+                        logger.info("加密价差策略监控 WebSocket（下一周期）已连接并订阅: ${tokenIds.size} 个 token")
                     }
                 } catch (e: Exception) {
                     logger.warn("发送下一周期订阅失败: ${e.message}")
@@ -593,7 +593,7 @@ class CryptoTailMonitorService(
     private fun closeCurrentPeriodWebSocket() {
         currentPeriodWebSocket?.close(1000, "period_ended")
         currentPeriodWebSocket = null
-        logger.info("尾盘监控 WebSocket（当前周期）已关闭")
+        logger.info("加密价差策略监控 WebSocket（当前周期）已关闭")
     }
 
     private fun closeAllWebSockets() {
@@ -604,7 +604,7 @@ class CryptoTailMonitorService(
         currentPeriodWebSocket = null
         nextPeriodWebSocket?.close(1000, "no_subscribers")
         nextPeriodWebSocket = null
-        logger.info("尾盘监控 WebSocket 已全部关闭（无订阅者）")
+        logger.info("加密价差策略监控 WebSocket 已全部关闭（无订阅者）")
     }
 
     private fun handleMessage(webSocket: WebSocket, text: String) {
@@ -802,7 +802,7 @@ class CryptoTailMonitorService(
             delay(reconnectDelayMs)
             reconnectJob = null
             if (strategySubscribers.isNotEmpty()) {
-                logger.info("尾盘监控 WebSocket 尝试重连")
+                logger.info("加密价差策略监控 WebSocket 尝试重连")
                 refreshSubscription()
             }
         }

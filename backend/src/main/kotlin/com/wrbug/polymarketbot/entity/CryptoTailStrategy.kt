@@ -8,7 +8,7 @@ import jakarta.persistence.*
 import java.math.BigDecimal
 
 /**
- * 加密市场尾盘策略实体
+ * 加密价差策略实体
  * 5/15 分钟 Up or Down 市场，在周期内时间窗口、价格进入区间时市价买入
  */
 @Entity

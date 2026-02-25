@@ -43,12 +43,12 @@ class CryptoTailStrategyController(
             result.fold(
                 onSuccess = { ResponseEntity.ok(ApiResponse.success(it)) },
                 onFailure = { e ->
-                    logger.error("查询尾盘策略列表失败: ${e.message}", e)
+                    logger.error("查询加密价差策略列表失败: ${e.message}", e)
                     ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_CRYPTO_TAIL_STRATEGY_LIST_FETCH_FAILED, e.message, messageSource))
                 }
             )
         } catch (e: Exception) {
-            logger.error("查询尾盘策略列表异常: ${e.message}", e)
+            logger.error("查询加密价差策略列表异常: ${e.message}", e)
             ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_CRYPTO_TAIL_STRATEGY_LIST_FETCH_FAILED, e.message, messageSource))
         }
     }
@@ -60,7 +60,7 @@ class CryptoTailStrategyController(
             result.fold(
                 onSuccess = { ResponseEntity.ok(ApiResponse.success(it)) },
                 onFailure = { e ->
-                    logger.error("创建尾盘策略失败: ${e.message}", e)
+                    logger.error("创建加密价差策略失败: ${e.message}", e)
                     val code = when (e.message) {
                         ErrorCode.CRYPTO_TAIL_STRATEGY_WINDOW_INVALID.messageKey -> ErrorCode.CRYPTO_TAIL_STRATEGY_WINDOW_INVALID
                         ErrorCode.CRYPTO_TAIL_STRATEGY_WINDOW_EXCEED.messageKey -> ErrorCode.CRYPTO_TAIL_STRATEGY_WINDOW_EXCEED
@@ -72,7 +72,7 @@ class CryptoTailStrategyController(
                 }
             )
         } catch (e: Exception) {
-            logger.error("创建尾盘策略异常: ${e.message}", e)
+            logger.error("创建加密价差策略异常: ${e.message}", e)
             ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_CRYPTO_TAIL_STRATEGY_CREATE_FAILED, e.message, messageSource))
         }
     }
@@ -87,7 +87,7 @@ class CryptoTailStrategyController(
             result.fold(
                 onSuccess = { ResponseEntity.ok(ApiResponse.success(it)) },
                 onFailure = { e ->
-                    logger.error("更新尾盘策略失败: ${e.message}", e)
+                    logger.error("更新加密价差策略失败: ${e.message}", e)
                     val code = when (e.message) {
                         ErrorCode.CRYPTO_TAIL_STRATEGY_NOT_FOUND.messageKey -> ErrorCode.CRYPTO_TAIL_STRATEGY_NOT_FOUND
                         ErrorCode.CRYPTO_TAIL_STRATEGY_WINDOW_INVALID.messageKey -> ErrorCode.CRYPTO_TAIL_STRATEGY_WINDOW_INVALID
@@ -99,7 +99,7 @@ class CryptoTailStrategyController(
                 }
             )
         } catch (e: Exception) {
-            logger.error("更新尾盘策略异常: ${e.message}", e)
+            logger.error("更新加密价差策略异常: ${e.message}", e)
             ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_CRYPTO_TAIL_STRATEGY_UPDATE_FAILED, e.message, messageSource))
         }
     }
@@ -115,12 +115,12 @@ class CryptoTailStrategyController(
             result.fold(
                 onSuccess = { ResponseEntity.ok(ApiResponse.success(Unit)) },
                 onFailure = { e ->
-                    logger.error("删除尾盘策略失败: ${e.message}", e)
+                    logger.error("删除加密价差策略失败: ${e.message}", e)
                     ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_CRYPTO_TAIL_STRATEGY_DELETE_FAILED, e.message, messageSource))
                 }
             )
         } catch (e: Exception) {
-            logger.error("删除尾盘策略异常: ${e.message}", e)
+            logger.error("删除加密价差策略异常: ${e.message}", e)
             ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_CRYPTO_TAIL_STRATEGY_DELETE_FAILED, e.message, messageSource))
         }
     }
@@ -194,7 +194,7 @@ class CryptoTailStrategyController(
     }
 
     /**
-     * 初始化尾盘策略监控
+     * 初始化加密价差策略监控
      * 返回策略信息、开盘价、tokenIds等初始化数据
      */
     @PostMapping("/monitor/init")
@@ -207,12 +207,12 @@ class CryptoTailStrategyController(
             result.fold(
                 onSuccess = { ResponseEntity.ok(ApiResponse.success(it)) },
                 onFailure = { e ->
-                    logger.error("初始化尾盘监控失败: ${e.message}", e)
+                    logger.error("初始化加密价差策略监控失败: ${e.message}", e)
                     ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
                 }
             )
         } catch (e: Exception) {
-            logger.error("初始化尾盘监控异常: ${e.message}", e)
+            logger.error("初始化加密价差策略监控异常: ${e.message}", e)
             ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
         }
     }

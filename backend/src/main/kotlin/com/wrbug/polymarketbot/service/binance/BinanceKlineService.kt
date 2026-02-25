@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * 币安 K 线 WebSocket：按需订阅尾盘策略使用的币种 5m/15m，维护当前周期 (open, close)，供价差校验使用。
+ * 币安 K 线 WebSocket：按需订阅加密价差策略使用的币种 5m/15m，维护当前周期 (open, close)，供价差校验使用。
  * 仅当存在启用策略且策略使用到某市场时才订阅对应币种，无策略时不建立连接。
  */
 @Service
@@ -46,7 +46,7 @@ class BinanceKlineService {
     
     /** 已连接的 WebSocket: wsKey (symbol-interval) -> WebSocket */
     private val connectedWebSockets = ConcurrentHashMap<String, WebSocket>()
-    /** 当前需要订阅的完整市场集合（如 btc-updown-5m、btc-updown-15m），由尾盘策略刷新时更新 */
+    /** 当前需要订阅的完整市场集合（如 btc-updown-5m、btc-updown-15m），由加密价差策略刷新时更新 */
     private val requiredMarketPrefixes = AtomicReference<Set<String>>(emptySet())
     private val subscriptionLock = Any()
     private var reconnectJob: Job? = null

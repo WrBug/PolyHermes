@@ -312,9 +312,9 @@
     "leaders": "Leader 管理",
     "templates": "跟單模板",
     "copyTradingConfig": "跟單配置",
-    "cryptoTail": "尾盤",
-    "cryptoTailStrategy": "尾盤策略",
-    "cryptoTailMonitor": "尾盤監控",
+    "cryptoSpreadStrategy": "加密價差策略",
+    "cryptoTailStrategy": "策略配置",
+    "cryptoTailMonitor": "即時監控",
     "positions": "倉位管理",
     "backtest": "回測",
     "statistics": "統計信息",
@@ -1486,12 +1486,12 @@
   "cryptoTailStrategy": {
     "binanceApiAlert": {
       "title": "無法連接幣安 API，策略暫時不能運行",
-      "description": "尾盤策略需要從幣安取得行情資料才能運作。目前連線失敗，可能是網路問題或幣安服務異常，請稍後點擊下方按鈕重新檢測。",
+      "description": "加密價差策略需要從幣安取得行情資料才能運作。目前連線失敗，可能是網路問題或幣安服務異常，請稍後點擊下方按鈕重新檢測。",
       "recheck": "重新檢測"
     },
     "list": {
-      "title": "加密尾盤策略",
-      "walletTip": "請使用單獨的錢包運行尾盤策略，避免該錢包用於手動交易、跟單等其他操作，否則可能導致餘額或倉位變化，造成策略執行異常。",
+      "title": "加密價差策略",
+      "walletTip": "請使用單獨的錢包運行加密價差策略，避免該錢包用於手動交易、跟單等其他操作，否則可能導致餘額或倉位變化，造成策略執行異常。",
       "addStrategy": "新增策略",
       "strategyName": "策略名稱",
       "account": "賬戶",
@@ -1548,7 +1548,7 @@
     },
     "redeemRequiredModal": {
       "title": "請先配置自動贖回",
-      "description": "尾盤策略依賴自動贖回功能，請先在系統設置中配置 Builder API Key 並開啟自動贖回。",
+      "description": "加密價差策略依賴自動贖回功能，請先在系統設置中配置 Builder API Key 並開啟自動贖回。",
       "goToSettings": "去配置",
       "cancel": "取消"
     },
@@ -1579,7 +1579,7 @@
     }
   },
   "cryptoTailMonitor": {
-    "title": "尾盤策略監控",
+    "title": "加密價差策略監控",
     "selectStrategy": "選擇策略",
     "selectStrategyPlaceholder": "請選擇要監控的策略",
     "direction": "監控方向",

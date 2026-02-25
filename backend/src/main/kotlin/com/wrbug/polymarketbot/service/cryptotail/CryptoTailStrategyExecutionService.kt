@@ -34,7 +34,7 @@ import java.math.RoundingMode
 import java.util.concurrent.ConcurrentHashMap
 import java.util.regex.Pattern
 
-/** 尾盘策略固定下单价格（最高价 0.99），不再在触发时拉取最优价 */
+/** 加密价差策略固定下单价格（最高价 0.99），不再在触发时拉取最优价 */
 private const val TRIGGER_FIXED_PRICE = "0.99"
 
 /** 最大价差模式（MAX）时，买入价格调整系数（加在触发价格上） */
@@ -62,7 +62,7 @@ private data class PeriodContext(
 )
 
 /**
- * 尾盘策略执行服务：按周期与时间窗口检查价格并下单，每周期最多触发一次。
+ * 加密价差策略执行服务：按周期与时间窗口检查价格并下单，每周期最多触发一次。
  * 周期开始预置账户、解密、费率、签名类型、CLOB 客户端；触发时按 outcomeIndex 计算 size 并签名提交。
  */
 @Service
@@ -131,7 +131,7 @@ class CryptoTailStrategyExecutionService(
         val decryptedKey = try {
             cryptoUtils.decrypt(account.privateKey) ?: return null
         } catch (e: Exception) {
-            logger.warn("尾盘策略周期上下文解密私钥失败: accountId=${account.id}", e)
+            logger.warn("加密价差策略周期上下文解密私钥失败: accountId=${account.id}", e)
             return null
         }
         val apiSecret = try {
@@ -230,11 +230,11 @@ class CryptoTailStrategyExecutionService(
                 )
                 val openPrice = oc?.first?.toPlainString() ?: "-"
                 val closePrice = oc?.second?.toPlainString() ?: "-"
-                val strategyName = strategy.name?.takeIf { it.isNotBlank() } ?: "尾盘策略-${strategy.marketSlugPrefix}"
+                val strategyName = strategy.name?.takeIf { it.isNotBlank() } ?: "加密价差策略-${strategy.marketSlugPrefix}"
                 val direction = if (outcomeIndex == 0) "Up" else "Down"
                 val modeStr = if (strategy.spreadDirection == SpreadDirection.MAX) "最大价差" else "最小价差"
                 logger.info(
-                    "尾盘策略首次满足条件: strategyName=$strategyName, strategyId=${strategy.id}, " +
+                    "加密价差策略首次满足条件: strategyName=$strategyName, strategyId=${strategy.id}, " +
                             "openPrice=$openPrice, closePrice=$closePrice, marketPrice=${bestBid.toPlainString()}, " +
                             "direction=$direction, outcomeIndex=$outcomeIndex, spreadMode=$modeStr"
                 )
@@ -446,7 +446,7 @@ class CryptoTailStrategyExecutionService(
                         "success",
                         null
                     )
-                    logger.info("尾盘策略下单成功: strategyId=${strategy.id}, periodStartUnix=$periodStartUnix, outcomeIndex=$outcomeIndex, orderId=${body.orderId}")
+                    logger.info("加密价差策略下单成功: strategyId=${strategy.id}, periodStartUnix=$periodStartUnix, outcomeIndex=$outcomeIndex, orderId=${body.orderId}")
                     return
                 }
                 failReason = body.errorMsg ?: "unknown"
@@ -456,7 +456,7 @@ class CryptoTailStrategyExecutionService(
             }
         } catch (e: Exception) {
             failReason = e.message ?: e.toString()
-            logger.error("尾盘策略下单异常: strategyId=${strategy.id}, periodStartUnix=$periodStartUnix", e)
+            logger.error("加密价差策略下单异常: strategyId=${strategy.id}, periodStartUnix=$periodStartUnix", e)
         }
         saveTriggerRecord(
             strategy,
@@ -469,7 +469,7 @@ class CryptoTailStrategyExecutionService(
             "fail",
             failReason
         )
-        logger.error("尾盘策略下单失败: strategyId=${strategy.id}, periodStartUnix=$periodStartUnix, reason=$failReason")
+        logger.error("加密价差策略下单失败: strategyId=${strategy.id}, periodStartUnix=$periodStartUnix, reason=$failReason")
     }
 
     /** 无预置上下文时的完整流程：固定价格 0.99，账户/解密/费率/签名在触发时执行 */
@@ -672,6 +672,6 @@ class CryptoTailStrategyExecutionService(
         periodContextCache.clear()
         // 清理所有锁，避免内存泄漏
         triggerMutexMap.clear()
-        logger.debug("尾盘策略执行服务已清理缓存和锁")
+        logger.debug("加密价差策略执行服务已清理缓存和锁")
     }
 }

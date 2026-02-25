@@ -6,7 +6,7 @@ import jakarta.annotation.PostConstruct
 import org.springframework.context.annotation.Configuration
 
 /**
- * 尾盘监控服务配置
+ * 加密价差策略监控服务配置
  * 处理 WebSocketSubscriptionService 和 CryptoTailMonitorService 之间的循环依赖
  */
 @Configuration

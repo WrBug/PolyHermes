@@ -104,7 +104,7 @@ class CryptoTailStrategyService(
         } catch (e: IllegalArgumentException) {
             Result.failure(e)
         } catch (e: Exception) {
-            logger.error("创建尾盘策略失败: ${e.message}", e)
+            logger.error("创建加密价差策略失败: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -179,7 +179,7 @@ class CryptoTailStrategyService(
         } catch (e: IllegalArgumentException) {
             Result.failure(e)
         } catch (e: Exception) {
-            logger.error("更新尾盘策略失败: ${e.message}", e)
+            logger.error("更新加密价差策略失败: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -194,7 +194,7 @@ class CryptoTailStrategyService(
             eventPublisher.publishEvent(CryptoTailStrategyChangedEvent(this))
             Result.success(Unit)
         } catch (e: Exception) {
-            logger.error("删除尾盘策略失败: ${e.message}", e)
+            logger.error("删除加密价差策略失败: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -215,7 +215,7 @@ class CryptoTailStrategyService(
             val dtos = list.map { entityToDto(it, lastTriggerMap[it.id]) }
             Result.success(CryptoTailStrategyListResponse(list = dtos))
         } catch (e: Exception) {
-            logger.error("查询尾盘策略列表失败: ${e.message}", e)
+            logger.error("查询加密价差策略列表失败: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -263,7 +263,7 @@ class CryptoTailStrategyService(
     private fun generateStrategyName(marketSlugPrefix: String): String {
         val suffix = Instant.now().atZone(ZoneId.systemDefault())
             .format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
-        return "尾盘策略-${marketSlugPrefix}-$suffix"
+        return "加密价差策略-${marketSlugPrefix}-$suffix"
     }
 
     private fun entityToDto(e: CryptoTailStrategy, lastTriggerAt: Long?): CryptoTailStrategyDto {

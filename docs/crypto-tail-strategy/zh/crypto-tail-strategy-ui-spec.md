@@ -1,4 +1,4 @@
-# 加密市场尾盘策略 - 前端 UI 规格
+# 加密价差策略 - 前端 UI 规格
 
 > 周期推导与市场数据获取详见 `crypto-tail-strategy-market-data.md`。
 
@@ -10,7 +10,7 @@
 
 | 项目 | 说明 |
 |------|------|
-| **菜单** | 在「跟单管理」同级或其下增加一项，如「尾盘策略」，key 建议 `/crypto-tail-strategy`。 |
+| **菜单** | 在「跟单管理」同级或其下增加一项，如「加密价差策略」，key 建议 `/crypto-tail-strategy`。 |
 | **路由** | 列表页 `/crypto-tail-strategy`；可选详情/触发记录 `/crypto-tail-strategy/records/:id`。 |
 
 参考：`Layout.tsx` 中 `/copy-trading`、`/backtest` 的配置；`App.tsx` 中对应 `Route`。
@@ -26,7 +26,7 @@
 
 | 元素 | 类型 | 说明 |
 |------|------|------|
-| 页面标题 | 标题文案 | 如「加密尾盘策略」，用 `t('cryptoTailStrategy.list.title')`。 |
+| 页面标题 | 标题文案 | 如「加密价差策略」，用 `t('cryptoTailStrategy.list.title')`。 |
 | **钱包使用提示** | **Alert（Warning）** | **必须**在页面顶部或标题下方展示：提示用户**使用单独/专用钱包**运行本策略，避免该钱包用于手动交易、跟单等其他操作，否则可能导致余额或仓位变化，进而造成策略执行异常（如余额不足、下单失败等）。文案走多语言 `t('cryptoTailStrategy.list.walletTip')`，可带 `showIcon`。 |
 | 新增策略 | Button（Primary） | 点击时**先检查自动赎回相关配置**（见 2.4）；若未配置则弹出「去配置」简易弹窗，若已配置则打开「新增策略」表单弹窗。图标可用 `PlusOutlined`。 |
 | 筛选（可选） | Select / 筛选项 | 按账户、启用状态筛选；移动端可收起到抽屉或折叠。 |
@@ -59,7 +59,7 @@
 1. **检查**：请求系统配置（如 `apiService.systemConfig.getConfig()` 或已有接口），判断是否已配置 Builder API Key（及可选：自动赎回已开启）。若 `builderApiKeyConfigured === false`（或后端约定之「未配置」状态），视为未配置。
 2. **未配置时**：不打开新增策略表单，改为弹出**简易弹窗**（Modal），内容建议：
    - **标题**：如「请先配置自动赎回」，`t('cryptoTailStrategy.redeemRequiredModal.title')`。
-   - **正文**：简短说明尾盘策略依赖自动赎回，需要先在「系统设置」中配置 Builder API Key 及自动赎回。文案 `t('cryptoTailStrategy.redeemRequiredModal.description')`。
+   - **正文**：简短说明加密价差策略依赖自动赎回，需要先在「系统设置」中配置 Builder API Key 及自动赎回。文案 `t('cryptoTailStrategy.redeemRequiredModal.description')`。
    - **操作**：
      - **去配置**：主按钮，点击后关闭弹窗并跳转到系统设置页（如 `/system-settings`，该页含 Relayer 配置与自动赎回开关）。
      - **取消**：次按钮或关闭图标，仅关闭弹窗。
@@ -133,7 +133,7 @@
 |------|------|
 | **钱包提示** | 列表页与新增/编辑表单**必须**包含「使用单独钱包」的 Alert 提示，避免用户用混用钱包导致异常；文案走多语言。 |
 | **创建前检查** | 点击「新增策略」时先检查自动赎回/Builder API 是否已配置；未配置则弹出简易「去配置」弹窗，引导用户到系统设置配置 API Key 与自动赎回，不打开策略表单。 |
-| 多语言 | 所有文案 `t('cryptoTailStrategy.xxx')`，在 `locales/zh-CN`、`zh-TW`、`en` 的 `common.json` 中增加键。需包含：`cryptoTailStrategy.list.walletTip`、`cryptoTailStrategy.form.walletTip`，以及 `cryptoTailStrategy.redeemRequiredModal.title`、`cryptoTailStrategy.redeemRequiredModal.description`、`cryptoTailStrategy.redeemRequiredModal.goToSettings`、`cryptoTailStrategy.redeemRequiredModal.cancel`。文案示例：列表页 `walletTip`：「请使用单独的钱包运行尾盘策略，避免该钱包用于手动交易、跟单等其他操作，否则可能导致余额或仓位变化，造成策略执行异常。」表单内 `walletTip`：「建议使用专用钱包，避免手动操作等导致余额或下单异常。」未配置赎回弹窗 `title`：「请先配置自动赎回」；`description`：「尾盘策略依赖自动赎回功能，请先在系统设置中配置 Builder API Key 并开启自动赎回。」；`goToSettings`：「去配置」；`cancel`：「取消」。 |
+| 多语言 | 所有文案 `t('cryptoTailStrategy.xxx')`，在 `locales/zh-CN`、`zh-TW`、`en` 的 `common.json` 中增加键。需包含：`cryptoTailStrategy.list.walletTip`、`cryptoTailStrategy.form.walletTip`，以及 `cryptoTailStrategy.redeemRequiredModal.title`、`cryptoTailStrategy.redeemRequiredModal.description`、`cryptoTailStrategy.redeemRequiredModal.goToSettings`、`cryptoTailStrategy.redeemRequiredModal.cancel`。文案示例：列表页 `walletTip`：「请使用单独的钱包运行加密价差策略，避免该钱包用于手动交易、跟单等其他操作，否则可能导致余额或仓位变化，造成策略执行异常。」表单内 `walletTip`：「建议使用专用钱包，避免手动操作等导致余额或下单异常。」未配置赎回弹窗 `title`：「请先配置自动赎回」；`description`：「加密价差策略依赖自动赎回功能，请先在系统设置中配置 Builder API Key 并开启自动赎回。」；`goToSettings`：「去配置」；`cancel`：「取消」。 |
 | 金额 | 统一 `formatUSDC`（见 frontend.mdc）。 |
 | 响应式 | `useMediaQuery`；按钮触摸目标 ≥ 44px；移动端主操作突出。 |
 | 类型 | 不用 `any`；为策略、触发记录定义 TypeScript 类型。 |
@@ -150,7 +150,7 @@
 | 新增/编辑弹窗 | `frontend/src/pages/CryptoTailStrategyList/FormModal.tsx` 或内嵌 Modal |
 | 触发记录 | `frontend/src/pages/CryptoTailStrategyList/TriggerRecordsModal.tsx` 或 `CryptoTailStrategyRecords.tsx` |
 | 路由 | `App.tsx` 中 `/crypto-tail-strategy`、可选 `/crypto-tail-strategy/records/:id` |
-| 菜单 | `Layout.tsx` 中增加「尾盘策略」菜单项 |
+| 菜单 | `Layout.tsx` 中增加「加密价差策略」菜单项 |
 | 类型 | `frontend/src/types/index.ts` 或 `types/cryptoTailStrategy.ts` 中增加策略与触发记录类型 |
 | 多语言 | `frontend/src/locales/{zh-CN,zh-TW,en}/common.json` 中增加 `cryptoTailStrategy.*` |
 
@@ -158,7 +158,7 @@
 
 ## 7. 小结：UI 包含的主要元素
 
-- **导航**：主导航中「尾盘策略」入口。
+- **导航**：主导航中「加密价差策略」入口。
 - **列表页**：标题、钱包提示 Alert、新增按钮（点击前先检查赎回配置，未配置则弹「去配置」简易弹窗）、筛选、表格/卡片（策略名、市场、价格区间、投入方式、状态、最近触发、操作）、加载与空状态。
 - **未配置赎回弹窗**：简易 Modal，提示依赖自动赎回、需先配置 Builder API Key 与自动赎回；按钮「去配置」（跳转 `/system-settings`）、「取消」。
 - **表单弹窗**：策略名、账户、市场选择、minPrice/maxPrice、投入方式（比例/固定）、启用开关、提交/取消。
@@ -169,9 +169,9 @@
 
 ## 附录 A 后端/产品要求：自动赎回须支持本策略仓位
 
-自动赎回逻辑**必须支持赎回由尾盘策略产生的订单所对应的仓位**。即：本策略触发的市价买入会形成仓位，这些仓位在满足「可赎回」条件时，应被纳入现有自动赎回流程并正常发起赎回，不得因来源为「尾盘策略」而被排除。后端实现时需保证：
+自动赎回逻辑**必须支持赎回由加密价差策略产生的订单所对应的仓位**。即：本策略触发的市价买入会形成仓位，这些仓位在满足「可赎回」条件时，应被纳入现有自动赎回流程并正常发起赎回，不得因来源为「加密价差策略」而被排除。后端实现时需保证：
 
-- 尾盘策略下单产生的仓位，与跟单/手动下单等来源的仓位一视同仁，参与可赎回查询与批量赎回；
-- 若当前自动赎回按账户或仓位类型过滤，需将「尾盘策略订单产生的仓位」包含在内。
+- 加密价差策略下单产生的仓位，与跟单/手动下单等来源的仓位一视同仁，参与可赎回查询与批量赎回；
+- 若当前自动赎回按账户或仓位类型过滤，需将「加密价差策略订单产生的仓位」包含在内。
 
 这样前端所依赖的「自动赎回」对该策略才完整有效。

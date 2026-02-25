@@ -1,8 +1,8 @@
-# Crypto Tail Strategy Configuration Guide
+# Crypto Spread Strategy Configuration Guide
 
-## Part 1: What is Crypto Tail Strategy?
+## Part 1: What is Crypto Spread Strategy?
 
-Crypto Tail Strategy is an automated trading strategy designed specifically for Polymarket crypto markets' **5-minute** or **15-minute** "Up or Down" markets.
+Crypto Spread Strategy is an automated trading strategy designed specifically for Polymarket crypto markets' **5-minute** or **15-minute** "Up or Down" markets.
 
 **Core Logic**: Within a specified time window, when the market price enters your set price range, the system will automatically buy at a fixed price (0.99) without manual operation.
 
@@ -39,7 +39,7 @@ Cycle Start → Within Time Window → Price Enters Range → Auto Order
 
 - **Maximum one trigger per cycle**: Within the same cycle, even if conditions are met multiple times, only one order is placed
 - **Fixed order price**: All orders are submitted at price 0.99
-- **Requires separate wallet**: It's recommended to use a dedicated wallet for tail strategies to avoid conflicts with other operations (manual trading, copy trading, etc.)
+- **Requires separate wallet**: It's recommended to use a dedicated wallet for crypto spread strategies to avoid conflicts with other operations (manual trading, copy trading, etc.)
 
 ---
 
@@ -50,7 +50,7 @@ Cycle Start → Within Time Window → Price Enters Range → Auto Order
 | Parameter | Description | Required | Example |
 |-----------|-------------|----------|---------|
 | **Account** | Select the wallet account for trading | ✅ | Account A |
-| **Strategy Name** | Name your strategy for easy identification | ❌ | "BTC 15min Tail Strategy" |
+| **Strategy Name** | Name your strategy for easy identification | ❌ | "BTC 15min Crypto Spread Strategy" |
 | **Market** | Select the market to trade (5-minute or 15-minute) | ✅ | btc-updown-15m |
 
 ### 3.2 Cycle Settings
@@ -341,7 +341,7 @@ Enabled: On
 2. **Position conflicts**: Manual trading and strategy trading may conflict
 3. **Management confusion**: Difficult to distinguish which orders are from strategy vs manual
 
-**Recommendation**: Create a dedicated wallet, only for tail strategies.
+**Recommendation**: Create a dedicated wallet, only for crypto spread strategies.
 
 ### Q7: Why is the order price fixed at 0.99?
 
@@ -352,7 +352,7 @@ Enabled: On
 
 ### Q8: Does the strategy depend on auto-redeem functionality?
 
-**A**: Yes, tail strategy depends on auto-redeem functionality.
+**A**: Yes, crypto spread strategy depends on auto-redeem functionality.
 
 **Reasons**:
 - Strategy orders create positions after execution
@@ -411,7 +411,7 @@ Enabled: On
 
 ### 7.1 View Strategy List
 
-On the "Crypto Tail Strategy" page, you can view all strategies:
+On the "Crypto Spread Strategy" page, you can view all strategies:
 - Strategy name
 - Market information
 - Time window
@@ -453,7 +453,7 @@ After deleting a strategy:
 
 ## Part 8: Summary
 
-Crypto Tail Strategy is a powerful automated trading tool that can help you:
+Crypto Spread Strategy is a powerful automated trading tool that can help you:
 
 1. **Automated Trading**: No need for manual monitoring, system executes automatically
 2. **Precise Control**: Precisely control trigger conditions through time windows and price ranges

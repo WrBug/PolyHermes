@@ -304,7 +304,7 @@ class TelegramNotificationService(
     }
 
     /**
-     * 发送尾盘策略下单成功通知（与跟单一致：在收到 WS 订单推送时匹配尾盘订单后调用）
+     * 发送加密价差策略下单成功通知（与跟单一致：在收到 WS 订单推送时匹配价差策略订单后调用）
      */
     suspend fun sendCryptoTailOrderSuccessNotification(
         orderId: String?,
@@ -324,7 +324,7 @@ class TelegramNotificationService(
         if (orderId != null) {
             val lastSentTime = sentOrderIds[orderId]
             if (lastSentTime != null && System.currentTimeMillis() - lastSentTime < 5 * 60 * 1000) {
-                logger.info("尾盘订单通知已发送过（5分钟内），跳过: orderId=$orderId")
+                logger.info("加密价差策略订单通知已发送过（5分钟内），跳过: orderId=$orderId")
                 return
             }
             sentOrderIds[orderId] = System.currentTimeMillis()
@@ -894,7 +894,7 @@ class TelegramNotificationService(
     }
 
     /**
-     * 构建尾盘策略下单成功消息（与订单成功格式一致，增加「尾盘策略」标题与策略名）
+     * 构建加密价差策略下单成功消息（与订单成功格式一致，增加「加密价差策略」标题与策略名）
      */
     private fun buildCryptoTailOrderSuccessMessage(
         orderId: String?,
@@ -912,7 +912,7 @@ class TelegramNotificationService(
         locale: java.util.Locale,
         orderTime: Long?
     ): String {
-        val tailOrderSuccess = messageSource.getMessage("notification.tail.order.success", null, "尾盘策略下单成功", locale)
+        val tailOrderSuccess = messageSource.getMessage("notification.tail.order.success", null, "加密价差策略下单成功", locale)
         val strategyLabel = messageSource.getMessage("notification.tail.strategy", null, "策略", locale)
         val orderInfo = messageSource.getMessage("notification.order.info", null, "订单信息", locale)
         val orderIdLabel = messageSource.getMessage("notification.order.id", null, "订单ID", locale)

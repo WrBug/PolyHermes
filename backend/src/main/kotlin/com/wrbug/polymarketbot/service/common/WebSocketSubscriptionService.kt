@@ -40,14 +40,14 @@ class WebSocketSubscriptionService(
     // 存储 order 频道的订阅回调：sessionId -> callback（用于取消订阅）
     private val orderChannelCallbacks = ConcurrentHashMap<String, (OrderPushMessage) -> Unit>()
     
-    // 存储尾盘监控频道的订阅回调：sessionId -> (strategyId -> callback)
+    // 存储加密价差策略监控频道的订阅回调：sessionId -> (strategyId -> callback)
     private val monitorChannelCallbacks = ConcurrentHashMap<String, MutableMap<Long, (CryptoTailMonitorPushData) -> Unit>>()
     
-    // 尾盘监控服务（延迟注入，避免循环依赖）
+    // 加密价差策略监控服务（延迟注入，避免循环依赖）
     private var cryptoTailMonitorService: CryptoTailMonitorService? = null
     
     /**
-     * 设置尾盘监控服务（由 Spring 在初始化后调用）
+     * 设置加密价差策略监控服务（由 Spring 在初始化后调用）
      */
     fun setCryptoTailMonitorService(service: CryptoTailMonitorService) {
         cryptoTailMonitorService = service
@@ -75,7 +75,7 @@ class WebSocketSubscriptionService(
         // 清理 order 频道的回调
         orderChannelCallbacks.remove(sessionId)
 
-        // 清理尾盘监控频道的回调
+        // 清理加密价差策略监控频道的回调
         val monitorCallbacks = monitorChannelCallbacks.remove(sessionId)
         monitorCallbacks?.keys?.forEach { strategyId ->
             cryptoTailMonitorService?.unsubscribe(sessionId, strategyId)
@@ -127,7 +127,7 @@ class WebSocketSubscriptionService(
                 orderPushService.subscribeAllEnabled(callback)
             }
             channel.startsWith("crypto_tail_monitor_") -> {
-                // 尾盘策略监控频道
+                // 加密价差策略监控频道
                 val strategyId = channel.removePrefix("crypto_tail_monitor_").toLongOrNull()
                 if (strategyId != null && cryptoTailMonitorService != null) {
                     val callback: (CryptoTailMonitorPushData) -> Unit = { message ->
@@ -136,7 +136,7 @@ class WebSocketSubscriptionService(
                     monitorChannelCallbacks.getOrPut(sessionId) { mutableMapOf() }[strategyId] = callback
                     cryptoTailMonitorService!!.subscribe(sessionId, strategyId, callback)
                 } else {
-                    logger.warn("无效的尾盘监控频道或服务未初始化: $channel")
+                    logger.warn("无效的加密价差策略监控频道或服务未初始化: $channel")
                     sendSubscribeAck(sessionId, channel, false, "无效的策略ID")
                 }
             }
@@ -167,7 +167,7 @@ class WebSocketSubscriptionService(
                 }
             }
             channel.startsWith("crypto_tail_monitor_") -> {
-                // 取消尾盘监控订阅
+                // 取消加密价差策略监控订阅
                 val strategyId = channel.removePrefix("crypto_tail_monitor_").toLongOrNull()
                 if (strategyId != null) {
                     monitorChannelCallbacks[sessionId]?.remove(strategyId)
@@ -178,21 +178,21 @@ class WebSocketSubscriptionService(
     }
     
     /**
-     * 注册尾盘监控回调（由 CryptoTailMonitorService 调用）
+     * 注册加密价差策略监控回调（由 CryptoTailMonitorService 调用）
      */
     fun registerMonitorCallback(sessionId: String, strategyId: Long, callback: (CryptoTailMonitorPushData) -> Unit) {
         monitorChannelCallbacks.getOrPut(sessionId) { mutableMapOf() }[strategyId] = callback
     }
     
     /**
-     * 注销尾盘监控回调（由 CryptoTailMonitorService 调用）
+     * 注销加密价差策略监控回调（由 CryptoTailMonitorService 调用）
      */
     fun unregisterMonitorCallback(sessionId: String, strategyId: Long) {
         monitorChannelCallbacks[sessionId]?.remove(strategyId)
     }
     
     /**
-     * 推送尾盘监控数据（由 CryptoTailMonitorService 调用）
+     * 推送加密价差策略监控数据（由 CryptoTailMonitorService 调用）
      */
     fun pushMonitorData(strategyId: Long, data: CryptoTailMonitorPushData) {
         val channel = "crypto_tail_monitor_$strategyId"

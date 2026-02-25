@@ -1,7 +1,7 @@
 package com.wrbug.polymarketbot.dto
 
 /**
- * 尾盘策略监控初始化请求
+ * 加密价差策略监控初始化请求
  */
 data class CryptoTailMonitorInitRequest(
     /** 策略ID */
@@ -9,7 +9,7 @@ data class CryptoTailMonitorInitRequest(
 )
 
 /**
- * 尾盘策略监控初始化响应
+ * 加密价差策略监控初始化响应
  */
 data class CryptoTailMonitorInitResponse(
     /** 策略ID */
@@ -59,7 +59,7 @@ data class CryptoTailMonitorInitResponse(
 )
 
 /**
- * 尾盘策略监控实时推送数据
+ * 加密价差策略监控实时推送数据
  */
 data class CryptoTailMonitorPushData(
     /** 策略ID */
