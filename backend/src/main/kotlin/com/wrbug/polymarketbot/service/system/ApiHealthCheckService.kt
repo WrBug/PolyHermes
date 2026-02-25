@@ -250,7 +250,7 @@ class ApiHealthCheckService(
                     name = "币安 WebSocket",
                     url = binanceWsUrl,
                     status = "success",
-                    message = "无尾盘策略，未订阅"
+                    message = "无加密价差策略，未订阅"
                 )
             } else if (connected > 0) {
                 val which = statuses.filter { it.value }.keys.joinToString("、")

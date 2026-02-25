@@ -94,7 +94,7 @@ class BinanceKlineAutoSpreadService(
         val baseDown = averageAfterIqr(spreadsDown).setScale(8, RoundingMode.HALF_UP)
         cache[cacheKey(marketSlugPrefix, intervalSeconds, periodStartUnix)] = baseUp to baseDown
         logger.info(
-            "尾盘自动价差已计算并缓存(100%基准): market=$marketSlugPrefix symbol=$symbol interval=${intervalSeconds}s periodStartUnix=$periodStartUnix | " +
+            "加密价差策略自动价差已计算并缓存(100%基准): market=$marketSlugPrefix symbol=$symbol interval=${intervalSeconds}s periodStartUnix=$periodStartUnix | " +
                 "Up方向: 样本数=${spreadsUp.size}, baseSpreadUp=${baseUp.toPlainString()} | " +
                 "Down方向: 样本数=${spreadsDown.size}, baseSpreadDown=${baseDown.toPlainString()}"
         )

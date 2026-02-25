@@ -1,6 +1,6 @@
-# 尾盘策略文档 (Crypto Tail Strategy)
+# 加密价差策略文档 (Crypto Spread Strategy)
 
-本目录集中存放与 Polymarket 加密市场尾盘策略相关的文档。
+本目录集中存放与 Polymarket 加密市场加密价差策略相关的文档。
 
 ## 目录结构
 

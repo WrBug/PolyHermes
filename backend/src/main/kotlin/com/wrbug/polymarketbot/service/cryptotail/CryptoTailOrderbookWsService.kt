@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * 尾盘策略订单簿 WebSocket 监听：订阅 CLOB Market 频道，收到订单簿/价格变更时若满足条件立即触发下单。
+ * 加密价差策略订单簿 WebSocket 监听：订阅 CLOB Market 频道，收到订单簿/价格变更时若满足条件立即触发下单。
  */
 @Service
 class CryptoTailOrderbookWsService(
@@ -103,7 +103,7 @@ class CryptoTailOrderbookWsService(
         try {
             webSocket?.close(1000, "shutdown")
         } catch (e: Exception) {
-            logger.debug("关闭尾盘策略 WebSocket 时异常: ${e.message}")
+            logger.debug("关闭加密价差策略 WebSocket 时异常: ${e.message}")
         }
         webSocket = null
         scopeJob.cancel()
@@ -116,7 +116,7 @@ class CryptoTailOrderbookWsService(
                 val request = Request.Builder().url(wsUrl).build()
                 webSocket = client.newWebSocket(request, object : WebSocketListener() {
                     override fun onOpen(webSocket: WebSocket, response: okhttp3.Response) {
-                        logger.info("尾盘策略订单簿 WebSocket 已连接")
+                        logger.info("加密价差策略订单簿 WebSocket 已连接")
                         refreshAndSubscribe(fromConnect = true)
                     }
 
@@ -130,13 +130,13 @@ class CryptoTailOrderbookWsService(
                     }
 
                     override fun onFailure(webSocket: WebSocket, t: Throwable, response: okhttp3.Response?) {
-                        logger.warn("尾盘策略订单簿 WebSocket 异常: ${t.message}")
+                        logger.warn("加密价差策略订单簿 WebSocket 异常: ${t.message}")
                         this@CryptoTailOrderbookWsService.webSocket = null
                         scheduleReconnect()
                     }
                 })
             } catch (e: Exception) {
-                logger.error("尾盘策略订单簿 WebSocket 连接失败: ${e.message}", e)
+                logger.error("加密价差策略订单簿 WebSocket 连接失败: ${e.message}", e)
                 scheduleReconnect()
             }
         }
@@ -150,7 +150,7 @@ class CryptoTailOrderbookWsService(
             delay(reconnectDelayMs)
             reconnectJob = null
             if (strategyRepository.findAllByEnabledTrue().isEmpty()) return@launch
-            logger.info("尾盘策略订单簿 WebSocket 尝试重连")
+            logger.info("加密价差策略订单簿 WebSocket 尝试重连")
             connect()
         }
     }
@@ -244,7 +244,7 @@ class CryptoTailOrderbookWsService(
         synchronized(refreshLock) {
             // 如果正在刷新，直接返回，避免重复调用
             if (isRefreshing.get()) {
-                logger.debug("尾盘策略订阅刷新已在进行中，跳过本次调用")
+                logger.debug("加密价差策略订阅刷新已在进行中，跳过本次调用")
                 return
             }
             isRefreshing.set(true)
@@ -281,7 +281,7 @@ class CryptoTailOrderbookWsService(
             val msg = """{"type":"MARKET","assets_ids":${tokenIds.toJson()}}"""
             try {
                 webSocket?.send(msg)
-                logger.info("尾盘策略订单簿订阅: ${tokenIds.size} 个 token, 市场: $marketSlugs")
+                logger.info("加密价差策略订单簿订阅: ${tokenIds.size} 个 token, 市场: $marketSlugs")
             } catch (e: Exception) {
                 logger.warn("发送订阅失败: ${e.message}")
                 return
@@ -303,9 +303,9 @@ class CryptoTailOrderbookWsService(
             try {
                 ws.close(1000, "subscription_change")
             } catch (e: Exception) {
-                logger.debug("关闭尾盘策略 WebSocket 时异常: ${e.message}")
+                logger.debug("关闭加密价差策略 WebSocket 时异常: ${e.message}")
             }
-            logger.info("尾盘策略订单簿 WebSocket 已关闭（订阅更新，将重连）")
+            logger.info("加密价差策略订单簿 WebSocket 已关闭（订阅更新，将重连）")
         }
     }
 
@@ -357,9 +357,9 @@ class CryptoTailOrderbookWsService(
             try {
                 ws.close(1000, "no_enabled_strategies")
             } catch (e: Exception) {
-                logger.debug("关闭尾盘策略 WebSocket 时异常: ${e.message}")
+                logger.debug("关闭加密价差策略 WebSocket 时异常: ${e.message}")
             }
-            logger.info("尾盘策略订单簿 WebSocket 已关闭（无启用策略）")
+            logger.info("加密价差策略订单簿 WebSocket 已关闭（无启用策略）")
         }
     }
 
@@ -377,7 +377,7 @@ class CryptoTailOrderbookWsService(
             periodEndCountdownJob = null
             refreshAndSubscribe()
         }
-        logger.debug("尾盘策略订单簿订阅倒计时: ${delayMs / 1000}s 后刷新")
+        logger.debug("加密价差策略订单簿订阅倒计时: ${delayMs / 1000}s 后刷新")
     }
 
     private fun buildSubscriptionMap(): Pair<List<String>, Map<String, List<WsBookEntry>>> {
@@ -391,23 +391,23 @@ class CryptoTailOrderbookWsService(
             val periodStartUnix = (nowSeconds / interval) * interval
             val windowEnd = periodStartUnix + strategy.windowEndSeconds
             if (nowSeconds >= windowEnd) {
-                logger.debug("尾盘策略跳过（已过时间窗口）: strategyId=${strategy.id}, slug=${strategy.marketSlugPrefix}, windowEnd=$windowEnd")
+                logger.debug("加密价差策略跳过（已过时间窗口）: strategyId=${strategy.id}, slug=${strategy.marketSlugPrefix}, windowEnd=$windowEnd")
                 continue
             }
             val slug = "${strategy.marketSlugPrefix}-$periodStartUnix"
             val event = runBlocking { fetchEventBySlugWithRetry(slug).getOrNull() }
             if (event == null) {
-                logger.warn("尾盘策略跳过（拉取事件失败）: strategyId=${strategy.id}, slug=$slug，请确认 Gamma 是否存在该 slug 或稍后重试")
+                logger.warn("加密价差策略跳过（拉取事件失败）: strategyId=${strategy.id}, slug=$slug，请确认 Gamma 是否存在该 slug 或稍后重试")
                 continue
             }
             val market = event.markets?.firstOrNull()
             if (market == null) {
-                logger.warn("尾盘策略跳过（事件无市场）: strategyId=${strategy.id}, slug=$slug")
+                logger.warn("加密价差策略跳过（事件无市场）: strategyId=${strategy.id}, slug=$slug")
                 continue
             }
             val tokenIds = parseClobTokenIds(market.clobTokenIds)
             if (tokenIds.size < 2) {
-                logger.warn("尾盘策略跳过（token 数量不足）: strategyId=${strategy.id}, slug=$slug, tokenCount=${tokenIds.size}")
+                logger.warn("加密价差策略跳过（token 数量不足）: strategyId=${strategy.id}, slug=$slug, tokenCount=${tokenIds.size}")
                 continue
             }
             tokenIdSet.addAll(tokenIds)

@@ -125,8 +125,8 @@ class AccountService(
 
             // 7. 加密敏感信息
             val encryptedPrivateKey = cryptoUtils.encrypt(request.privateKey)
-            val encryptedApiSecret = apiKeyCreds.secret?.let { cryptoUtils.encrypt(it) }
-            val encryptedApiPassphrase = apiKeyCreds.passphrase?.let { cryptoUtils.encrypt(it) }
+            val encryptedApiSecret = apiKeyCreds.secret.let { cryptoUtils.encrypt(it) }
+            val encryptedApiPassphrase = apiKeyCreds.passphrase.let { cryptoUtils.encrypt(it) }
 
             // 8. 生成账户名称（如果未提供，使用 SAFE/MAGIC-代理地址后4位）
             val accountName = if (request.accountName.isNullOrBlank()) {
@@ -518,8 +518,8 @@ class AccountService(
                     }
                     val creds = result.getOrNull()
                         ?: return Result.failure(IllegalStateException("API Key 返回为空"))
-                    val encryptedSecret = creds.secret?.let { cryptoUtils.encrypt(it) }
-                    val encryptedPassphrase = creds.passphrase?.let { cryptoUtils.encrypt(it) }
+                    val encryptedSecret = creds.secret.let { cryptoUtils.encrypt(it) }
+                    val encryptedPassphrase = creds.passphrase.let { cryptoUtils.encrypt(it) }
                     val updated = account.copy(
                         apiKey = creds.apiKey,
                         apiSecret = encryptedSecret,
@@ -1128,7 +1128,7 @@ class AccountService(
 
             // 3. 验证仓位是否存在并获取原始数量
             val positionsResult = getAllPositions()
-            val (position, originalQuantity) = positionsResult.fold(
+            val (_, originalQuantity) = positionsResult.fold(
                 onSuccess = { positionListResponse ->
                     val position = positionListResponse.currentPositions.find {
                         it.accountId == request.accountId &&
@@ -1161,7 +1161,7 @@ class AccountService(
                 onFailure = { e ->
                     return Result.failure(Exception("查询仓位失败: ${e.message}"))
                 }
-            ) ?: return Result.failure(IllegalArgumentException("仓位不存在"))
+            )
 
             // 4. 计算实际卖出数量
             val sellQuantity = if (percentDecimal != null) {
@@ -1280,7 +1280,7 @@ class AccountService(
 
             val newOrderRequest = com.wrbug.polymarketbot.api.NewOrderRequest(
                 order = signedOrder,
-                owner = account.apiKey!!,  // API Key
+                owner = account.apiKey,  // API Key
                 orderType = orderType,
                 deferExec = false
             )
@@ -1300,7 +1300,7 @@ class AccountService(
             }
 
             val clobApi = retrofitFactory.createClobApi(
-                account.apiKey!!,
+                account.apiKey,
                 apiSecret,
                 apiPassphrase,
                 account.walletAddress

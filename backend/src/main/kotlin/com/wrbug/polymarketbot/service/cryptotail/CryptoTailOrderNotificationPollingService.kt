@@ -22,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional
 import jakarta.annotation.PreDestroy
 
 /**
- * 尾盘策略订单 TG 通知轮询服务（与跟单一致）
+ * 加密价差策略订单 TG 通知轮询服务（与跟单一致）
  * 定时查询「下单成功且未发 TG」的触发记录，通过 CLOB getOrder 获取订单详情后发送 TG 并标记已发。
  */
 @Service
@@ -57,14 +57,14 @@ class CryptoTailOrderNotificationPollingService(
     @Scheduled(fixedDelay = 5000)
     fun scheduledSendPendingNotifications() {
         if (notificationJob != null && notificationJob!!.isActive) {
-            logger.debug("上一轮尾盘 TG 通知任务仍在执行，跳过本次")
+            logger.debug("上一轮加密价差策略 TG 通知任务仍在执行，跳过本次")
             return
         }
         notificationJob = scope.launch {
             try {
                 getSelf().sendPendingNotifications()
             } catch (e: Exception) {
-                logger.error("尾盘 TG 通知轮询异常: ${e.message}", e)
+                logger.error("加密价差策略 TG 通知轮询异常: ${e.message}", e)
             } finally {
                 notificationJob = null
             }
@@ -88,7 +88,7 @@ class CryptoTailOrderNotificationPollingService(
                     triggerRepository.save(trigger)
                 }
             } catch (e: Exception) {
-                logger.warn("尾盘 TG 通知单条失败: triggerId=${trigger.id}, orderId=${trigger.orderId}, ${e.message}", e)
+                logger.warn("加密价差策略 TG 通知单条失败: triggerId=${trigger.id}, orderId=${trigger.orderId}, ${e.message}", e)
             }
         }
     }
@@ -102,16 +102,16 @@ class CryptoTailOrderNotificationPollingService(
             return false
         }
         val apiSecret = try {
-            cryptoUtils.decrypt(account.apiSecret) ?: return false
+            cryptoUtils.decrypt(account.apiSecret)
         } catch (e: Exception) {
             logger.warn("解密 API Secret 失败: accountId=${account.id}", e)
             return false
         }
         val apiPassphrase = try {
-            cryptoUtils.decrypt(account.apiPassphrase) ?: ""
+            cryptoUtils.decrypt(account.apiPassphrase)
         } catch (e: Exception) { "" }
         val clobApi = retrofitFactory.createClobApi(
-            account.apiKey!!,
+            account.apiKey,
             apiSecret,
             apiPassphrase,
             account.walletAddress
@@ -142,7 +142,7 @@ class CryptoTailOrderNotificationPollingService(
             walletAddress = account.walletAddress,
             orderTime = orderTimeMs
         )
-        logger.info("尾盘订单 TG 通知已发送: orderId=$orderId, strategyId=${strategy.id}, triggerId=${trigger.id}")
+        logger.info("加密价差策略订单 TG 通知已发送: orderId=$orderId, strategyId=${strategy.id}, triggerId=${trigger.id}")
         return true
     }
 

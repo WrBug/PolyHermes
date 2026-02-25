@@ -5,7 +5,7 @@ import java.math.BigDecimal
 import com.wrbug.polymarketbot.util.toSafeBigDecimal
 
 /**
- * 尾盘策略触发记录
+ * 加密价差策略触发记录
  */
 @Entity
 @Table(name = "crypto_tail_strategy_trigger")

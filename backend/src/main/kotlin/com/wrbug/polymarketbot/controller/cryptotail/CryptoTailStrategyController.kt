@@ -11,9 +11,12 @@ import com.wrbug.polymarketbot.dto.CryptoTailStrategyTriggerListResponse
 import com.wrbug.polymarketbot.dto.CryptoTailStrategyUpdateRequest
 import com.wrbug.polymarketbot.dto.CryptoTailMarketOptionDto
 import com.wrbug.polymarketbot.dto.CryptoTailAutoMinSpreadResponse
+import com.wrbug.polymarketbot.dto.CryptoTailMonitorInitRequest
+import com.wrbug.polymarketbot.dto.CryptoTailMonitorInitResponse
 import com.wrbug.polymarketbot.enums.ErrorCode
 import com.wrbug.polymarketbot.service.binance.BinanceKlineAutoSpreadService
 import com.wrbug.polymarketbot.service.cryptotail.CryptoTailStrategyService
+import com.wrbug.polymarketbot.service.cryptotail.CryptoTailMonitorService
 import org.slf4j.LoggerFactory
 import org.springframework.context.MessageSource
 import org.springframework.http.ResponseEntity
@@ -26,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/api/crypto-tail-strategy")
 class CryptoTailStrategyController(
     private val cryptoTailStrategyService: CryptoTailStrategyService,
+    private val cryptoTailMonitorService: CryptoTailMonitorService,
     private val binanceKlineAutoSpreadService: BinanceKlineAutoSpreadService,
     private val messageSource: MessageSource
 ) {
@@ -39,12 +43,12 @@ class CryptoTailStrategyController(
             result.fold(
                 onSuccess = { ResponseEntity.ok(ApiResponse.success(it)) },
                 onFailure = { e ->
-                    logger.error("查询尾盘策略列表失败: ${e.message}", e)
+                    logger.error("查询加密价差策略列表失败: ${e.message}", e)
                     ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_CRYPTO_TAIL_STRATEGY_LIST_FETCH_FAILED, e.message, messageSource))
                 }
             )
         } catch (e: Exception) {
-            logger.error("查询尾盘策略列表异常: ${e.message}", e)
+            logger.error("查询加密价差策略列表异常: ${e.message}", e)
             ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_CRYPTO_TAIL_STRATEGY_LIST_FETCH_FAILED, e.message, messageSource))
         }
     }
@@ -56,7 +60,7 @@ class CryptoTailStrategyController(
             result.fold(
                 onSuccess = { ResponseEntity.ok(ApiResponse.success(it)) },
                 onFailure = { e ->
-                    logger.error("创建尾盘策略失败: ${e.message}", e)
+                    logger.error("创建加密价差策略失败: ${e.message}", e)
                     val code = when (e.message) {
                         ErrorCode.CRYPTO_TAIL_STRATEGY_WINDOW_INVALID.messageKey -> ErrorCode.CRYPTO_TAIL_STRATEGY_WINDOW_INVALID
                         ErrorCode.CRYPTO_TAIL_STRATEGY_WINDOW_EXCEED.messageKey -> ErrorCode.CRYPTO_TAIL_STRATEGY_WINDOW_EXCEED
@@ -68,7 +72,7 @@ class CryptoTailStrategyController(
                 }
             )
         } catch (e: Exception) {
-            logger.error("创建尾盘策略异常: ${e.message}", e)
+            logger.error("创建加密价差策略异常: ${e.message}", e)
             ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_CRYPTO_TAIL_STRATEGY_CREATE_FAILED, e.message, messageSource))
         }
     }
@@ -83,7 +87,7 @@ class CryptoTailStrategyController(
             result.fold(
                 onSuccess = { ResponseEntity.ok(ApiResponse.success(it)) },
                 onFailure = { e ->
-                    logger.error("更新尾盘策略失败: ${e.message}", e)
+                    logger.error("更新加密价差策略失败: ${e.message}", e)
                     val code = when (e.message) {
                         ErrorCode.CRYPTO_TAIL_STRATEGY_NOT_FOUND.messageKey -> ErrorCode.CRYPTO_TAIL_STRATEGY_NOT_FOUND
                         ErrorCode.CRYPTO_TAIL_STRATEGY_WINDOW_INVALID.messageKey -> ErrorCode.CRYPTO_TAIL_STRATEGY_WINDOW_INVALID
@@ -95,7 +99,7 @@ class CryptoTailStrategyController(
                 }
             )
         } catch (e: Exception) {
-            logger.error("更新尾盘策略异常: ${e.message}", e)
+            logger.error("更新加密价差策略异常: ${e.message}", e)
             ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_CRYPTO_TAIL_STRATEGY_UPDATE_FAILED, e.message, messageSource))
         }
     }
@@ -111,12 +115,12 @@ class CryptoTailStrategyController(
             result.fold(
                 onSuccess = { ResponseEntity.ok(ApiResponse.success(Unit)) },
                 onFailure = { e ->
-                    logger.error("删除尾盘策略失败: ${e.message}", e)
+                    logger.error("删除加密价差策略失败: ${e.message}", e)
                     ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_CRYPTO_TAIL_STRATEGY_DELETE_FAILED, e.message, messageSource))
                 }
             )
         } catch (e: Exception) {
-            logger.error("删除尾盘策略异常: ${e.message}", e)
+            logger.error("删除加密价差策略异常: ${e.message}", e)
             ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_CRYPTO_TAIL_STRATEGY_DELETE_FAILED, e.message, messageSource))
         }
     }
@@ -173,7 +177,7 @@ class CryptoTailStrategyController(
                 return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ERROR, messageSource = messageSource))
             }
             val periodStartUnix = (request["periodStartUnix"] as? Number)?.toLong()
-                ?: (System.currentTimeMillis() / 1000 / intervalSeconds) * intervalSeconds
+                ?: ((System.currentTimeMillis() / 1000 / intervalSeconds) * intervalSeconds)
             // 默认使用 BTC 市场（向后兼容）
             val marketSlugPrefix = (request["marketSlugPrefix"] as? String) ?: "btc-updown"
             val pair = binanceKlineAutoSpreadService.computeAndCache(marketSlugPrefix, intervalSeconds, periodStartUnix)
@@ -185,6 +189,30 @@ class CryptoTailStrategyController(
             ResponseEntity.ok(ApiResponse.success(body))
         } catch (e: Exception) {
             logger.error("计算自动最小价差异常: ${e.message}", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
+        }
+    }
+
+    /**
+     * 初始化加密价差策略监控
+     * 返回策略信息、开盘价、tokenIds等初始化数据
+     */
+    @PostMapping("/monitor/init")
+    fun initMonitor(@RequestBody request: CryptoTailMonitorInitRequest): ResponseEntity<ApiResponse<CryptoTailMonitorInitResponse>> {
+        return try {
+            if (request.strategyId <= 0) {
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.CRYPTO_TAIL_STRATEGY_NOT_FOUND, messageSource = messageSource))
+            }
+            val result = cryptoTailMonitorService.initMonitor(request)
+            result.fold(
+                onSuccess = { ResponseEntity.ok(ApiResponse.success(it)) },
+                onFailure = { e ->
+                    logger.error("初始化加密价差策略监控失败: ${e.message}", e)
+                    ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
+                }
+            )
+        } catch (e: Exception) {
+            logger.error("初始化加密价差策略监控异常: ${e.message}", e)
             ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
         }
     }

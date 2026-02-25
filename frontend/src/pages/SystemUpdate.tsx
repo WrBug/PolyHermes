@@ -6,6 +6,7 @@ import {
     CheckCircleOutlined,
     ExclamationCircleOutlined
 } from '@ant-design/icons'
+import { useTranslation } from 'react-i18next'
 import { apiClient } from '../services/api'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -29,13 +30,14 @@ interface UpdateStatus {
 }
 
 const SystemUpdate: React.FC = () => {
+    const { t, i18n } = useTranslation()
     const [currentVersion, setCurrentVersion] = useState('')
     const [updateChecking, setUpdateChecking] = useState(false)
     const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
     const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({
         updating: false,
         progress: 0,
-        message: '就绪',
+        message: '',
         error: null
     })
 
@@ -62,7 +64,7 @@ const SystemUpdate: React.FC = () => {
                 setUpdateStatus({
                     updating: response.data.data.updating,
                     progress: response.data.data.progress || 0,
-                    message: response.data.data.message || '就绪',
+                    message: response.data.data.message || '',
                     error: response.data.data.error || null
                 })
             }
@@ -83,15 +85,15 @@ const SystemUpdate: React.FC = () => {
                 setUpdateInfo(data.data)
 
                 if (data.data.hasUpdate) {
-                    message.success(`发现新版本: ${data.data.latestVersion}`)
+                    message.success(t('systemUpdate.hasNewVersion', { version: data.data.latestVersion }))
                 } else {
-                    message.info('当前已是最新版本')
+                    message.info(t('systemUpdate.alreadyLatest'))
                 }
             } else {
-                message.error(data.message || '检查更新失败')
+                message.error(data.message || t('systemUpdate.checkFailed'))
             }
         } catch (error: any) {
-            message.error(error.message || '检查更新失败')
+            message.error(error.message || t('systemUpdate.checkFailed'))
         } finally {
             setUpdateChecking(false)
         }
@@ -99,25 +101,25 @@ const SystemUpdate: React.FC = () => {
 
     const handleExecuteUpdate = () => {
         Modal.confirm({
-            title: '确认更新',
+            title: t('systemUpdate.confirmTitle'),
             icon: <ExclamationCircleOutlined />,
             content: (
                 <div>
-                    <p>确定要更新到版本 <strong>{updateInfo?.latestVersion}</strong> 吗？</p>
-                    <p>更新过程中系统将暂时不可用（约30-60秒）。</p>
-                    <p>更新完成后页面将自动刷新。</p>
+                    <p>{t('systemUpdate.confirmContent1', { version: updateInfo?.latestVersion })}</p>
+                    <p>{t('systemUpdate.confirmContent2')}</p>
+                    <p>{t('systemUpdate.confirmContent3')}</p>
                 </div>
             ),
-            okText: '立即更新',
+            okText: t('systemUpdate.okText'),
             okType: 'primary',
-            cancelText: '取消',
+            cancelText: t('systemUpdate.cancelText'),
             onOk: async () => {
                 try {
                     const response = await apiClient.post('/update/update', {})
                     const data = response.data
 
                     if (data.code === 0) {
-                        message.success('更新已启动，请稍候...')
+                        message.success(t('systemUpdate.updateStarted'))
 
                         // 开始轮询更新状态
                         const pollInterval = setInterval(async () => {
@@ -138,9 +140,9 @@ const SystemUpdate: React.FC = () => {
                                         clearInterval(pollInterval)
 
                                         if (statusData.data.error) {
-                                            message.error(`更新失败: ${statusData.data.error}`)
+                                            message.error(t('systemUpdate.updateFailedWithMessage', { message: statusData.data.error }))
                                         } else if (statusData.data.progress === 100) {
-                                            message.success('更新成功！页面将在3秒后刷新...')
+                                            message.success(t('systemUpdate.updateSuccessRefresh'))
                                             setTimeout(() => window.location.reload(), 3000)
                                         }
                                     }
@@ -153,19 +155,19 @@ const SystemUpdate: React.FC = () => {
                         // 5分钟后停止轮询
                         setTimeout(() => clearInterval(pollInterval), 5 * 60 * 1000)
                     } else if (data.code === 403) {
-                        message.error('需要管理员权限才能执行更新')
+                        message.error(t('systemUpdate.needAdmin'))
                     } else {
-                        message.error(data.message || '启动更新失败')
+                        message.error(data.message || t('systemUpdate.startFailed'))
                     }
                 } catch (error: any) {
-                    message.error(error.message || '启动更新失败')
+                    message.error(error.message || t('systemUpdate.startFailed'))
                 }
             }
         })
     }
 
     const formatDate = (dateString: string) => {
-        return new Date(dateString).toLocaleString('zh-CN')
+        return new Date(dateString).toLocaleString(i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en')
     }
 
     return (
@@ -173,7 +175,7 @@ const SystemUpdate: React.FC = () => {
             title={
                 <Space>
                     <CloudUploadOutlined style={{ fontSize: '18px', color: '#1890ff' }} />
-                    <span style={{ fontSize: '16px', fontWeight: 600 }}>系统更新</span>
+                    <span style={{ fontSize: '16px', fontWeight: 600 }}>{t('systemUpdate.title')}</span>
                 </Space>
             }
             style={{ 
@@ -195,7 +197,7 @@ const SystemUpdate: React.FC = () => {
                 }}>
                     <div>
                         <div style={{ fontSize: '13px', opacity: 0.9, marginBottom: '4px' }}>
-                            当前版本
+                            {t('systemUpdate.currentVersion')}
                         </div>
                         <div style={{ fontSize: '20px', fontWeight: 600 }}>
                             v{currentVersion || 'unknown'}
@@ -208,16 +210,16 @@ const SystemUpdate: React.FC = () => {
                 {updateStatus.updating && (
                     <Alert
                         message={
-                            <span style={{ fontSize: '15px', fontWeight: 500 }}>系统正在更新</span>
+                            <span style={{ fontSize: '15px', fontWeight: 500 }}>{t('systemUpdate.updating')}</span>
                         }
                         description={
                             <div style={{ marginTop: '12px' }}>
                                 <div style={{ 
                                     marginBottom: '12px', 
                                     fontSize: '14px', 
-                                    color: '#595959' 
+                                    color: '#595959'
                                 }}>
-                                    {updateStatus.message}
+                                    {updateStatus.message || t('systemUpdate.ready')}
                                 </div>
                                 <Progress
                                     percent={updateStatus.progress}
@@ -245,7 +247,7 @@ const SystemUpdate: React.FC = () => {
 
                 {updateStatus.error && (
                     <Alert
-                        message={<span style={{ fontSize: '15px', fontWeight: 500 }}>更新失败</span>}
+                        message={<span style={{ fontSize: '15px', fontWeight: 500 }}>{t('systemUpdate.updateFailedTitle')}</span>}
                         description={
                             <div style={{ 
                                 marginTop: '8px', 
@@ -281,14 +283,14 @@ const SystemUpdate: React.FC = () => {
                                 boxShadow: '0 2px 4px rgba(24, 144, 255, 0.2)'
                             }}
                         >
-                            检查更新
+                            {t('systemUpdate.checkUpdate')}
                         </Button>
 
                         {updateInfo && !updateInfo.hasUpdate && (
                             <Alert
                                 message={
                                     <span style={{ fontSize: '15px', fontWeight: 500 }}>
-                                        当前已是最新版本
+                                        {t('systemUpdate.alreadyLatest')}
                                     </span>
                                 }
                                 type="success"
@@ -326,7 +328,7 @@ const SystemUpdate: React.FC = () => {
                                     color: '#8c8c8c',
                                     marginBottom: '6px'
                                 }}>
-                                    发现新版本
+                                    {t('systemUpdate.newVersionFound')}
                                 </div>
                                 <Space size="small">
                                     <Tag 
@@ -341,15 +343,15 @@ const SystemUpdate: React.FC = () => {
                                         v{updateInfo.latestVersion}
                                     </Tag>
                                     {updateInfo.prerelease && (
-                                        <Tag 
-                                            color="orange" 
-                                            style={{ 
+                                        <Tag
+                                            color="orange"
+                                            style={{
                                                 fontSize: '12px',
                                                 padding: '4px 12px',
                                                 borderRadius: '4px'
                                             }}
                                         >
-                                            Pre-release
+                                            {t('systemUpdate.prerelease')}
                                         </Tag>
                                     )}
                                 </Space>
@@ -367,7 +369,7 @@ const SystemUpdate: React.FC = () => {
                                 color: '#8c8c8c',
                                 marginBottom: '4px'
                             }}>
-                                发布时间
+                                {t('systemUpdate.publishedAt')}
                             </div>
                             <div style={{
                                 fontSize: '14px',
@@ -385,7 +387,7 @@ const SystemUpdate: React.FC = () => {
                                     marginBottom: '8px',
                                     fontWeight: 500
                                 }}>
-                                    更新内容
+                                    {t('systemUpdate.releaseNotes')}
                                 </div>
                                 <div style={{
                                     padding: '16px',
@@ -449,7 +451,7 @@ const SystemUpdate: React.FC = () => {
                                 boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)'
                             }}
                         >
-                            立即升级到 v{updateInfo.latestVersion}
+                            {t('systemUpdate.upgradeNow', { version: updateInfo.latestVersion })}
                         </Button>
                     </div>
                 )}
@@ -458,20 +460,20 @@ const SystemUpdate: React.FC = () => {
                 {!updateStatus.updating && !(updateInfo && updateInfo.hasUpdate) && (
                     <Alert
                         message={
-                            <span style={{ fontSize: '15px', fontWeight: 500 }}>使用说明</span>
+                            <span style={{ fontSize: '15px', fontWeight: 500 }}>{t('systemUpdate.usageTitle')}</span>
                         }
                         description={
-                            <ul style={{ 
-                                marginBottom: 0, 
+                            <ul style={{
+                                marginBottom: 0,
                                 paddingLeft: '20px',
                                 fontSize: '14px',
                                 color: '#595959',
                                 lineHeight: '1.8'
                             }}>
-                                <li>点击"检查更新"按钮检查是否有新版本</li>
-                                <li>更新过程约需30-60秒，期间系统将暂时不可用</li>
-                                <li>更新成功后页面将自动刷新</li>
-                                <li>如果更新失败，系统会自动回滚到当前版本</li>
+                                <li>{t('systemUpdate.usage1')}</li>
+                                <li>{t('systemUpdate.usage2')}</li>
+                                <li>{t('systemUpdate.usage3')}</li>
+                                <li>{t('systemUpdate.usage4')}</li>
                             </ul>
                         }
                         type="info"

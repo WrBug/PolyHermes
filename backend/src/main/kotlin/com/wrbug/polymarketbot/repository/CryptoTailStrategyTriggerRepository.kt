@@ -23,7 +23,7 @@ interface CryptoTailStrategyTriggerRepository : JpaRepository<CryptoTailStrategy
     /** 轮询结算：仅处理下单成功的订单（status=success 且 orderId 非空）、且未结算的触发记录 */
     fun findByStatusAndResolvedAndOrderIdIsNotNullOrderByCreatedAtAsc(status: String, resolved: Boolean): List<CryptoTailStrategyTrigger>
 
-    /** 根据订单 ID 查询尾盘触发记录 */
+    /** 根据订单 ID 查询加密价差策略触发记录 */
     fun findByOrderId(orderId: String): CryptoTailStrategyTrigger?
 
     /** 轮询发 TG：status=success、orderId 非空、未发过通知，按创建时间正序 */

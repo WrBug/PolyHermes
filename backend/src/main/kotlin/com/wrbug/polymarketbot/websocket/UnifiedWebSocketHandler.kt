@@ -193,7 +193,7 @@ class UnifiedWebSocketHandler(
             lastActivityTime.remove(sessionId)
             sessionLocks.remove(sessionId)  // 清理同步锁
             subscriptionService.unregisterSession(sessionId)
-            
+
             if (session != null && session.isOpen) {
                 try {
                     session.close(CloseStatus.NORMAL)
@@ -201,7 +201,6 @@ class UnifiedWebSocketHandler(
                     // 忽略关闭时的异常
                 }
             }
-            
         } catch (e: Exception) {
             logger.error("清理 WebSocket 资源时发生错误: $sessionId, ${e.message}", e)
         }

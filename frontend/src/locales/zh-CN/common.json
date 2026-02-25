@@ -92,6 +92,7 @@
     "accountNamePlaceholder": "账户名称（可选）",
     "accountIdRequired": "账户ID不能为空",
     "walletAddress": "钱包地址",
+    "walletType": "钱包类型",
     "proxyAddress": "代理钱包地址",
     "apiCredentials": "API 凭证",
     "apiKey": "API Key",
@@ -311,7 +312,9 @@
     "leaders": "Leader 管理",
     "templates": "跟单模板",
     "copyTradingConfig": "跟单配置",
-    "cryptoTailStrategy": "尾盘策略",
+    "cryptoSpreadStrategy": "加密价差策略",
+    "cryptoTailStrategy": "策略配置",
+    "cryptoTailMonitor": "实时监控",
     "positions": "仓位管理",
     "backtest": "回测",
     "statistics": "统计信息",
@@ -416,6 +419,40 @@
       "saveSuccess": "自动赎回配置已保存",
       "saveFailed": "保存自动赎回配置失败"
     }
+  },
+  "systemUpdate": {
+    "title": "系统更新",
+    "currentVersion": "当前版本",
+    "ready": "就绪",
+    "hasNewVersion": "发现新版本: {{version}}",
+    "alreadyLatest": "当前已是最新版本",
+    "checkFailed": "检查更新失败",
+    "confirmTitle": "确认更新",
+    "confirmContent1": "确定要更新到版本 {{version}} 吗？",
+    "confirmContent2": "更新过程中系统将暂时不可用（约30-60秒）。",
+    "confirmContent3": "更新完成后页面将自动刷新。",
+    "okText": "立即更新",
+    "cancelText": "取消",
+    "updateStarted": "更新已启动，请稍候...",
+    "updateFailedWithMessage": "更新失败: {{message}}",
+    "updateSuccessRefresh": "更新成功！页面将在3秒后刷新...",
+    "needAdmin": "需要管理员权限才能执行更新",
+    "startFailed": "启动更新失败",
+    "updating": "系统正在更新",
+    "updateFailedTitle": "更新失败",
+    "checkUpdate": "检查更新",
+    "newVersionFound": "发现新版本",
+    "publishedAt": "发布时间",
+    "releaseNotes": "更新内容",
+    "upgradeNow": "立即升级到 v{{version}}",
+    "usageTitle": "使用说明",
+    "usage1": "点击「检查更新」按钮检查是否有新版本",
+    "usage2": "更新过程约需30-60秒，期间系统将暂时不可用",
+    "usage3": "更新成功后页面将自动刷新",
+    "usage4": "如果更新失败，系统会自动回滚到当前版本",
+    "versionTooltipNew": "有新版本可用，点击前往系统更新",
+    "versionTooltipLatest": "当前已是最新版本",
+    "prerelease": "预发布"
   },
   "builderApiKey": {
     "title": "Builder API Key 配置",
@@ -1449,12 +1486,12 @@
   "cryptoTailStrategy": {
     "binanceApiAlert": {
       "title": "无法连接币安 API，策略暂时不能运行",
-      "description": "尾盘策略需要从币安获取行情数据才能工作。当前连接失败，可能是网络问题或币安服务异常，请稍后点击下方按钮重新检测。",
+      "description": "加密价差策略需要从币安获取行情数据才能工作。当前连接失败，可能是网络问题或币安服务异常，请稍后点击下方按钮重新检测。",
       "recheck": "重新检测"
     },
     "list": {
-      "title": "加密尾盘策略",
-      "walletTip": "请使用单独的钱包运行尾盘策略，避免该钱包用于手动交易、跟单等其他操作，否则可能导致余额或仓位变化，造成策略执行异常。",
+      "title": "加密价差策略",
+      "walletTip": "请使用单独的钱包运行加密价差策略，避免该钱包用于手动交易、跟单等其他操作，否则可能导致余额或仓位变化，造成策略执行异常。",
       "addStrategy": "新增策略",
       "strategyName": "策略名称",
       "account": "账户",
@@ -1511,7 +1548,7 @@
     },
     "redeemRequiredModal": {
       "title": "请先配置自动赎回",
-      "description": "尾盘策略依赖自动赎回功能，请先在系统设置中配置 Builder API Key 并开启自动赎回。",
+      "description": "加密价差策略依赖自动赎回功能，请先在系统设置中配置 Builder API Key 并开启自动赎回。",
       "goToSettings": "去配置",
       "cancel": "取消"
     },
@@ -1539,6 +1576,74 @@
       "emptySuccess": "暂无成功记录",
       "emptyFail": "暂无失败记录",
       "totalCount": "共 {count} 条"
+    }
+  },
+  "cryptoTailMonitor": {
+    "title": "加密价差策略监控",
+    "selectStrategy": "选择策略",
+    "selectStrategyPlaceholder": "请选择要监控的策略",
+    "direction": "监控方向",
+    "directionUp": "Up",
+    "directionDown": "Down",
+    "noData": "请选择一个策略开始监控",
+    "priceRange": "价格区间",
+    "timeWindow": "时间窗口",
+    "stat": {
+      "openPrice": "开盘价",
+      "currentPrice": "最新价",
+      "spread": "价差",
+      "remainingTime": "剩余时间",
+      "configuredSpread": "配置价差",
+      "configuredSpreadMin": "最小价差",
+      "configuredSpreadMax": "最大价差",
+      "status": "状态",
+      "minSpreadLine": "最小价差线",
+      "periodSpreadMinMax": "周期内价差",
+      "periodSpreadMin": "周期内最小价差",
+      "periodSpreadMax": "周期内最大价差",
+      "minSpread": "最小",
+      "maxSpread": "最大"
+    },
+    "status": {
+      "triggered": "已触发",
+      "periodEnded": "周期结束",
+      "inCondition": "满足条件",
+      "waiting": "等待中"
+    },
+    "chart": {
+      "title": "分时图",
+      "btcTitle": "BTC 分时图",
+      "marketTitle": "市场分时图",
+      "priceChart": "价格分时图",
+      "price": "价格",
+      "openPrice": "开盘价",
+      "spread": "价差",
+      "minSpreadLine": "最小价差线",
+      "maxSpreadLine": "最大价差线",
+      "marketUp": "Up",
+      "marketDown": "Down",
+      "time": "时间",
+      "latestPrice": "最新价",
+      "timeWindowStart": "区间开始",
+      "timeWindowEnd": "区间结束"
+    },
+    "strategyInfo": {
+      "title": "策略信息",
+      "market": "市场",
+      "interval": "周期",
+      "account": "账户",
+      "spreadMode": "价差模式",
+      "spreadDirection": "价差方向"
+    },
+    "periodSwitch": {
+      "mode": "周期切换模式",
+      "auto": "自动",
+      "manual": "手动",
+      "autoDesc": "周期结束时自动切换到最新周期",
+      "manualDesc": "周期结束时保留完整数据",
+      "switchToLatest": "切换到最新周期",
+      "periodEnded": "当前周期已结束",
+      "newPeriodAvailable": "新周期已开始"
     }
   }
 }

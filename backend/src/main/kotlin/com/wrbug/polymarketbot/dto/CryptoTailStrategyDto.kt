@@ -1,7 +1,7 @@
 package com.wrbug.polymarketbot.dto
 
 /**
- * 尾盘策略创建请求
+ * 加密价差策略创建请求
  * 金额与价格使用 String，后端转为 BigDecimal
  */
 data class CryptoTailStrategyCreateRequest(
@@ -25,7 +25,7 @@ data class CryptoTailStrategyCreateRequest(
 )
 
 /**
- * 尾盘策略更新请求
+ * 加密价差策略更新请求
  */
 data class CryptoTailStrategyUpdateRequest(
     val strategyId: Long = 0L,
@@ -46,7 +46,7 @@ data class CryptoTailStrategyUpdateRequest(
 )
 
 /**
- * 尾盘策略列表请求
+ * 加密价差策略列表请求
  */
 data class CryptoTailStrategyListRequest(
     val accountId: Long? = null,
@@ -54,7 +54,7 @@ data class CryptoTailStrategyListRequest(
 )
 
 /**
- * 尾盘策略 DTO（列表与详情）
+ * 加密价差策略 DTO（列表与详情）
  */
 data class CryptoTailStrategyDto(
     val id: Long = 0L,
@@ -90,14 +90,14 @@ data class CryptoTailStrategyDto(
 )
 
 /**
- * 尾盘策略列表响应
+ * 加密价差策略列表响应
  */
 data class CryptoTailStrategyListResponse(
     val list: List<CryptoTailStrategyDto> = emptyList()
 )
 
 /**
- * 尾盘策略删除请求
+ * 加密价差策略删除请求
  */
 data class CryptoTailStrategyDeleteRequest(
     val strategyId: Long = 0L

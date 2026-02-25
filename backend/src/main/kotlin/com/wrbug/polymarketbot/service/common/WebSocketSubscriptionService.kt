@@ -1,11 +1,13 @@
 package com.wrbug.polymarketbot.service.common
 
+import com.wrbug.polymarketbot.dto.CryptoTailMonitorPushData
 import com.wrbug.polymarketbot.dto.OrderPushMessage
 import com.wrbug.polymarketbot.dto.PositionPushMessage
 import com.wrbug.polymarketbot.dto.WebSocketMessage as WsMessage
 import com.wrbug.polymarketbot.dto.WebSocketMessageType
 import com.wrbug.polymarketbot.service.accounts.PositionPushService
 import com.wrbug.polymarketbot.service.copytrading.orders.OrderPushService
+import com.wrbug.polymarketbot.service.cryptotail.CryptoTailMonitorService
 import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -38,28 +40,47 @@ class WebSocketSubscriptionService(
     // 存储 order 频道的订阅回调：sessionId -> callback（用于取消订阅）
     private val orderChannelCallbacks = ConcurrentHashMap<String, (OrderPushMessage) -> Unit>()
     
+    // 存储加密价差策略监控频道的订阅回调：sessionId -> (strategyId -> callback)
+    private val monitorChannelCallbacks = ConcurrentHashMap<String, MutableMap<Long, (CryptoTailMonitorPushData) -> Unit>>()
+    
+    // 加密价差策略监控服务（延迟注入，避免循环依赖）
+    private var cryptoTailMonitorService: CryptoTailMonitorService? = null
+    
+    /**
+     * 设置加密价差策略监控服务（由 Spring 在初始化后调用）
+     */
+    fun setCryptoTailMonitorService(service: CryptoTailMonitorService) {
+        cryptoTailMonitorService = service
+    }
+    
     /**
      * 注册会话
      */
     fun registerSession(sessionId: String, callback: (WsMessage) -> Unit) {
         sessionCallbacks[sessionId] = callback
         sessionSubscriptions[sessionId] = mutableSetOf()
+        monitorChannelCallbacks[sessionId] = mutableMapOf()
     }
     
     /**
      * 注销会话
      */
     fun unregisterSession(sessionId: String) {
-        
         // 取消所有订阅
         val channels = sessionSubscriptions.remove(sessionId) ?: emptySet()
         channels.forEach { channel ->
             unsubscribe(sessionId, channel)
         }
-        
+
         // 清理 order 频道的回调
         orderChannelCallbacks.remove(sessionId)
-        
+
+        // 清理加密价差策略监控频道的回调
+        val monitorCallbacks = monitorChannelCallbacks.remove(sessionId)
+        monitorCallbacks?.keys?.forEach { strategyId ->
+            cryptoTailMonitorService?.unsubscribe(sessionId, strategyId)
+        }
+
         sessionCallbacks.remove(sessionId)
     }
     
@@ -83,8 +104,8 @@ class WebSocketSubscriptionService(
         sendSubscribeAck(sessionId, channel, true)
         
         // 根据频道类型启动推送服务
-        when (channel) {
-            "position" -> {
+        when {
+            channel == "position" -> {
                 positionPushService.subscribe(sessionId) { message ->
                     pushData(sessionId, channel, message)
                 }
@@ -97,13 +118,27 @@ class WebSocketSubscriptionService(
                     }
                 }
             }
-            "order" -> {
+            channel == "order" -> {
                 // 订单推送：自动订阅所有启用的账户
                 val callback: (OrderPushMessage) -> Unit = { message ->
                     pushData(sessionId, channel, message)
                 }
                 orderChannelCallbacks[sessionId] = callback
                 orderPushService.subscribeAllEnabled(callback)
+            }
+            channel.startsWith("crypto_tail_monitor_") -> {
+                // 加密价差策略监控频道
+                val strategyId = channel.removePrefix("crypto_tail_monitor_").toLongOrNull()
+                if (strategyId != null && cryptoTailMonitorService != null) {
+                    val callback: (CryptoTailMonitorPushData) -> Unit = { message ->
+                        pushData(sessionId, channel, message)
+                    }
+                    monitorChannelCallbacks.getOrPut(sessionId) { mutableMapOf() }[strategyId] = callback
+                    cryptoTailMonitorService!!.subscribe(sessionId, strategyId, callback)
+                } else {
+                    logger.warn("无效的加密价差策略监控频道或服务未初始化: $channel")
+                    sendSubscribeAck(sessionId, channel, false, "无效的策略ID")
+                }
             }
             else -> {
                 logger.warn("未知的频道: $channel")
@@ -122,14 +157,57 @@ class WebSocketSubscriptionService(
         channelSubscriptions[channel]?.remove(sessionId)
         
         // 取消推送服务的订阅（推送服务内部会处理是否停止轮询）
-        when (channel) {
-            "position" -> positionPushService.unsubscribe(sessionId)
-            "order" -> {
+        when {
+            channel == "position" -> positionPushService.unsubscribe(sessionId)
+            channel == "order" -> {
                 // 取消订阅所有账户的订单推送
                 val callback = orderChannelCallbacks.remove(sessionId)
                 if (callback != null) {
                     orderPushService.unsubscribeAll(callback)
                 }
+            }
+            channel.startsWith("crypto_tail_monitor_") -> {
+                // 取消加密价差策略监控订阅
+                val strategyId = channel.removePrefix("crypto_tail_monitor_").toLongOrNull()
+                if (strategyId != null) {
+                    monitorChannelCallbacks[sessionId]?.remove(strategyId)
+                    cryptoTailMonitorService?.unsubscribe(sessionId, strategyId)
+                }
+            }
+        }
+    }
+    
+    /**
+     * 注册加密价差策略监控回调（由 CryptoTailMonitorService 调用）
+     */
+    fun registerMonitorCallback(sessionId: String, strategyId: Long, callback: (CryptoTailMonitorPushData) -> Unit) {
+        monitorChannelCallbacks.getOrPut(sessionId) { mutableMapOf() }[strategyId] = callback
+    }
+    
+    /**
+     * 注销加密价差策略监控回调（由 CryptoTailMonitorService 调用）
+     */
+    fun unregisterMonitorCallback(sessionId: String, strategyId: Long) {
+        monitorChannelCallbacks[sessionId]?.remove(strategyId)
+    }
+    
+    /**
+     * 推送加密价差策略监控数据（由 CryptoTailMonitorService 调用）
+     */
+    fun pushMonitorData(strategyId: Long, data: CryptoTailMonitorPushData) {
+        val channel = "crypto_tail_monitor_$strategyId"
+        val sessionIds = channelSubscriptions[channel] ?: return
+        
+        for (sessionId in sessionIds) {
+            val callback = sessionCallbacks[sessionId]
+            if (callback != null) {
+                val message = WsMessage(
+                    type = WebSocketMessageType.DATA.value,
+                    channel = channel,
+                    payload = data,
+                    timestamp = System.currentTimeMillis()
+                )
+                callback(message)
             }
         }
     }
@@ -168,4 +246,3 @@ class WebSocketSubscriptionService(
         }
     }
 }
-

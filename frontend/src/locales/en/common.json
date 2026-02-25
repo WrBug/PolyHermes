@@ -312,7 +312,9 @@
     "leaders": "Leader Management",
     "templates": "Templates",
     "copyTradingConfig": "Copy Trading Config",
-    "cryptoTailStrategy": "Tail Strategy",
+    "cryptoSpreadStrategy": "Crypto Spread Strategy",
+    "cryptoTailStrategy": "Strategy Config",
+    "cryptoTailMonitor": "Real-time Monitor",
     "positions": "Position Management",
     "backtest": "Backtest",
     "statistics": "Statistics",
@@ -417,6 +419,40 @@
       "saveSuccess": "Auto redeem configuration saved",
       "saveFailed": "Failed to save auto redeem configuration"
     }
+  },
+  "systemUpdate": {
+    "title": "System Update",
+    "currentVersion": "Current Version",
+    "ready": "Ready",
+    "hasNewVersion": "New version available: {{version}}",
+    "alreadyLatest": "You are on the latest version",
+    "checkFailed": "Failed to check for updates",
+    "confirmTitle": "Confirm Update",
+    "confirmContent1": "Update to version {{version}}?",
+    "confirmContent2": "The system will be temporarily unavailable during the update (about 30-60 seconds).",
+    "confirmContent3": "The page will refresh automatically when the update completes.",
+    "okText": "Update Now",
+    "cancelText": "Cancel",
+    "updateStarted": "Update started, please wait...",
+    "updateFailedWithMessage": "Update failed: {{message}}",
+    "updateSuccessRefresh": "Update successful! Page will refresh in 3 seconds...",
+    "needAdmin": "Admin permission required to perform update",
+    "startFailed": "Failed to start update",
+    "updating": "System is updating",
+    "updateFailedTitle": "Update Failed",
+    "checkUpdate": "Check for Updates",
+    "newVersionFound": "New Version Available",
+    "publishedAt": "Published At",
+    "releaseNotes": "Release Notes",
+    "upgradeNow": "Upgrade to v{{version}} Now",
+    "usageTitle": "Instructions",
+    "usage1": "Click \"Check for Updates\" to see if a new version is available",
+    "usage2": "Update takes about 30-60 seconds; the system will be temporarily unavailable",
+    "usage3": "The page will refresh automatically after a successful update",
+    "usage4": "If the update fails, the system will roll back to the current version",
+    "versionTooltipNew": "New version available, click to go to System Update",
+    "versionTooltipLatest": "You are on the latest version",
+    "prerelease": "Pre-release"
   },
   "builderApiKey": {
     "title": "Builder API Key Configuration",
@@ -1450,12 +1486,12 @@
   "cryptoTailStrategy": {
     "binanceApiAlert": {
       "title": "Cannot connect to Binance API — strategy cannot run for now",
-      "description": "Tail strategy needs Binance market data to work. The connection failed; this may be a network issue or Binance outage. Try again later by clicking the button below.",
+      "description": "Crypto spread strategy needs Binance market data to work. The connection failed; this may be a network issue or Binance outage. Try again later by clicking the button below.",
       "recheck": "Re-check"
     },
     "list": {
-      "title": "Crypto Tail Strategy",
-      "walletTip": "Use a dedicated wallet for tail strategy. Do not use it for manual trading or copy trading to avoid balance/position issues.",
+      "title": "Crypto Spread Strategy",
+      "walletTip": "Use a dedicated wallet for crypto spread strategy. Do not use it for manual trading or copy trading to avoid balance/position issues.",
       "addStrategy": "Add Strategy",
       "strategyName": "Strategy Name",
       "account": "Account",
@@ -1512,7 +1548,7 @@
     },
     "redeemRequiredModal": {
       "title": "Configure Auto Redeem First",
-      "description": "Tail strategy requires auto redeem. Please configure Builder API Key and enable auto redeem in System Settings.",
+      "description": "Crypto spread strategy requires auto redeem. Please configure Builder API Key and enable auto redeem in System Settings.",
       "goToSettings": "Go to Settings",
       "cancel": "Cancel"
     },
@@ -1540,6 +1576,74 @@
       "emptySuccess": "No success records",
       "emptyFail": "No failed records",
       "totalCount": "{count} record(s)"
+    }
+  },
+  "cryptoTailMonitor": {
+    "title": "Crypto Spread Strategy Monitor",
+    "selectStrategy": "Strategy",
+    "selectStrategyPlaceholder": "Select a strategy to monitor",
+    "direction": "Direction",
+    "directionUp": "Up",
+    "directionDown": "Down",
+    "noData": "Select a strategy to start monitoring",
+    "priceRange": "Price Range",
+    "timeWindow": "Time Window",
+    "stat": {
+      "openPrice": "Open Price",
+      "currentPrice": "Current Price",
+      "spread": "Spread",
+      "remainingTime": "Remaining",
+      "configuredSpread": "Configured Spread",
+      "configuredSpreadMin": "Min Spread",
+      "configuredSpreadMax": "Max Spread",
+      "status": "Status",
+      "minSpreadLine": "Min Spread",
+      "periodSpreadMinMax": "Period Spread",
+      "periodSpreadMin": "Period Min Spread",
+      "periodSpreadMax": "Period Max Spread",
+      "minSpread": "Min",
+      "maxSpread": "Max"
+    },
+    "status": {
+      "triggered": "Triggered",
+      "periodEnded": "Period Ended",
+      "inCondition": "In Condition",
+      "waiting": "Waiting"
+    },
+    "chart": {
+      "title": "Price Chart",
+      "btcTitle": "BTC Price Chart",
+      "marketTitle": "Market Price Chart",
+      "priceChart": "Price Chart",
+      "price": "Price",
+      "openPrice": "Open",
+      "spread": "Spread",
+      "minSpreadLine": "Min Spread Line",
+      "maxSpreadLine": "Max Spread Line",
+      "marketUp": "Up",
+      "marketDown": "Down",
+      "time": "Time",
+      "latestPrice": "Latest",
+      "timeWindowStart": "Window Start",
+      "timeWindowEnd": "Window End"
+    },
+    "strategyInfo": {
+      "title": "Strategy Info",
+      "market": "Market",
+      "interval": "Interval",
+      "account": "Account",
+      "spreadMode": "Spread Mode",
+      "spreadDirection": "Spread Direction"
+    },
+    "periodSwitch": {
+      "mode": "Period Switch Mode",
+      "auto": "Auto",
+      "manual": "Manual",
+      "autoDesc": "Automatically switch to the latest period when it ends",
+      "manualDesc": "Keep complete data when period ends",
+      "switchToLatest": "Switch to Latest Period",
+      "periodEnded": "Current period has ended",
+      "newPeriodAvailable": "New period has started"
     }
   }
 }

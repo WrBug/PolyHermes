@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * 币安 K 线 WebSocket：按需订阅尾盘策略使用的币种 5m/15m，维护当前周期 (open, close)，供价差校验使用。
+ * 币安 K 线 WebSocket：按需订阅加密价差策略使用的币种 5m/15m，维护当前周期 (open, close)，供价差校验使用。
  * 仅当存在启用策略且策略使用到某市场时才订阅对应币种，无策略时不建立连接。
  */
 @Service
@@ -29,7 +29,9 @@ class BinanceKlineService {
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     private val wsBase = "wss://stream.binance.com:9443"
-    private val client = createClient().build()
+    private val client by lazy {
+        createClient().build()
+    }
 
     /** (marketSlugPrefix, intervalSeconds, periodStartUnix) -> (open, close) */
     private val openCloseByPeriod = ConcurrentHashMap<String, Pair<BigDecimal, BigDecimal>>()
@@ -44,7 +46,7 @@ class BinanceKlineService {
     
     /** 已连接的 WebSocket: wsKey (symbol-interval) -> WebSocket */
     private val connectedWebSockets = ConcurrentHashMap<String, WebSocket>()
-    /** 当前需要订阅的完整市场集合（如 btc-updown-5m、btc-updown-15m），由尾盘策略刷新时更新 */
+    /** 当前需要订阅的完整市场集合（如 btc-updown-5m、btc-updown-15m），由加密价差策略刷新时更新 */
     private val requiredMarketPrefixes = AtomicReference<Set<String>>(emptySet())
     private val subscriptionLock = Any()
     private var reconnectJob: Job? = null
@@ -82,6 +84,7 @@ class BinanceKlineService {
      */
     fun updateSubscriptions(marketPrefixes: Set<String>) {
         val normalized = marketPrefixes.map { it.lowercase() }.toSet()
+
         val parsed = normalized.mapNotNull { full ->
             parseMarketSlug(full)?.let { (base, interval) ->
                 getSymbol(base)?.let { symbol -> Triple(full, symbol, interval) }
@@ -123,14 +126,14 @@ class BinanceKlineService {
             else -> 300
         }
         val request = Request.Builder().url(url).build()
-        val ws = client.newWebSocket(request, object : WebSocketListener() {
+        client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: okhttp3.Response) {
                 connectedWebSockets[wsKey] = webSocket
                 logger.info("币安 K 线 WS 已连接: $streamName")
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
-                parseKlineMessage(text, intervalSeconds)?.let { (tMs, o, c) ->
+                parseKlineMessage(text)?.let { (tMs, o, c) ->
                     onKline(marketPrefix, intervalSeconds, tMs, o, c)
                 }
             }
@@ -152,7 +155,7 @@ class BinanceKlineService {
         })
     }
 
-    private fun parseKlineMessage(text: String, intervalSeconds: Int): Triple<Long, BigDecimal, BigDecimal>? {
+    private fun parseKlineMessage(text: String): Triple<Long, BigDecimal, BigDecimal>? {
         return try {
             val json = com.google.gson.JsonParser.parseString(text).asJsonObject
             if (json.get("e")?.asString != "kline") return null
@@ -176,6 +179,8 @@ class BinanceKlineService {
             connectedWebSockets.values.forEach { it.close(1000, "reconnect") }
             connectedWebSockets.clear()
             logger.info("币安 K 线 WS 尝试重连")
+            // 清空 requiredMarketPrefixes，否则 updateSubscriptions(current) 内会因 normalized == requiredMarketPrefixes.get() 直接 return，不会重新 connectStream
+            requiredMarketPrefixes.set(emptySet())
             updateSubscriptions(current)
         }
     }

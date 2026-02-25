@@ -446,7 +446,7 @@ export const apiService = {
   },
 
   /**
-   * 尾盘策略 API
+   * 加密价差策略 API
    */
   cryptoTailStrategy: {
     list: (data: { accountId?: number; enabled?: boolean } = {}) =>
@@ -497,7 +497,9 @@ export const apiService = {
     marketOptions: () =>
       apiClient.post<ApiResponse<import('../types').CryptoTailMarketOptionDto[]>>('/crypto-tail-strategy/market-options', {}),
     autoMinSpread: (data: { intervalSeconds: number }) =>
-      apiClient.post<ApiResponse<import('../types').CryptoTailAutoMinSpreadResponse>>('/crypto-tail-strategy/auto-min-spread', data)
+      apiClient.post<ApiResponse<import('../types').CryptoTailAutoMinSpreadResponse>>('/crypto-tail-strategy/auto-min-spread', data),
+    monitorInit: (strategyId: number) =>
+      apiClient.post<ApiResponse<import('../types').CryptoTailMonitorInitResponse>>('/crypto-tail-strategy/monitor/init', { strategyId })
   },
   
   /**
