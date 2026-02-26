@@ -499,9 +499,19 @@ export const apiService = {
     autoMinSpread: (data: { intervalSeconds: number }) =>
       apiClient.post<ApiResponse<import('../types').CryptoTailAutoMinSpreadResponse>>('/crypto-tail-strategy/auto-min-spread', data),
     monitorInit: (strategyId: number) =>
-      apiClient.post<ApiResponse<import('../types').CryptoTailMonitorInitResponse>>('/crypto-tail-strategy/monitor/init', { strategyId })
+      apiClient.post<ApiResponse<import('../types').CryptoTailMonitorInitResponse>>('/crypto-tail-strategy/monitor/init', { strategyId }),
+    manualOrder: (data: {
+      strategyId: number
+      periodStartUnix: number
+      direction: 'UP' | 'DOWN'
+      price: string
+      size: string
+      marketTitle: string
+      tokenIds: string[]
+    }) =>
+      apiClient.post<ApiResponse<import('../types').CryptoTailManualOrderResponse>>('/crypto-tail-strategy/manual-order', data)
   },
-  
+
   /**
    * 订单管理 API
    */

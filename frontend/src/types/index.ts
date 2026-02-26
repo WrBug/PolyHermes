@@ -1156,6 +1156,10 @@ export interface CryptoTailMonitorInitResponse {
   currentTimestamp: number
   /** 是否启用 */
   enabled: boolean
+  /** 投入金额模式: FIXED or RATIO */
+  amountMode?: string
+  /** 投入金额数值 */
+  amountValue?: string
 }
 
 /**
@@ -1202,4 +1206,28 @@ export interface CryptoTailMonitorPushData {
   triggerDirection?: string
   /** 周期是否已结束 */
   periodEnded: boolean
+}
+
+export interface CryptoTailManualOrderResponse {
+  /** 是否成功 */
+  success: boolean
+  /** 订单ID */
+  orderId?: string
+  /** 提示消息 */
+  message: string
+  /** 下单详情 */
+  orderDetails?: ManualOrderDetails
+}
+
+export interface ManualOrderDetails {
+  /** 策略ID */
+  strategyId: number
+  /** 方向 */
+  direction: string
+  /** 下单价格 */
+  price: string
+  /** 下单数量 */
+  size: string
+  /** 总金额 */
+  totalAmount: string
 }

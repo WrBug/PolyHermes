@@ -12,9 +12,12 @@ import {
   Alert,
   Radio,
   Button,
-  Tooltip
+  Tooltip,
+  Modal,
+  InputNumber,
+  message
 } from 'antd'
-import { ClockCircleOutlined, SyncOutlined, InfoCircleOutlined } from '@ant-design/icons'
+import { ClockCircleOutlined, SyncOutlined, InfoCircleOutlined, ShoppingCartOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useMediaQuery } from 'react-responsive'
 import * as echarts from 'echarts'
@@ -83,6 +86,24 @@ const CryptoTailMonitor: React.FC = () => {
   } | null>(null)
   // 标记当前是否在查看旧周期（手动模式下）
   const [isViewingOldPeriod, setIsViewingOldPeriod] = useState<boolean>(false)
+
+  // 手动下单状态
+  const [manualOrderModal, setManualOrderModal] = useState<{
+    visible: boolean
+    direction: 'UP' | 'DOWN'
+    price: string
+    size: string
+    totalAmount: string
+    bestBid: string
+  }>({
+    visible: false,
+    direction: 'UP',
+    price: '',
+    size: '',
+    totalAmount: '',
+    bestBid: ''
+  })
+  const [ordering, setOrdering] = useState(false)
 
   // 获取策略列表
   useEffect(() => {
@@ -709,6 +730,94 @@ const CryptoTailMonitor: React.FC = () => {
   const spreadBelowThreshold = currentSpread != null && currentSpread !== '' && minSpreadLineNum.length > 0 &&
     parseFloat(currentSpread) < Math.min(...minSpreadLineNum)
 
+  // 手动下单：打开弹窗
+  const handleOpenManualOrderModal = (direction: 'UP' | 'DOWN') => {
+    if (!pushData) {
+      message.warning(t('cryptoTailMonitor.manualOrder.priceNotLoaded'))
+      return
+    }
+    const bestBid = direction === 'UP' ? pushData.currentPriceUp : pushData.currentPriceDown
+    if (!bestBid) {
+      message.warning(t('cryptoTailMonitor.manualOrder.priceNotLoaded'))
+      return
+    }
+    // 计算默认价格：最优 bid × 1.1，限制在 0~1 之间
+    const rawPrice = parseFloat(bestBid) * 1.1
+    const defaultPrice = Math.min(1, Math.max(0, rawPrice))
+    const defaultAmountUsdc = 10
+    const defaultSize = Math.ceil(defaultAmountUsdc / defaultPrice)
+    setManualOrderModal({
+      visible: true,
+      direction,
+      price: defaultPrice.toFixed(4),
+      size: defaultSize.toFixed(2),
+      totalAmount: (defaultPrice * defaultSize).toFixed(2),
+      bestBid
+    })
+  }
+
+  const handleCloseManualOrderModal = () => {
+    setManualOrderModal({
+      visible: false,
+      direction: 'UP',
+      price: '',
+      size: '',
+      totalAmount: '',
+      bestBid: ''
+    })
+  }
+
+  const handlePriceChange = (value: number | null) => {
+    if (value === null) return
+    const clamped = Math.min(1, Math.max(0, value))
+    const price = clamped.toFixed(4)
+    const size = parseFloat(manualOrderModal.size)
+    const totalAmount = (clamped * size).toFixed(2)
+    setManualOrderModal({ ...manualOrderModal, price, totalAmount })
+  }
+
+  const handleSizeChange = (value: number | null) => {
+    if (value === null) return
+    const size = value.toFixed(2)
+    const priceRaw = parseFloat(manualOrderModal.price)
+    const price = Math.min(1, Math.max(0, priceRaw))
+    const totalAmount = (price * value).toFixed(2)
+    setManualOrderModal({ ...manualOrderModal, size, totalAmount, price: price.toFixed(4) })
+  }
+
+  const handleManualOrder = async () => {
+    if (!initData || !pushData) return
+    try {
+      setOrdering(true)
+      const tokenIds: string[] = []
+      if (initData.tokenIdUp) tokenIds.push(initData.tokenIdUp)
+      if (initData.tokenIdDown) tokenIds.push(initData.tokenIdDown)
+      const request = {
+        strategyId: initData.strategyId,
+        periodStartUnix: pushData.periodStartUnix,
+        direction: manualOrderModal.direction,
+        price: Math.min(1, Math.max(0, parseFloat(manualOrderModal.price) || 0)).toFixed(4),
+        size: manualOrderModal.size,
+        marketTitle: pushData.marketTitle || initData.marketTitle,
+        tokenIds
+      }
+      const res = await apiService.cryptoTailStrategy.manualOrder(request)
+      if (res.data.code === 0 && res.data.data?.success) {
+        message.success(t('cryptoTailMonitor.manualOrder.success'))
+        handleCloseManualOrderModal()
+      } else {
+        const reason = res.data.msg?.trim() || 'unknown'
+        message.error(t('cryptoTailMonitor.manualOrder.failed', { reason }))
+      }
+    } catch (error: unknown) {
+      const err = error as { response?: { data?: { msg?: string } }; message?: string }
+      const reason = err?.response?.data?.msg?.trim() ?? err?.message?.trim() ?? 'unknown'
+      message.error(t('cryptoTailMonitor.manualOrder.failed', { reason }))
+    } finally {
+      setOrdering(false)
+    }
+  }
+
   return (
     <div style={{ padding: isMobile ? 12 : 24 }}>
       <Title level={2} style={{ marginBottom: 16, fontSize: isMobile ? 20 : 24 }}>
@@ -914,29 +1023,61 @@ const CryptoTailMonitor: React.FC = () => {
             />
           </Card>
 
+          {/* 手动下单 */}
+          <Card title={t('cryptoTailMonitor.manualOrder.title')} style={{ marginTop: 16 }}>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Button
+                  type="primary"
+                  icon={<ShoppingCartOutlined />}
+                  disabled={!pushData || pushData.triggered || pushData.periodEnded}
+                  onClick={() => handleOpenManualOrderModal('UP')}
+                  loading={ordering}
+                  block
+                  style={{ backgroundColor: '#1890ff', borderColor: '#1890ff' }}
+                >
+                  {t('cryptoTailMonitor.manualOrder.buttonUp')}
+                </Button>
+              </Col>
+              <Col span={12}>
+                <Button
+                  type="primary"
+                  icon={<ShoppingCartOutlined />}
+                  disabled={!pushData || pushData.triggered || pushData.periodEnded}
+                  onClick={() => handleOpenManualOrderModal('DOWN')}
+                  loading={ordering}
+                  block
+                  style={{ backgroundColor: '#fa8c16', borderColor: '#fa8c16' }}
+                >
+                  {t('cryptoTailMonitor.manualOrder.buttonDown')}
+                </Button>
+              </Col>
+            </Row>
+          </Card>
+
           {/* 策略信息 */}
           <Card title={t('cryptoTailMonitor.strategyInfo.title')} style={{ marginTop: 16 }}>
-            <Row gutter={[16, 8]}>
-              <Col span={12}>
+            <Row gutter={[16, isMobile ? 12 : 8]}>
+              <Col xs={24} sm={24} md={12}>
                 <Text type="secondary">{t('cryptoTailMonitor.strategyInfo.market')}: </Text>
                 <Text>{pushData?.marketTitle ?? initData.marketTitle}</Text>
               </Col>
-              <Col span={12}>
+              <Col xs={24} sm={24} md={12}>
                 <Text type="secondary">{t('cryptoTailMonitor.strategyInfo.interval')}: </Text>
                 <Text>{initData.intervalSeconds === 300 ? '5m' : '15m'}</Text>
               </Col>
-              <Col span={12}>
+              <Col xs={24} sm={24} md={12}>
                 <Text type="secondary">{t('cryptoTailMonitor.strategyInfo.account')}: </Text>
                 <Text>{initData.accountName || `#${initData.accountId}`}</Text>
               </Col>
-              <Col span={12}>
+              <Col xs={24} sm={24} md={12}>
                 <Text type="secondary">{t('cryptoTailMonitor.strategyInfo.spreadMode')}: </Text>
                 <Text>{initData.minSpreadMode}</Text>
                 {initData.minSpreadMode === 'FIXED' && initData.minSpreadValue && (
                   <Text> ({formatNumber(initData.minSpreadValue, 4)})</Text>
                 )}
               </Col>
-              <Col span={12}>
+              <Col xs={24} sm={24} md={12}>
                 <Text type="secondary">{t('cryptoTailMonitor.strategyInfo.spreadDirection')}: </Text>
                 <Text>{(initData.spreadDirection ?? 'MIN') === 'MAX' ? t('cryptoTailMonitor.stat.configuredSpreadMax') : t('cryptoTailMonitor.stat.configuredSpreadMin')}</Text>
               </Col>
@@ -944,6 +1085,103 @@ const CryptoTailMonitor: React.FC = () => {
           </Card>
         </>
       )}
+
+      {/* 手动下单确认弹窗 */}
+      <Modal
+        title={t('cryptoTailMonitor.manualOrder.confirmTitle')}
+        open={manualOrderModal.visible}
+        onCancel={handleCloseManualOrderModal}
+        footer={[
+          <Button key="cancel" onClick={handleCloseManualOrderModal}>
+            {t('cryptoTailMonitor.manualOrder.cancel')}
+          </Button>,
+          <Button
+            key="confirm"
+            type="primary"
+            onClick={handleManualOrder}
+            loading={ordering}
+            style={
+              manualOrderModal.direction === 'UP'
+                ? { backgroundColor: '#1890ff', borderColor: '#1890ff' }
+                : { backgroundColor: '#fa8c16', borderColor: '#fa8c16' }
+            }
+          >
+            {t('cryptoTailMonitor.manualOrder.confirm')}
+          </Button>
+        ]}
+        width={isMobile ? '100%' : 480}
+        style={isMobile ? { maxWidth: '100%', top: 0, paddingBottom: 0 } : undefined}
+      >
+        {initData && (
+          <Space direction="vertical" style={{ width: '100%' }} size={16}>
+            <Row gutter={[12, 8]}>
+              <Col span={24}>
+                <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                  {t('cryptoTailMonitor.manualOrder.marketTitle')}
+                </Text>
+                <Text>{pushData?.marketTitle ?? initData.marketTitle}</Text>
+              </Col>
+              <Col span={24}>
+                <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                  {t('cryptoTailMonitor.manualOrder.direction')}
+                </Text>
+                <Text
+                  strong
+                  style={{
+                    color: manualOrderModal.direction === 'UP' ? '#1890ff' : '#fa8c16'
+                  }}
+                >
+                  {manualOrderModal.direction === 'UP'
+                    ? t('cryptoTailMonitor.manualOrder.directionUp')
+                    : t('cryptoTailMonitor.manualOrder.directionDown')}
+                </Text>
+              </Col>
+              <Col span={24}>
+                <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                  {t('cryptoTailMonitor.manualOrder.orderPrice')} ({t('cryptoTailMonitor.manualOrder.orderUnit')})
+                </Text>
+                <InputNumber
+                  style={{ width: '100%' }}
+                value={manualOrderModal.price ? parseFloat(manualOrderModal.price) : undefined}
+                onChange={handlePriceChange}
+                min={0}
+                max={1}
+                step={0.0001}
+                precision={4}
+                placeholder="0.0000"
+              />
+              </Col>
+              <Col span={24}>
+                <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                  {t('cryptoTailMonitor.manualOrder.orderSize')} ({t('cryptoTailMonitor.manualOrder.sizeUnit')})
+                </Text>
+                <InputNumber
+                  style={{ width: '100%' }}
+                value={manualOrderModal.size ? parseFloat(manualOrderModal.size) : undefined}
+                onChange={handleSizeChange}
+                min={1}
+                precision={2}
+                placeholder="1"
+              />
+              </Col>
+              <Col span={24}>
+                <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                  {t('cryptoTailMonitor.manualOrder.totalAmount')}
+                </Text>
+                <Text strong style={{ fontSize: 16 }}>
+                  {manualOrderModal.totalAmount} {t('cryptoTailMonitor.manualOrder.orderUnit')}
+                </Text>
+              </Col>
+              <Col span={24}>
+                <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                  {t('cryptoTailMonitor.manualOrder.account')}
+                </Text>
+                <Text>{initData.accountName || `#${initData.accountId}`}</Text>
+              </Col>
+            </Row>
+          </Space>
+        )}
+      </Modal>
     </div>
   )
 }

@@ -13,10 +13,13 @@ import com.wrbug.polymarketbot.dto.CryptoTailMarketOptionDto
 import com.wrbug.polymarketbot.dto.CryptoTailAutoMinSpreadResponse
 import com.wrbug.polymarketbot.dto.CryptoTailMonitorInitRequest
 import com.wrbug.polymarketbot.dto.CryptoTailMonitorInitResponse
+import com.wrbug.polymarketbot.dto.CryptoTailManualOrderRequest
+import com.wrbug.polymarketbot.dto.CryptoTailManualOrderResponse
 import com.wrbug.polymarketbot.enums.ErrorCode
 import com.wrbug.polymarketbot.service.binance.BinanceKlineAutoSpreadService
 import com.wrbug.polymarketbot.service.cryptotail.CryptoTailStrategyService
 import com.wrbug.polymarketbot.service.cryptotail.CryptoTailMonitorService
+import com.wrbug.polymarketbot.service.cryptotail.CryptoTailStrategyExecutionService
 import org.slf4j.LoggerFactory
 import org.springframework.context.MessageSource
 import org.springframework.http.ResponseEntity
@@ -24,12 +27,14 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import kotlinx.coroutines.runBlocking
 
 @RestController
 @RequestMapping("/api/crypto-tail-strategy")
 class CryptoTailStrategyController(
     private val cryptoTailStrategyService: CryptoTailStrategyService,
     private val cryptoTailMonitorService: CryptoTailMonitorService,
+    private val cryptoTailStrategyExecutionService: CryptoTailStrategyExecutionService,
     private val binanceKlineAutoSpreadService: BinanceKlineAutoSpreadService,
     private val messageSource: MessageSource
 ) {
@@ -214,6 +219,43 @@ class CryptoTailStrategyController(
         } catch (e: Exception) {
             logger.error("初始化加密价差策略监控异常: ${e.message}", e)
             ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
+        }
+    }
+
+    /**
+     * 手动下单
+     * 用户主动触发下单，不检查任何条件，仅检查当前周期是否已下单
+     */
+    @PostMapping("/manual-order")
+    fun manualOrder(@RequestBody request: CryptoTailManualOrderRequest): ResponseEntity<ApiResponse<CryptoTailManualOrderResponse>> {
+        return runBlocking {
+            try {
+                if (request.strategyId <= 0) {
+                    return@runBlocking ResponseEntity.ok(
+                        ApiResponse.error(ErrorCode.CRYPTO_TAIL_STRATEGY_NOT_FOUND, messageSource = messageSource)
+                    )
+                }
+                val result = cryptoTailStrategyExecutionService.manualOrder(request)
+                result.fold(
+                    onSuccess = { ResponseEntity.ok(ApiResponse.success(it)) },
+                    onFailure = { e ->
+                        logger.error("手动下单失败: ${e.message}", e)
+                        val code = when (e.message) {
+                            "策略不存在" -> ErrorCode.CRYPTO_TAIL_STRATEGY_NOT_FOUND
+                            "当前周期已下单" -> ErrorCode.PARAM_ERROR
+                            "价格必须在 0~1 之间" -> ErrorCode.PARAM_ERROR
+                            "数量不能少于 1" -> ErrorCode.PARAM_ERROR
+                            "总金额不能少于 1 USDC" -> ErrorCode.PARAM_ERROR
+                            "总金额超过策略配置的投入金额" -> ErrorCode.PARAM_ERROR
+                            else -> ErrorCode.SERVER_ERROR
+                        }
+                        ResponseEntity.ok(ApiResponse.error(code, e.message, messageSource))
+                    }
+                )
+            } catch (e: Exception) {
+                logger.error("手动下单异常: ${e.message}", e)
+                ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
+            }
         }
     }
 }
