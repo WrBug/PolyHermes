@@ -793,7 +793,7 @@ const CryptoTailMonitor: React.FC = () => {
       // RATIO 模式：按比例计算
       const balanceNum = parseFloat(availableBalance)
       const ratio = parseFloat(initData.amountValue || '10')
-      defaultAmountUsdc = Math.floor(balanceNum * ratio / 100)
+      defaultAmountUsdc = balanceNum * ratio / 100
       // 至少保留 1 USDC
       if (defaultAmountUsdc < 1) {
         message.warning(t('cryptoTailMonitor.manualOrder.insufficientBalance'))
