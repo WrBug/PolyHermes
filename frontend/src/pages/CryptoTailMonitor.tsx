@@ -768,9 +768,9 @@ const CryptoTailMonitor: React.FC = () => {
       message.warning(t('cryptoTailMonitor.manualOrder.priceNotLoaded'))
       return
     }
-    // 计算默认价格：最优 bid × 1.1，限制在 0~1 之间
+    // 计算默认价格：最优 bid × 1.1，限制在 0~0.99 之间
     const rawPrice = parseFloat(bestBid) * 1.1
-    const defaultPrice = Math.min(1, Math.max(0, rawPrice))
+    const defaultPrice = Math.min(0.99, Math.max(0, rawPrice))
     
     // 获取账户余额
     let availableBalance = '0'
@@ -835,7 +835,7 @@ const CryptoTailMonitor: React.FC = () => {
       message.warning(t('cryptoTailMonitor.manualOrder.priceNotLoaded'))
       return
     }
-    const price = parseFloat(latestPrice)
+    const price = Math.min(0.99, parseFloat(latestPrice))
     const size = parseFloat(manualOrderModal.size)
     const totalAmount = (price * size).toFixed(2)
     setManualOrderModal({ 
@@ -860,7 +860,7 @@ const CryptoTailMonitor: React.FC = () => {
 
   const handlePriceChange = (value: number | null) => {
     if (value === null) return
-    const clamped = Math.min(1, Math.max(0, value))
+    const clamped = Math.min(0.99, Math.max(0, value))
     const price = clamped.toFixed(4)
     const size = parseFloat(manualOrderModal.size)
     const totalAmount = (clamped * size).toFixed(2)
@@ -871,7 +871,7 @@ const CryptoTailMonitor: React.FC = () => {
     if (value === null) return
     const size = value.toFixed(2)
     const priceRaw = parseFloat(manualOrderModal.price)
-    const price = Math.min(1, Math.max(0, priceRaw))
+    const price = Math.min(0.99, Math.max(0, priceRaw))
     const totalAmount = (price * value).toFixed(2)
     setManualOrderModal({ ...manualOrderModal, size, totalAmount, price: price.toFixed(4) })
   }
@@ -915,7 +915,7 @@ const CryptoTailMonitor: React.FC = () => {
         strategyId: initData.strategyId,
         periodStartUnix: pushData.periodStartUnix,
         direction: manualOrderModal.direction,
-        price: Math.min(1, Math.max(0, parseFloat(manualOrderModal.price) || 0)).toFixed(4),
+        price: Math.min(0.99, Math.max(0, parseFloat(manualOrderModal.price) || 0)).toFixed(4),
         size: manualOrderModal.size,
         marketTitle: pushData.marketTitle || initData.marketTitle,
         tokenIds
