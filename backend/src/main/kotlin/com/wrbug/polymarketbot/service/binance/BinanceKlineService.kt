@@ -91,7 +91,12 @@ class BinanceKlineService {
             }
         }.toSet()
         val wsKeysNeeded = parsed.map { (_, symbol, interval) -> "$symbol-$interval" }.toSet()
-        if (normalized == requiredMarketPrefixes.get()) return
+        
+        // 检查是否有需要的 WebSocket 连接缺失（可能因网络问题断开）
+        val hasMissingConnection = wsKeysNeeded.any { it !in connectedWebSockets.keys }
+        
+        // 只有当集合相同且所有需要的连接都存在时才跳过
+        if (normalized == requiredMarketPrefixes.get() && !hasMissingConnection) return
         requiredMarketPrefixes.set(normalized)
         synchronized(subscriptionLock) {
             connectedWebSockets.keys.toList().forEach { wsKey ->
