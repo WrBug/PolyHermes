@@ -64,6 +64,10 @@ const CryptoTailMonitor: React.FC = () => {
   const marketChartRef = useRef<HTMLDivElement>(null)
   const marketChartInstance = useRef<echarts.ECharts | null>(null)
   const lastPeriodStartRef = useRef<number | null>(null)
+  const selectedStrategyIdRef = useRef<number | null>(null)
+  useEffect(() => {
+    selectedStrategyIdRef.current = selectedStrategyId
+  }, [selectedStrategyId])
 
   // localStorage key for period switch mode
   const PERIOD_SWITCH_MODE_KEY = 'cryptoTailMonitor_periodSwitchMode'
@@ -148,7 +152,7 @@ const CryptoTailMonitor: React.FC = () => {
       setPendingPeriodData(null)
       setIsViewingOldPeriod(false)
       try {
-        const res = await apiService.cryptoTailStrategy.monitorInit(selectedStrategyId)
+        const res = await apiService.cryptoTailStrategy.monitorInit({ strategyId: selectedStrategyId })
         if (res.data.code === 0 && res.data.data) {
           setInitData(res.data.data)
         } else {
@@ -193,11 +197,23 @@ const CryptoTailMonitor: React.FC = () => {
     const lastPeriod = lastPeriodStartRef.current
 
     if (pushPeriod != null && pushPeriod !== lastPeriod) {
-      // 新周期到来
+      // 新周期到来：重新拉取 init（含 tokenIds），再更新状态
       lastPeriodStartRef.current = pushPeriod
-
+      const marketTitle = (data as { marketTitle?: string }).marketTitle
+      const applyFreshInit = (fresh: CryptoTailMonitorInitResponse) => {
+        if (selectedStrategyIdRef.current !== fresh.strategyId) return
+        const merged: CryptoTailMonitorInitResponse = {
+          ...fresh,
+          periodStartUnix: pushPeriod,
+          marketTitle: marketTitle ?? fresh.marketTitle ?? ''
+        }
+        if (periodSwitchMode === 'manual' && lastPeriod != null) {
+          setPendingPeriodData(p => p ? { ...p, initData: merged } : null)
+        } else {
+          setInitData(merged)
+        }
+      }
       if (periodSwitchMode === 'manual' && lastPeriod != null) {
-        // 手动模式：保存新周期数据到 pending，保留当前显示
         setPendingPeriodData({
           periodStartUnix: pushPeriod,
           priceHistory: [newPoint],
@@ -205,26 +221,35 @@ const CryptoTailMonitor: React.FC = () => {
           pushData: data
         })
         setIsViewingOldPeriod(true)
-        // 更新 pending 数据的 initData
-        setInitData(prev => {
-          if (prev) {
-            setPendingPeriodData(p => p ? { ...p, initData: { ...prev, periodStartUnix: pushPeriod, marketTitle: (data as { marketTitle?: string }).marketTitle ?? prev.marketTitle } } : null)
+        apiService.cryptoTailStrategy.monitorInit({ strategyId: selectedStrategyId!, periodStartUnix: pushPeriod }).then(res => {
+          if (res.data?.code === 0 && res.data?.data) applyFreshInit(res.data.data)
+          else {
+            setInitData(prev => {
+              if (prev) setPendingPeriodData(p => p ? { ...p, initData: { ...prev, periodStartUnix: pushPeriod, marketTitle: marketTitle ?? prev.marketTitle ?? '' } } : null)
+              return prev ?? null
+            })
           }
-          return prev
+        }).catch(() => {
+          setInitData(prev => {
+            if (prev) setPendingPeriodData(p => p ? { ...p, initData: { ...prev, periodStartUnix: pushPeriod, marketTitle: marketTitle ?? prev.marketTitle ?? '' } } : null)
+            return prev ?? null
+          })
         })
       } else {
-        // 自动模式或首次推送：直接切换
-        if (lastPeriod != null) {
-          setHasSwitchedPeriod(true)
-        }
+        if (lastPeriod != null) setHasSwitchedPeriod(true)
         setFirstDataTime(newPoint.time)
-        setInitData(prev => prev ? { ...prev, periodStartUnix: pushPeriod, marketTitle: (data as { marketTitle?: string }).marketTitle ?? prev.marketTitle } : null)
         setPriceHistory([newPoint])
         setPushData(data)
         setIsViewingOldPeriod(false)
         setPendingPeriodData(null)
-        return
+        apiService.cryptoTailStrategy.monitorInit({ strategyId: selectedStrategyId!, periodStartUnix: pushPeriod }).then(res => {
+          if (res.data?.code === 0 && res.data?.data) applyFreshInit(res.data.data)
+          else setInitData(prev => prev ? { ...prev, periodStartUnix: pushPeriod, marketTitle: marketTitle ?? prev.marketTitle ?? '' } : null)
+        }).catch(() => {
+          setInitData(prev => prev ? { ...prev, periodStartUnix: pushPeriod, marketTitle: marketTitle ?? prev.marketTitle ?? '' } : null)
+        })
       }
+      return
     } else {
       // 同周期：追加数据
       if (periodSwitchMode === 'manual' && isViewingOldPeriod && pendingPeriodData) {

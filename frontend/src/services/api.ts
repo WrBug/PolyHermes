@@ -498,8 +498,8 @@ export const apiService = {
       apiClient.post<ApiResponse<import('../types').CryptoTailMarketOptionDto[]>>('/crypto-tail-strategy/market-options', {}),
     autoMinSpread: (data: { intervalSeconds: number }) =>
       apiClient.post<ApiResponse<import('../types').CryptoTailAutoMinSpreadResponse>>('/crypto-tail-strategy/auto-min-spread', data),
-    monitorInit: (strategyId: number) =>
-      apiClient.post<ApiResponse<import('../types').CryptoTailMonitorInitResponse>>('/crypto-tail-strategy/monitor/init', { strategyId }),
+    monitorInit: (data: { strategyId: number; periodStartUnix?: number }) =>
+      apiClient.post<ApiResponse<import('../types').CryptoTailMonitorInitResponse>>('/crypto-tail-strategy/monitor/init', data),
     manualOrder: (data: {
       strategyId: number
       periodStartUnix: number

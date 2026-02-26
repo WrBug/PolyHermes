@@ -5,7 +5,9 @@ package com.wrbug.polymarketbot.dto
  */
 data class CryptoTailMonitorInitRequest(
     /** 策略ID */
-    val strategyId: Long = 0L
+    val strategyId: Long = 0L,
+    /** 指定周期开始时间 (Unix 秒)，不传则用服务器当前周期 */
+    val periodStartUnix: Long? = null
 )
 
 /**
