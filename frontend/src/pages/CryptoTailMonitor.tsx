@@ -851,18 +851,22 @@ const CryptoTailMonitor: React.FC = () => {
 
       {/* 顶部控制区 */}
       <Card style={{ marginBottom: 16 }}>
-        <Space wrap size="middle">
-          <Space>
+        <Space direction={isMobile ? 'vertical' : 'horizontal'} size="middle" style={{ width: '100%' }}>
+          <Space direction={isMobile ? 'vertical' : 'horizontal'} size="small" style={{ width: isMobile ? '100%' : 'auto' }}>
             <Text strong>{t('cryptoTailMonitor.selectStrategy')}</Text>
             <Select
-              style={{ minWidth: isMobile ? 200 : 300 }}
+              style={{ minWidth: isMobile ? '100%' : 300, width: isMobile ? '100%' : 'auto' }}
               loading={strategiesLoading}
               value={selectedStrategyId}
               onChange={(id) => setSelectedStrategyId(id)}
               placeholder={t('cryptoTailMonitor.selectStrategyPlaceholder')}
+              popupMatchSelectWidth={false}
+              dropdownStyle={{ minWidth: isMobile ? 280 : 'auto', wordWrap: 'break-word', whiteSpace: 'normal' }}
+              optionLabelProp="label"
               options={strategies.map(s => ({
                 label: `${s.name || s.marketSlugPrefix} (${s.intervalSeconds === 300 ? '5m' : '15m'})`,
-                value: s.id
+                value: s.id,
+                style: { whiteSpace: 'normal', wordWrap: 'break-word' }
               }))}
             />
           </Space>
@@ -1049,36 +1053,38 @@ const CryptoTailMonitor: React.FC = () => {
           </Card>
 
           {/* 手动下单 */}
-          <Card title={t('cryptoTailMonitor.manualOrder.title')} style={{ marginTop: 16 }}>
-            <Row gutter={16}>
-              <Col span={12}>
-                <Button
-                  type="primary"
-                  icon={<ShoppingCartOutlined />}
-                  disabled={!pushData || pushData.triggered || pushData.periodEnded}
-                  onClick={() => handleOpenManualOrderModal('UP')}
-                  loading={ordering}
-                  block
-                  style={{ backgroundColor: '#1890ff', borderColor: '#1890ff' }}
-                >
-                  {t('cryptoTailMonitor.manualOrder.buttonUp')}
-                </Button>
-              </Col>
-              <Col span={12}>
-                <Button
-                  type="primary"
-                  icon={<ShoppingCartOutlined />}
-                  disabled={!pushData || pushData.triggered || pushData.periodEnded}
-                  onClick={() => handleOpenManualOrderModal('DOWN')}
-                  loading={ordering}
-                  block
-                  style={{ backgroundColor: '#fa8c16', borderColor: '#fa8c16' }}
-                >
-                  {t('cryptoTailMonitor.manualOrder.buttonDown')}
-                </Button>
-              </Col>
-            </Row>
-          </Card>
+          {!isMobile ? (
+            <Card title={t('cryptoTailMonitor.manualOrder.title')} style={{ marginTop: 16 }}>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Button
+                    type="primary"
+                    icon={<ShoppingCartOutlined />}
+                    disabled={!pushData || pushData.triggered || pushData.periodEnded}
+                    onClick={() => handleOpenManualOrderModal('UP')}
+                    loading={ordering}
+                    block
+                    style={{ backgroundColor: '#1890ff', borderColor: '#1890ff' }}
+                  >
+                    {t('cryptoTailMonitor.manualOrder.buttonUp')}
+                  </Button>
+                </Col>
+                <Col span={12}>
+                  <Button
+                    type="primary"
+                    icon={<ShoppingCartOutlined />}
+                    disabled={!pushData || pushData.triggered || pushData.periodEnded}
+                    onClick={() => handleOpenManualOrderModal('DOWN')}
+                    loading={ordering}
+                    block
+                    style={{ backgroundColor: '#fa8c16', borderColor: '#fa8c16' }}
+                  >
+                    {t('cryptoTailMonitor.manualOrder.buttonDown')}
+                  </Button>
+                </Col>
+              </Row>
+            </Card>
+          ) : null}
 
           {/* 策略信息 */}
           <Card title={t('cryptoTailMonitor.strategyInfo.title')} style={{ marginTop: 16 }}>
@@ -1207,6 +1213,47 @@ const CryptoTailMonitor: React.FC = () => {
           </Space>
         )}
       </Modal>
+
+      {/* 移动端底部悬浮按钮 */}
+      {isMobile && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 1000,
+            padding: '12px 16px',
+            background: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(10px)',
+            borderTop: '1px solid #f0f0f0',
+            boxShadow: '0 -2px 8px rgba(0, 0, 0, 0.06)'
+          }}
+        >
+          <div style={{ display: 'flex', width: '100%', gap: 0 }}>
+            <Button
+              type="primary"
+              icon={<ShoppingCartOutlined />}
+              disabled={!pushData || pushData.triggered || pushData.periodEnded}
+              onClick={() => handleOpenManualOrderModal('UP')}
+              loading={ordering}
+              style={{ flex: 1, backgroundColor: '#1890ff', borderColor: '#1890ff', height: 44, borderRadius: '6px 0 0 6px' }}
+            >
+              {t('cryptoTailMonitor.manualOrder.buttonUp')}
+            </Button>
+            <Button
+              type="primary"
+              icon={<ShoppingCartOutlined />}
+              disabled={!pushData || pushData.triggered || pushData.periodEnded}
+              onClick={() => handleOpenManualOrderModal('DOWN')}
+              loading={ordering}
+              style={{ flex: 1, backgroundColor: '#fa8c16', borderColor: '#fa8c16', height: 44, borderRadius: '0 6px 6px 0' }}
+            >
+              {t('cryptoTailMonitor.manualOrder.buttonDown')}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
