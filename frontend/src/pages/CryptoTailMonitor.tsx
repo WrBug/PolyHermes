@@ -99,13 +99,15 @@ const CryptoTailMonitor: React.FC = () => {
     size: string
     totalAmount: string
     bestBid: string
+    availableBalance: string
   }>({
     visible: false,
     direction: 'UP',
     price: '',
     size: '',
     totalAmount: '',
-    bestBid: ''
+    bestBid: '',
+    availableBalance: ''
   })
   const [ordering, setOrdering] = useState(false)
 
@@ -756,7 +758,7 @@ const CryptoTailMonitor: React.FC = () => {
     parseFloat(currentSpread) < Math.min(...minSpreadLineNum)
 
   // 手动下单：打开弹窗
-  const handleOpenManualOrderModal = (direction: 'UP' | 'DOWN') => {
+  const handleOpenManualOrderModal = async (direction: 'UP' | 'DOWN') => {
     if (!pushData) {
       message.warning(t('cryptoTailMonitor.manualOrder.priceNotLoaded'))
       return
@@ -769,16 +771,79 @@ const CryptoTailMonitor: React.FC = () => {
     // 计算默认价格：最优 bid × 1.1，限制在 0~1 之间
     const rawPrice = parseFloat(bestBid) * 1.1
     const defaultPrice = Math.min(1, Math.max(0, rawPrice))
-    const defaultAmountUsdc = 10
-    const defaultSize = Math.ceil(defaultAmountUsdc / defaultPrice)
+    
+    // 获取账户余额
+    let availableBalance = '0'
+    if (initData?.accountId) {
+      try {
+        const balanceRes = await apiService.accounts.balance({ accountId: initData.accountId })
+        if (balanceRes.data.code === 0 && balanceRes.data.data?.availableBalance) {
+          availableBalance = balanceRes.data.data.availableBalance
+        }
+      } catch (e) {
+        console.error('获取账户余额失败:', e)
+      }
+    }
+    
+    // 使用策略配置的金额
+    let defaultAmountUsdc = 10
+    if (initData?.amountMode === 'FIXED' && initData?.amountValue) {
+      defaultAmountUsdc = parseFloat(initData.amountValue)
+    } else if (initData?.amountMode === 'RATIO' && initData?.amountValue) {
+      // RATIO 模式：按比例计算
+      const balanceNum = parseFloat(availableBalance)
+      const ratio = parseFloat(initData.amountValue || '10')
+      defaultAmountUsdc = Math.floor(balanceNum * ratio / 100)
+      // 至少保留 1 USDC
+      if (defaultAmountUsdc < 1) {
+        message.warning(t('cryptoTailMonitor.manualOrder.insufficientBalance'))
+        return
+      }
+    }
+    
+    // 计算默认数量（保留2位小数，用于手动下单）
+    let defaultSize = (defaultAmountUsdc / defaultPrice).toFixed(2)
+    // 确保至少 1 张
+    if (parseFloat(defaultSize) < 1) {
+      defaultSize = '1.00'
+    }
+    
+    // 重新计算总金额（基于实际数量）
+    const defaultTotalAmount = (defaultPrice * parseFloat(defaultSize)).toFixed(2)
+    
     setManualOrderModal({
       visible: true,
       direction,
       price: defaultPrice.toFixed(4),
-      size: defaultSize.toFixed(2),
-      totalAmount: (defaultPrice * defaultSize).toFixed(2),
-      bestBid
+      size: defaultSize,
+      totalAmount: defaultTotalAmount,
+      bestBid,
+      availableBalance
     })
+  }
+
+  // 获取最新价
+  const handleFetchLatestPrice = async () => {
+    if (!pushData) {
+      message.warning(t('cryptoTailMonitor.manualOrder.priceNotLoaded'))
+      return
+    }
+    const latestPrice = manualOrderModal.direction === 'UP' 
+      ? pushData.currentPriceUp 
+      : pushData.currentPriceDown
+    if (!latestPrice) {
+      message.warning(t('cryptoTailMonitor.manualOrder.priceNotLoaded'))
+      return
+    }
+    const price = parseFloat(latestPrice)
+    const size = parseFloat(manualOrderModal.size)
+    const totalAmount = (price * size).toFixed(2)
+    setManualOrderModal({ 
+      ...manualOrderModal, 
+      price: price.toFixed(4),
+      totalAmount 
+    })
+    message.success(t('cryptoTailMonitor.manualOrder.priceUpdated'))
   }
 
   const handleCloseManualOrderModal = () => {
@@ -788,7 +853,8 @@ const CryptoTailMonitor: React.FC = () => {
       price: '',
       size: '',
       totalAmount: '',
-      bestBid: ''
+      bestBid: '',
+      availableBalance: ''
     })
   }
 
@@ -808,6 +874,33 @@ const CryptoTailMonitor: React.FC = () => {
     const price = Math.min(1, Math.max(0, priceRaw))
     const totalAmount = (price * value).toFixed(2)
     setManualOrderModal({ ...manualOrderModal, size, totalAmount, price: price.toFixed(4) })
+  }
+
+  // 计算最大数量（截位处理）
+  const handleMaxSize = () => {
+    const price = parseFloat(manualOrderModal.price)
+    const balance = parseFloat(manualOrderModal.availableBalance)
+    
+    if (price <= 0 || balance <= 0) {
+      message.warning(t('cryptoTailMonitor.manualOrder.invalidPriceOrBalance'))
+      return
+    }
+    
+    // 最大数量 = Math.floor(可用余额 / 价格)
+    const maxSize = Math.floor(balance / price)
+    
+    if (maxSize < 1) {
+      message.warning(t('cryptoTailMonitor.manualOrder.insufficientBalanceForMax'))
+      return
+    }
+    
+    const totalAmount = (price * maxSize).toFixed(2)
+    setManualOrderModal({ 
+      ...manualOrderModal, 
+      size: maxSize.toFixed(2),
+      totalAmount 
+    })
+    message.success(t('cryptoTailMonitor.manualOrder.maxSizeUpdated'))
   }
 
   const handleManualOrder = async () => {
@@ -1169,31 +1262,49 @@ const CryptoTailMonitor: React.FC = () => {
               </Col>
               <Col span={24}>
                 <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                  {t('cryptoTailMonitor.manualOrder.availableBalance')}
+                </Text>
+                <Text strong style={{ fontSize: 16, color: '#52c41a' }}>
+                  {manualOrderModal.availableBalance ? formatNumber(manualOrderModal.availableBalance, 2) : '-'} {t('cryptoTailMonitor.manualOrder.orderUnit')}
+                </Text>
+              </Col>
+              <Col span={24}>
+                <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
                   {t('cryptoTailMonitor.manualOrder.orderPrice')} ({t('cryptoTailMonitor.manualOrder.orderUnit')})
                 </Text>
-                <InputNumber
-                  style={{ width: '100%' }}
-                value={manualOrderModal.price ? parseFloat(manualOrderModal.price) : undefined}
-                onChange={handlePriceChange}
-                min={0}
-                max={1}
-                step={0.0001}
-                precision={4}
-                placeholder="0.0000"
-              />
+                <Space.Compact style={{ width: '100%' }}>
+                  <InputNumber
+                    style={{ width: '100%' }}
+                    value={manualOrderModal.price ? parseFloat(manualOrderModal.price) : undefined}
+                    onChange={handlePriceChange}
+                    min={0}
+                    max={1}
+                    step={0.0001}
+                    precision={4}
+                    placeholder="0.0000"
+                  />
+                  <Button onClick={handleFetchLatestPrice} icon={<SyncOutlined />}>
+                    {t('cryptoTailMonitor.manualOrder.fetchLatestPrice')}
+                  </Button>
+                </Space.Compact>
               </Col>
               <Col span={24}>
                 <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
                   {t('cryptoTailMonitor.manualOrder.orderSize')} ({t('cryptoTailMonitor.manualOrder.sizeUnit')})
                 </Text>
-                <InputNumber
-                  style={{ width: '100%' }}
-                value={manualOrderModal.size ? parseFloat(manualOrderModal.size) : undefined}
-                onChange={handleSizeChange}
-                min={1}
-                precision={2}
-                placeholder="1"
-              />
+                <Space.Compact style={{ width: '100%' }}>
+                  <InputNumber
+                    style={{ width: '100%' }}
+                    value={manualOrderModal.size ? parseFloat(manualOrderModal.size) : undefined}
+                    onChange={handleSizeChange}
+                    min={1}
+                    precision={2}
+                    placeholder="1"
+                  />
+                  <Button onClick={handleMaxSize} type="primary" ghost>
+                    {t('cryptoTailMonitor.manualOrder.maxSize')}
+                  </Button>
+                </Space.Compact>
               </Col>
               <Col span={24}>
                 <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>

@@ -57,7 +57,11 @@ data class CryptoTailMonitorInitResponse(
     /** 当前时间 (毫秒时间戳) */
     val currentTimestamp: Long = System.currentTimeMillis(),
     /** 是否启用 */
-    val enabled: Boolean = true
+    val enabled: Boolean = true,
+    /** 投入金额模式: FIXED or RATIO */
+    val amountMode: String? = null,
+    /** 投入金额数值 */
+    val amountValue: String? = null
 )
 
 /**

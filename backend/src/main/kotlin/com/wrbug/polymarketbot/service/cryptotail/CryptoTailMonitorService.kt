@@ -208,7 +208,9 @@ class CryptoTailMonitorService(
                 tokenIdUp = tokenIds.getOrNull(0),
                 tokenIdDown = tokenIds.getOrNull(1),
                 currentTimestamp = System.currentTimeMillis(),
-                enabled = strategy.enabled
+                enabled = strategy.enabled,
+                amountMode = strategy.amountMode,
+                amountValue = strategy.amountValue.toPlainString()
             )
 
             Result.success(response)

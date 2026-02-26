@@ -1676,7 +1676,16 @@
       "failed": "Manual order failed: {{reason}}",
       "errorSigning": "Signing failed: {reason}",
       "errorNetwork": "Network error, please try again later",
-      "priceNotLoaded": "Price data not loaded"
+      "priceNotLoaded": "Price data not loaded",
+      "insufficientBalance": "Insufficient balance, available amount less than 1 USDC",
+      "fetchBalanceFailed": "Failed to fetch account balance",
+      "availableBalance": "Available Balance",
+      "fetchLatestPrice": "Latest Price",
+      "priceUpdated": "Price updated",
+      "maxSize": "Max",
+      "invalidPriceOrBalance": "Invalid price or balance",
+      "insufficientBalanceForMax": "Insufficient balance for max size",
+      "maxSizeUpdated": "Updated to max size"
     }
   }
 }

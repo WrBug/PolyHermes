@@ -1676,7 +1676,16 @@
       "failed": "手动下单失败：{{reason}}",
       "errorSigning": "签名失败：{{reason}}",
       "errorNetwork": "网络错误，请稍后重试",
-      "priceNotLoaded": "价格数据未加载"
+      "priceNotLoaded": "价格数据未加载",
+      "insufficientBalance": "余额不足，可用金额少于 1 USDC",
+      "fetchBalanceFailed": "获取账户余额失败",
+      "availableBalance": "可用余额",
+      "fetchLatestPrice": "获取最新价",
+      "priceUpdated": "价格已更新",
+      "maxSize": "最大",
+      "invalidPriceOrBalance": "价格或余额无效",
+      "insufficientBalanceForMax": "余额不足以购买最大数量",
+      "maxSizeUpdated": "已更新为最大数量"
     }
   }
 }
