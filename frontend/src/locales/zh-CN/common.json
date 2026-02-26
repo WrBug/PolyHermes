@@ -1685,7 +1685,8 @@
       "maxSize": "最大",
       "invalidPriceOrBalance": "价格或余额无效",
       "insufficientBalanceForMax": "余额不足以购买最大数量",
-      "maxSizeUpdated": "已更新为最大数量"
+      "maxSizeUpdated": "已更新为最大数量",
+      "periodChanged": "周期已切换，弹窗已关闭"
     }
   }
 }

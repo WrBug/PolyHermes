@@ -17,6 +17,7 @@ import {
   InputNumber,
   message
 } from 'antd'
+import { Popup as AntdMobilePopup } from 'antd-mobile'
 import { ClockCircleOutlined, SyncOutlined, InfoCircleOutlined, ShoppingCartOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useMediaQuery } from 'react-responsive'
@@ -32,6 +33,10 @@ import type {
 } from '../types'
 
 const { Title, Text } = Typography
+
+// localStorage keys
+const PERIOD_SWITCH_MODE_KEY = 'cryptoTailMonitor_periodSwitchMode'
+const SELECTED_STRATEGY_ID_KEY = 'cryptoTailMonitor_selectedStrategyId'
 
 /** 分时图数据点：时间戳、BTC 价格 USDC、市场 Up/Down 价格 0-1 */
 interface PriceDataPoint {
@@ -49,8 +54,11 @@ const CryptoTailMonitor: React.FC = () => {
   const [strategies, setStrategies] = useState<CryptoTailStrategyDto[]>([])
   const [strategiesLoading, setStrategiesLoading] = useState(false)
 
-  // 选中的策略
-  const [selectedStrategyId, setSelectedStrategyId] = useState<number | null>(null)
+  // 选中的策略（从 localStorage 恢复）
+  const [selectedStrategyId, setSelectedStrategyId] = useState<number | null>(() => {
+    const cached = localStorage.getItem(SELECTED_STRATEGY_ID_KEY)
+    return cached != null ? parseInt(cached, 10) : null
+  })
 
   // 监控数据
   const [initData, setInitData] = useState<CryptoTailMonitorInitResponse | null>(null)
@@ -68,9 +76,6 @@ const CryptoTailMonitor: React.FC = () => {
   useEffect(() => {
     selectedStrategyIdRef.current = selectedStrategyId
   }, [selectedStrategyId])
-
-  // localStorage key for period switch mode
-  const PERIOD_SWITCH_MODE_KEY = 'cryptoTailMonitor_periodSwitchMode'
 
   // 记录首次数据进入时间（用于中途进入时的横轴起点）
   const [firstDataTime, setFirstDataTime] = useState<number | null>(null)
@@ -100,6 +105,7 @@ const CryptoTailMonitor: React.FC = () => {
     totalAmount: string
     bestBid: string
     availableBalance: string
+    periodStartUnix: number | null
   }>({
     visible: false,
     direction: 'UP',
@@ -107,9 +113,20 @@ const CryptoTailMonitor: React.FC = () => {
     size: '',
     totalAmount: '',
     bestBid: '',
-    availableBalance: ''
+    availableBalance: '',
+    periodStartUnix: null
   })
   const [ordering, setOrdering] = useState(false)
+
+  // 检测周期切换，关闭弹窗并提示用户
+  useEffect(() => {
+    if (manualOrderModal.visible && manualOrderModal.periodStartUnix != null && pushData) {
+      if (pushData.periodStartUnix !== manualOrderModal.periodStartUnix) {
+        message.warning(t('cryptoTailMonitor.manualOrder.periodChanged'))
+        handleCloseManualOrderModal()
+      }
+    }
+  }, [pushData?.periodStartUnix, manualOrderModal.visible, manualOrderModal.periodStartUnix])
 
   // 获取策略列表
   useEffect(() => {
@@ -118,10 +135,18 @@ const CryptoTailMonitor: React.FC = () => {
       try {
         const res = await apiService.cryptoTailStrategy.list({ enabled: true })
         if (res.data.code === 0 && res.data.data) {
-          setStrategies(res.data.data.list ?? [])
-          // 自动选择第一个策略
-          if (res.data.data.list?.length > 0 && !selectedStrategyId) {
-            setSelectedStrategyId(res.data.data.list[0].id)
+          const strategyList = res.data.data.list ?? []
+          setStrategies(strategyList)
+          // 从 localStorage 恢复选中的策略
+          const cachedId = localStorage.getItem(SELECTED_STRATEGY_ID_KEY)
+          const cachedStrategyId = cachedId != null ? parseInt(cachedId, 10) : null
+          // 检查缓存的策略是否在列表中
+          const isValidCached = cachedStrategyId != null && strategyList.some(s => s.id === cachedStrategyId)
+          if (isValidCached) {
+            setSelectedStrategyId(cachedStrategyId)
+          } else if (strategyList.length > 0) {
+            // 自动选择第一个策略
+            setSelectedStrategyId(strategyList[0].id)
           }
         }
       } catch (e) {
@@ -132,6 +157,13 @@ const CryptoTailMonitor: React.FC = () => {
     }
     fetchStrategies()
   }, [])
+
+  // 保存选中的策略到 localStorage
+  useEffect(() => {
+    if (selectedStrategyId != null) {
+      localStorage.setItem(SELECTED_STRATEGY_ID_KEY, String(selectedStrategyId))
+    }
+  }, [selectedStrategyId])
 
   // 初始化监控数据
   useEffect(() => {
@@ -818,7 +850,8 @@ const CryptoTailMonitor: React.FC = () => {
       size: defaultSize,
       totalAmount: defaultTotalAmount,
       bestBid,
-      availableBalance
+      availableBalance,
+      periodStartUnix: pushData.periodStartUnix
     })
   }
 
@@ -854,7 +887,8 @@ const CryptoTailMonitor: React.FC = () => {
       size: '',
       totalAmount: '',
       bestBid: '',
-      availableBalance: ''
+      availableBalance: '',
+      periodStartUnix: null
     })
   }
 
@@ -1160,7 +1194,7 @@ const CryptoTailMonitor: React.FC = () => {
                     block
                     style={{ backgroundColor: '#1890ff', borderColor: '#1890ff' }}
                   >
-                    {t('cryptoTailMonitor.manualOrder.buttonUp')}
+                    {t('cryptoTailMonitor.manualOrder.buttonUp')} {pushData?.currentPriceUp ? `(${formatNumber(pushData.currentPriceUp, 2)})` : ''}
                   </Button>
                 </Col>
                 <Col span={12}>
@@ -1173,7 +1207,7 @@ const CryptoTailMonitor: React.FC = () => {
                     block
                     style={{ backgroundColor: '#fa8c16', borderColor: '#fa8c16' }}
                   >
-                    {t('cryptoTailMonitor.manualOrder.buttonDown')}
+                    {t('cryptoTailMonitor.manualOrder.buttonDown')} {pushData?.currentPriceDown ? `(${formatNumber(pushData.currentPriceDown, 2)})` : ''}
                   </Button>
                 </Col>
               </Row>
@@ -1211,48 +1245,162 @@ const CryptoTailMonitor: React.FC = () => {
         </>
       )}
 
-      {/* 手动下单确认弹窗 */}
-      <Modal
-        title={t('cryptoTailMonitor.manualOrder.confirmTitle')}
-        open={manualOrderModal.visible}
-        onCancel={handleCloseManualOrderModal}
-        footer={[
-          <Button key="cancel" onClick={handleCloseManualOrderModal}>
-            {t('cryptoTailMonitor.manualOrder.cancel')}
-          </Button>,
-          <Button
-            key="confirm"
-            type="primary"
-            onClick={handleManualOrder}
-            loading={ordering}
-            style={
-              manualOrderModal.direction === 'UP'
-                ? { backgroundColor: '#1890ff', borderColor: '#1890ff' }
-                : { backgroundColor: '#fa8c16', borderColor: '#fa8c16' }
-            }
-          >
-            {t('cryptoTailMonitor.manualOrder.confirm')}
-          </Button>
-        ]}
-        width={isMobile ? '100%' : 480}
-        style={isMobile ? { maxWidth: '100%', top: 0, paddingBottom: 0 } : undefined}
-      >
-        {initData && (
-          <Space direction="vertical" style={{ width: '100%' }} size={16}>
-            <Row gutter={[12, 8]}>
-              <Col span={24}>
-                <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
-                  {t('cryptoTailMonitor.manualOrder.marketTitle')}
+      {/* 手动下单确认弹窗 - 桌面端使用 Modal */}
+      {!isMobile && (
+        <Modal
+          title={t('cryptoTailMonitor.manualOrder.confirmTitle')}
+          open={manualOrderModal.visible}
+          onCancel={handleCloseManualOrderModal}
+          footer={[
+            <Button key="cancel" onClick={handleCloseManualOrderModal}>
+              {t('cryptoTailMonitor.manualOrder.cancel')}
+            </Button>,
+            <Button
+              key="confirm"
+              type="primary"
+              onClick={handleManualOrder}
+              loading={ordering}
+              style={
+                manualOrderModal.direction === 'UP'
+                  ? { backgroundColor: '#1890ff', borderColor: '#1890ff' }
+                  : { backgroundColor: '#fa8c16', borderColor: '#fa8c16' }
+              }
+            >
+              {t('cryptoTailMonitor.manualOrder.confirm')}
+            </Button>
+          ]}
+          width={480}
+        >
+          {initData && (
+            <Space direction="vertical" style={{ width: '100%' }} size={16}>
+              <Row gutter={[12, 8]}>
+                <Col span={24}>
+                  <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                    {t('cryptoTailMonitor.manualOrder.marketTitle')}
+                  </Text>
+                  <Text>{pushData?.marketTitle ?? initData.marketTitle}</Text>
+                </Col>
+                <Col span={24}>
+                  <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                    {t('cryptoTailMonitor.manualOrder.direction')}
+                  </Text>
+                  <Text
+                    strong
+                    style={{
+                      color: manualOrderModal.direction === 'UP' ? '#1890ff' : '#fa8c16'
+                    }}
+                  >
+                    {manualOrderModal.direction === 'UP'
+                      ? t('cryptoTailMonitor.manualOrder.directionUp')
+                      : t('cryptoTailMonitor.manualOrder.directionDown')}
+                  </Text>
+                </Col>
+                <Col span={24}>
+                  <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                    {t('cryptoTailMonitor.manualOrder.availableBalance')}
+                  </Text>
+                  <Text strong style={{ fontSize: 16, color: '#52c41a' }}>
+                    {manualOrderModal.availableBalance ? formatNumber(manualOrderModal.availableBalance, 2) : '-'} {t('cryptoTailMonitor.manualOrder.orderUnit')}
+                  </Text>
+                </Col>
+                <Col span={24}>
+                  <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                    {t('cryptoTailMonitor.manualOrder.orderPrice')} ({t('cryptoTailMonitor.manualOrder.orderUnit')})
+                  </Text>
+                  <Space.Compact style={{ width: '100%' }}>
+                    <InputNumber
+                      style={{ width: '100%' }}
+                      value={manualOrderModal.price ? parseFloat(manualOrderModal.price) : undefined}
+                      onChange={handlePriceChange}
+                      min={0}
+                      max={1}
+                      step={0.0001}
+                      precision={4}
+                      placeholder="0.0000"
+                    />
+                    <Button onClick={handleFetchLatestPrice} icon={<SyncOutlined />}>
+                      {t('cryptoTailMonitor.manualOrder.fetchLatestPrice')}
+                    </Button>
+                  </Space.Compact>
+                </Col>
+                <Col span={24}>
+                  <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                    {t('cryptoTailMonitor.manualOrder.orderSize')} ({t('cryptoTailMonitor.manualOrder.sizeUnit')})
+                  </Text>
+                  <Space.Compact style={{ width: '100%' }}>
+                    <InputNumber
+                      style={{ width: '100%' }}
+                      value={manualOrderModal.size ? parseFloat(manualOrderModal.size) : undefined}
+                      onChange={handleSizeChange}
+                      min={1}
+                      precision={2}
+                      placeholder="1"
+                    />
+                    <Button onClick={handleMaxSize} type="primary" ghost>
+                      {t('cryptoTailMonitor.manualOrder.maxSize')}
+                    </Button>
+                  </Space.Compact>
+                </Col>
+                <Col span={24}>
+                  <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                    {t('cryptoTailMonitor.manualOrder.totalAmount')}
+                  </Text>
+                  <Text strong style={{ fontSize: 16 }}>
+                    {manualOrderModal.totalAmount} {t('cryptoTailMonitor.manualOrder.orderUnit')}
+                  </Text>
+                </Col>
+                <Col span={24}>
+                  <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
+                    {t('cryptoTailMonitor.manualOrder.account')}
+                  </Text>
+                  <Text>{initData.accountName || `#${initData.accountId}`}</Text>
+                </Col>
+              </Row>
+            </Space>
+          )}
+        </Modal>
+      )}
+
+      {/* 移动端 BottomSheet 弹窗 */}
+      {isMobile && (
+        <AntdMobilePopup
+          visible={manualOrderModal.visible}
+          onMaskClick={handleCloseManualOrderModal}
+          onClose={handleCloseManualOrderModal}
+          bodyStyle={{
+            borderRadius: '16px 16px 0 0',
+            padding: '12px 16px',
+            maxHeight: '70vh',
+            overflow: 'auto'
+          }}
+        >
+          {initData && (
+            <div>
+              {/* 标题栏 */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 12
+              }}>
+                <Text strong style={{ fontSize: 16 }}>
+                  {t('cryptoTailMonitor.manualOrder.confirmTitle')}
                 </Text>
-                <Text>{pushData?.marketTitle ?? initData.marketTitle}</Text>
-              </Col>
-              <Col span={24}>
-                <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
-                  {t('cryptoTailMonitor.manualOrder.direction')}
-                </Text>
+                <Button type="text" onClick={handleCloseManualOrderModal} style={{ padding: 0, fontSize: 18 }}>
+                  ✕
+                </Button>
+              </div>
+
+              {/* 市场信息 + 方向 + 余额（一行） */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+                  <Text type="secondary" style={{ fontSize: 12 }}>{t('cryptoTailMonitor.manualOrder.marketTitle')}: </Text>
+                  <Text style={{ fontSize: 13 }} ellipsis>{pushData?.marketTitle ?? initData.marketTitle}</Text>
+                </div>
                 <Text
                   strong
                   style={{
+                    fontSize: 14,
                     color: manualOrderModal.direction === 'UP' ? '#1890ff' : '#fa8c16'
                   }}
                 >
@@ -1260,22 +1408,26 @@ const CryptoTailMonitor: React.FC = () => {
                     ? t('cryptoTailMonitor.manualOrder.directionUp')
                     : t('cryptoTailMonitor.manualOrder.directionDown')}
                 </Text>
-              </Col>
-              <Col span={24}>
-                <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
-                  {t('cryptoTailMonitor.manualOrder.availableBalance')}
+              </div>
+
+              {/* 可用余额 */}
+              <div style={{ marginBottom: 10 }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('cryptoTailMonitor.manualOrder.availableBalance')}: 
                 </Text>
-                <Text strong style={{ fontSize: 16, color: '#52c41a' }}>
+                <Text strong style={{ fontSize: 14, color: '#52c41a', marginLeft: 4 }}>
                   {manualOrderModal.availableBalance ? formatNumber(manualOrderModal.availableBalance, 2) : '-'} {t('cryptoTailMonitor.manualOrder.orderUnit')}
                 </Text>
-              </Col>
-              <Col span={24}>
-                <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
-                  {t('cryptoTailMonitor.manualOrder.orderPrice')} ({t('cryptoTailMonitor.manualOrder.orderUnit')})
+              </div>
+
+              {/* 价格输入 */}
+              <div style={{ marginBottom: 10 }}>
+                <Text type="secondary" style={{ display: 'block', marginBottom: 2, fontSize: 12 }}>
+                  {t('cryptoTailMonitor.manualOrder.orderPrice')}
                 </Text>
                 <Space.Compact style={{ width: '100%' }}>
                   <InputNumber
-                    style={{ width: '100%' }}
+                    style={{ width: '100%', height: 36 }}
                     value={manualOrderModal.price ? parseFloat(manualOrderModal.price) : undefined}
                     onChange={handlePriceChange}
                     min={0}
@@ -1284,47 +1436,65 @@ const CryptoTailMonitor: React.FC = () => {
                     precision={4}
                     placeholder="0.0000"
                   />
-                  <Button onClick={handleFetchLatestPrice} icon={<SyncOutlined />}>
+                  <Button onClick={handleFetchLatestPrice} icon={<SyncOutlined />} style={{ height: 36, fontSize: 12 }}>
                     {t('cryptoTailMonitor.manualOrder.fetchLatestPrice')}
                   </Button>
                 </Space.Compact>
-              </Col>
-              <Col span={24}>
-                <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
-                  {t('cryptoTailMonitor.manualOrder.orderSize')} ({t('cryptoTailMonitor.manualOrder.sizeUnit')})
+              </div>
+
+              {/* 数量输入 */}
+              <div style={{ marginBottom: 10 }}>
+                <Text type="secondary" style={{ display: 'block', marginBottom: 2, fontSize: 12 }}>
+                  {t('cryptoTailMonitor.manualOrder.orderSize')}
                 </Text>
                 <Space.Compact style={{ width: '100%' }}>
                   <InputNumber
-                    style={{ width: '100%' }}
+                    style={{ width: '100%', height: 36 }}
                     value={manualOrderModal.size ? parseFloat(manualOrderModal.size) : undefined}
                     onChange={handleSizeChange}
                     min={1}
                     precision={2}
                     placeholder="1"
                   />
-                  <Button onClick={handleMaxSize} type="primary" ghost>
+                  <Button onClick={handleMaxSize} type="primary" ghost style={{ height: 36, fontSize: 12 }}>
                     {t('cryptoTailMonitor.manualOrder.maxSize')}
                   </Button>
                 </Space.Compact>
-              </Col>
-              <Col span={24}>
-                <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
-                  {t('cryptoTailMonitor.manualOrder.totalAmount')}
-                </Text>
-                <Text strong style={{ fontSize: 16 }}>
-                  {manualOrderModal.totalAmount} {t('cryptoTailMonitor.manualOrder.orderUnit')}
-                </Text>
-              </Col>
-              <Col span={24}>
-                <Text type="secondary" style={{ display: 'block', marginBottom: 4 }}>
-                  {t('cryptoTailMonitor.manualOrder.account')}
-                </Text>
-                <Text>{initData.accountName || `#${initData.accountId}`}</Text>
-              </Col>
-            </Row>
-          </Space>
-        )}
-      </Modal>
+              </div>
+
+              {/* 总金额 + 账户（一行） */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>{t('cryptoTailMonitor.manualOrder.totalAmount')}: </Text>
+                  <Text strong style={{ fontSize: 16, marginLeft: 4 }}>
+                    {manualOrderModal.totalAmount} {t('cryptoTailMonitor.manualOrder.orderUnit')}
+                  </Text>
+                </div>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 12 }}>{t('cryptoTailMonitor.manualOrder.account')}: </Text>
+                  <Text style={{ fontSize: 12 }}>{initData.accountName || `#${initData.accountId}`}</Text>
+                </div>
+              </div>
+
+              {/* 确认按钮 */}
+              <Button
+                type="primary"
+                block
+                onClick={handleManualOrder}
+                loading={ordering}
+                style={{
+                  height: 44,
+                  borderRadius: 8,
+                  backgroundColor: manualOrderModal.direction === 'UP' ? '#1890ff' : '#fa8c16',
+                  borderColor: manualOrderModal.direction === 'UP' ? '#1890ff' : '#fa8c16'
+                }}
+              >
+                {t('cryptoTailMonitor.manualOrder.confirm')}
+              </Button>
+            </div>
+          )}
+        </AntdMobilePopup>
+      )}
 
       {/* 移动端底部悬浮按钮 */}
       {isMobile && (
@@ -1351,7 +1521,7 @@ const CryptoTailMonitor: React.FC = () => {
               loading={ordering}
               style={{ flex: 1, backgroundColor: '#1890ff', borderColor: '#1890ff', height: 44, borderRadius: '6px 0 0 6px' }}
             >
-              {t('cryptoTailMonitor.manualOrder.buttonUp')}
+              {t('cryptoTailMonitor.manualOrder.buttonUp')} {pushData?.currentPriceUp ? `(${formatNumber(pushData.currentPriceUp, 2)})` : ''}
             </Button>
             <Button
               type="primary"
@@ -1361,7 +1531,7 @@ const CryptoTailMonitor: React.FC = () => {
               loading={ordering}
               style={{ flex: 1, backgroundColor: '#fa8c16', borderColor: '#fa8c16', height: 44, borderRadius: '0 6px 6px 0' }}
             >
-              {t('cryptoTailMonitor.manualOrder.buttonDown')}
+              {t('cryptoTailMonitor.manualOrder.buttonDown')} {pushData?.currentPriceDown ? `(${formatNumber(pushData.currentPriceDown, 2)})` : ''}
             </Button>
           </div>
         </div>
