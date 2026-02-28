@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Card, Table, Button, Space, Tag, Popconfirm, message, List, Empty, Spin, Divider, Typography, Modal, Descriptions, Statistic, Row, Col } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined, GlobalOutlined, EyeOutlined, ReloadOutlined, WalletOutlined } from '@ant-design/icons'
+import { Card, Table, Button, Space, Tag, Popconfirm, message, List, Empty, Spin, Divider, Typography, Modal, Descriptions, Statistic, Row, Col, Tooltip, Badge } from 'antd'
+import { PlusOutlined, EditOutlined, DeleteOutlined, GlobalOutlined, EyeOutlined, ReloadOutlined, WalletOutlined, CopyOutlined, LineChartOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { apiService } from '../services/api'
 import type { Leader, LeaderBalanceResponse } from '../types'
@@ -225,11 +225,11 @@ const LeaderList: React.FC = () => {
       title: t('leaderList.leaderName'),
       dataIndex: 'leaderName',
       key: 'leaderName',
-      width: 150,
+      width: 200,
       render: (text: string, record: Leader) => (
         <Space direction="vertical" size={0}>
           <Text strong style={{ fontSize: '14px' }}>{text || `Leader ${record.id}`}</Text>
-          <Text type="secondary" style={{ fontSize: '12px' }}>{record.leaderAddress}</Text>
+          <Text type="secondary" style={{ fontSize: '12px', fontFamily: 'monospace' }}>{record.leaderAddress}</Text>
         </Space>
       )
     },
@@ -237,76 +237,155 @@ const LeaderList: React.FC = () => {
       title: t('leaderList.remark'),
       dataIndex: 'remark',
       key: 'remark',
-      width: 200,
+      width: 180,
       ellipsis: true,
       render: (remark: string | undefined) => {
         if (!remark) return <Text type="secondary">-</Text>
-        return <Text ellipsis={{ tooltip: remark }} style={{ maxWidth: 180 }}>{remark}</Text>
+        return <Text ellipsis={{ tooltip: remark }} style={{ maxWidth: 160 }}>{remark}</Text>
       }
     },
     {
       title: t('leaderDetail.availableBalance'),
       key: 'balance',
-      width: 150,
+      width: 180,
       render: (_: any, record: Leader) => {
         const balance = balanceMap[record.id]
         if (!balance) return <Spin size="small" />
-        const displayText = balance.available === '-' ? '-' : `${formatUSDC(balance.available)} USDC`
-        return <Text style={{ color: '#1890ff', fontSize: '14px' }}>{displayText}</Text>
+        return (
+          <Space direction="vertical" size={0}>
+            <Text style={{ color: '#52c41a', fontSize: '14px', fontWeight: '500' }}>
+              {balance.available === '-' ? '-' : `${formatUSDC(balance.available)} USDC`}
+            </Text>
+            <Text type="secondary" style={{ fontSize: '12px' }}>
+              {t('leaderDetail.positionBalance')}: {formatUSDC(balance.position)}
+            </Text>
+          </Space>
+        )
       }
-    },
-    {
-      title: t('leaderList.copyTradingCount'),
-      dataIndex: 'copyTradingCount',
-      key: 'copyTradingCount',
-      width: 100,
-      render: (count: number, record: Leader) => (
-        <Button
-          type="link"
-          size="small"
-          onClick={() => navigate(`/copy-trading?leaderId=${record.id}`)}
-          disabled={count === 0}
-          style={{ padding: 0 }}
-        >
-          <Tag color="cyan">{count}</Tag>
-        </Button>
-      )
-    },
-    {
-      title: t('leaderList.backtestCount'),
-      dataIndex: 'backtestCount',
-      key: 'backtestCount',
-      width: 100,
-      render: (count: number, record: Leader) => (
-        <Button
-          type="link"
-          size="small"
-          onClick={() => navigate(`/backtest?leaderId=${record.id}`)}
-          disabled={count === 0}
-          style={{ padding: 0 }}
-        >
-          <Tag color="purple">{count}</Tag>
-        </Button>
-      )
     },
     {
       title: t('common.actions'),
       key: 'action',
-      width: isMobile ? 180 : 250,
+      width: 200,
       fixed: 'right' as const,
       render: (_: any, record: Leader) => (
-        <Space size="small" wrap>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleShowDetail(record)}>
-            {t('common.viewDetail')}
-          </Button>
+        <Space size={4}>
+          <Tooltip title={t('common.viewDetail')}>
+            <div
+              onClick={() => handleShowDetail(record)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '32px',
+                height: '32px',
+                cursor: 'pointer',
+                borderRadius: '6px',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f0f0'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              <EyeOutlined style={{ fontSize: '16px', color: '#1890ff' }} />
+            </div>
+          </Tooltip>
+
           {record.website && (
-            <Button type="link" size="small" icon={<GlobalOutlined />} onClick={() => window.open(record.website, '_blank', 'noopener,noreferrer')}>
-              {t('leaderList.openWebsite')}
-            </Button>
+            <Tooltip title={t('leaderList.openWebsite')}>
+              <div
+                onClick={() => window.open(record.website, '_blank', 'noopener,noreferrer')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  cursor: 'pointer',
+                  borderRadius: '6px',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f0f0'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                <GlobalOutlined style={{ fontSize: '16px', color: '#fa8c16' }} />
+              </div>
+            </Tooltip>
           )}
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => navigate(`/leaders/edit?id=${record.id}`)}>
-            {t('common.edit')}
-          </Button>
+
+          <Tooltip title={t('common.edit')}>
+            <div
+              onClick={() => navigate(`/leaders/edit?id=${record.id}`)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '32px',
+                height: '32px',
+                cursor: 'pointer',
+                borderRadius: '6px',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f0f0'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              <EditOutlined style={{ fontSize: '16px', color: '#52c41a' }} />
+            </div>
+          </Tooltip>
+
+          <Tooltip title={`${t('leaderList.viewCopyTradings')} (${record.copyTradingCount})`}>
+            <div
+              onClick={() => {
+                if (record.copyTradingCount > 0) {
+                  navigate(`/copy-trading?leaderId=${record.id}`)
+                }
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '32px',
+                height: '32px',
+                cursor: record.copyTradingCount === 0 ? 'not-allowed' : 'pointer',
+                borderRadius: '6px',
+                opacity: record.copyTradingCount === 0 ? 0.4 : 1,
+                transition: 'background-color 0.2s'
+              }}
+              onMouseEnter={(e) => record.copyTradingCount > 0 && (e.currentTarget.style.backgroundColor = '#f0f0f0')}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              <Badge count={record.copyTradingCount} size="small" offset={[-4, -4]}>
+                <CopyOutlined style={{ fontSize: '16px', color: '#13c2c2' }} />
+              </Badge>
+            </div>
+          </Tooltip>
+
+          <Tooltip title={`${t('leaderList.viewBacktests')} (${record.backtestCount})`}>
+            <div
+              onClick={() => {
+                if (record.backtestCount > 0) {
+                  navigate(`/backtest?leaderId=${record.id}`)
+                }
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '32px',
+                height: '32px',
+                cursor: record.backtestCount === 0 ? 'not-allowed' : 'pointer',
+                borderRadius: '6px',
+                opacity: record.backtestCount === 0 ? 0.4 : 1,
+                transition: 'background-color 0.2s'
+              }}
+              onMouseEnter={(e) => record.backtestCount > 0 && (e.currentTarget.style.backgroundColor = '#f0f0f0')}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              <Badge count={record.backtestCount} size="small" offset={[-4, -4]}>
+                <LineChartOutlined style={{ fontSize: '16px', color: '#722ed1' }} />
+              </Badge>
+            </div>
+          </Tooltip>
+
           <Popconfirm
             title={t('leaderList.deleteConfirm')}
             description={record.copyTradingCount > 0 ? t('leaderList.deleteConfirmDesc', { count: record.copyTradingCount }) : undefined}
@@ -314,9 +393,24 @@ const LeaderList: React.FC = () => {
             okText={t('common.confirm')}
             cancelText={t('common.cancel')}
           >
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              {t('common.delete')}
-            </Button>
+            <Tooltip title={t('common.delete')}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  cursor: 'pointer',
+                  borderRadius: '6px',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fff1f0'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                <DeleteOutlined style={{ fontSize: '16px', color: '#ff4d4f' }} />
+              </div>
+            </Tooltip>
           </Popconfirm>
         </Space>
       )
@@ -346,71 +440,148 @@ const LeaderList: React.FC = () => {
                 dataSource={leaders}
                 renderItem={(leader) => {
                   const balance = balanceMap[leader.id]
+                  const isLoading = balanceLoading[leader.id]
 
                   return (
-                    <Card key={leader.id} style={{ marginBottom: '16px', borderRadius: '12px', boxShadow: '0 2px 6px rgba(0,0,0,0.06)', border: '1px solid #f0f0f0' }} bodyStyle={{ padding: '16px' }}>
-                      <div style={{ marginBottom: '12px' }}>
-                        <div style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '6px', color: '#1890ff' }}>
-                          {leader.leaderName || `Leader ${leader.id}`}
+                    <Card
+                      key={leader.id}
+                      style={{
+                        marginBottom: '10px',
+                        borderRadius: '10px',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                        border: '1px solid #e8e8e8',
+                        overflow: 'hidden'
+                      }}
+                      bodyStyle={{ padding: '0' }}
+                    >
+                      {/* 头部区域 - 名称和地址 */}
+                      <div style={{
+                        padding: '10px 12px',
+                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        color: '#fff'
+                      }}>
+                        <div style={{ fontSize: '15px', fontWeight: '600', marginBottom: '2px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span>{leader.leaderName || `Leader ${leader.id}`}</span>
+                          {leader.website && (
+                            <GlobalOutlined
+                              style={{ fontSize: '13px', cursor: 'pointer', opacity: 0.8 }}
+                              onClick={() => window.open(leader.website, '_blank', 'noopener,noreferrer')}
+                            />
+                          )}
                         </div>
-                        <div style={{ fontSize: '12px', color: '#666', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                        <div style={{ fontSize: '10px', opacity: '0.85', fontFamily: 'monospace', wordBreak: 'break-all' }}>
                           {leader.leaderAddress}
                         </div>
                       </div>
 
-                      {balance && (
-                        <div style={{ marginBottom: '12px', padding: '12px', backgroundColor: '#f6ffed', borderRadius: '8px', border: '1px solid #b7eb8f' }}>
-                          <div style={{ fontSize: '13px', color: '#52c41a', fontWeight: 'bold', marginBottom: '4px' }}>
-                            {t('leaderDetail.availableBalance')}: {balance.available === '-' ? '-' : `${formatUSDC(balance.available)} USDC`}
+                      {/* 资产区域 - 常驻显示 */}
+                      <div style={{
+                        padding: '8px 12px',
+                        backgroundColor: '#fafafa',
+                        borderBottom: '1px solid #f0f0f0',
+                        minHeight: '42px',
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                          <div>
+                            <div style={{ fontSize: '10px', color: '#8c8c8c' }}>
+                              {t('leaderDetail.availableBalance')}
+                            </div>
+                            <div style={{ fontSize: '14px', fontWeight: '600', color: '#52c41a' }}>
+                              {balance?.available && balance.available !== '-' ? `${formatUSDC(balance.available)} USDC` : '- USDC'}
+                            </div>
                           </div>
-                          <div style={{ fontSize: '11px', color: '#666' }}>
-                            {t('leaderDetail.positionBalance')}: {formatUSDC(balance.position)}
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '10px', color: '#8c8c8c' }}>
+                              {t('leaderDetail.positionBalance')}
+                            </div>
+                            <div style={{ fontSize: '14px', fontWeight: '500', color: '#722ed1' }}>
+                              {balance?.position && balance.position !== '-' ? formatUSDC(balance.position) : '-'}
+                            </div>
                           </div>
                         </div>
-                      )}
-
-                      <Divider style={{ margin: '12px 0' }} />
-
-                      <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
-                        <Button
-                          type="default"
-                          size="small"
-                          onClick={() => navigate(`/copy-trading?leaderId=${leader.id}`)}
-                          disabled={leader.copyTradingCount === 0}
-                          style={{ borderRadius: '6px', padding: '8px 16px' }}
-                        >
-                          {t('leaderList.viewCopyTradings')} ({leader.copyTradingCount})
-                        </Button>
-                        <Button
-                          type="default"
-                          size="small"
-                          onClick={() => navigate(`/backtest?leaderId=${leader.id}`)}
-                          disabled={leader.backtestCount === 0}
-                          style={{ borderRadius: '6px', padding: '8px 16px' }}
-                        >
-                          {t('leaderList.viewBacktests')} ({leader.backtestCount})
-                        </Button>
                       </div>
 
+                      {/* 备注区域 */}
                       {leader.remark && (
-                        <div style={{ marginBottom: '12px' }}>
-                          <Text type="secondary" style={{ fontSize: '12px' }}>{t('leaderList.remark')}：</Text>
-                          <Text style={{ fontSize: '12px', marginLeft: '4px' }}>{leader.remark}</Text>
+                        <div style={{
+                          padding: '6px 12px',
+                          backgroundColor: '#fffbe6',
+                          borderBottom: '1px solid #ffe58f',
+                          fontSize: '11px',
+                          color: '#8c8c8c'
+                        }}>
+                          <span style={{ color: '#d48806' }}>{t('leaderList.remark')}：</span>
+                          <span>{leader.remark}</span>
                         </div>
                       )}
 
-                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        <Button type="primary" size="small" icon={<EyeOutlined />} onClick={() => handleShowDetail(leader)} style={{ flex: 1, minWidth: '80px', borderRadius: '6px', padding: '8px 16px' }}>
-                          {t('common.viewDetail')}
-                        </Button>
-                        {leader.website && (
-                          <Button type="default" size="small" icon={<GlobalOutlined />} onClick={() => window.open(leader.website, '_blank', 'noopener,noreferrer')} style={{ flex: 1, minWidth: '80px', borderRadius: '6px', padding: '8px 16px' }}>
-                            {t('leaderList.openWebsite')}
-                          </Button>
-                        )}
-                        <Button type="default" size="small" icon={<EditOutlined />} onClick={() => navigate(`/leaders/edit?id=${leader.id}`)} style={{ flex: 1, minWidth: '80px', borderRadius: '6px', padding: '8px 16px' }}>
-                          {t('common.edit')}
-                        </Button>
+                      {/* 图标操作栏 */}
+                      <div style={{
+                        padding: '8px 12px',
+                        display: 'flex',
+                        justifyContent: 'space-around',
+                        alignItems: 'center'
+                      }}>
+                        <Tooltip title={t('common.viewDetail')}>
+                          <div
+                            onClick={() => handleShowDetail(leader)}
+                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}
+                          >
+                            <EyeOutlined style={{ fontSize: '18px', color: '#1890ff' }} />
+                            <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('common.viewDetail')}</span>
+                          </div>
+                        </Tooltip>
+
+                        <Tooltip title={t('common.edit')}>
+                          <div
+                            onClick={() => navigate(`/leaders/edit?id=${leader.id}`)}
+                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}
+                          >
+                            <EditOutlined style={{ fontSize: '18px', color: '#52c41a' }} />
+                            <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('common.edit')}</span>
+                          </div>
+                        </Tooltip>
+
+                        <Tooltip title={t('leaderList.viewCopyTradings')}>
+                          <div
+                            onClick={() => navigate(`/copy-trading?leaderId=${leader.id}`)}
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              cursor: leader.copyTradingCount === 0 ? 'not-allowed' : 'pointer',
+                              padding: '4px 8px',
+                              opacity: leader.copyTradingCount === 0 ? 0.4 : 1
+                            }}
+                          >
+                            <Badge count={leader.copyTradingCount} size="small" offset={[-2, -2]}>
+                              <CopyOutlined style={{ fontSize: '18px', color: '#13c2c2' }} />
+                            </Badge>
+                            <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('leaderList.viewCopyTradings')}</span>
+                          </div>
+                        </Tooltip>
+
+                        <Tooltip title={t('leaderList.viewBacktests')}>
+                          <div
+                            onClick={() => navigate(`/backtest?leaderId=${leader.id}`)}
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              cursor: leader.backtestCount === 0 ? 'not-allowed' : 'pointer',
+                              padding: '4px 8px',
+                              opacity: leader.backtestCount === 0 ? 0.4 : 1
+                            }}
+                          >
+                            <Badge count={leader.backtestCount} size="small" offset={[-2, -2]}>
+                              <LineChartOutlined style={{ fontSize: '18px', color: '#722ed1' }} />
+                            </Badge>
+                            <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('leaderList.viewBacktests')}</span>
+                          </div>
+                        </Tooltip>
+
                         <Popconfirm
                           title={t('leaderList.deleteConfirm')}
                           description={leader.copyTradingCount > 0 ? t('leaderList.deleteConfirmDesc', { count: leader.copyTradingCount }) : undefined}
@@ -418,9 +589,12 @@ const LeaderList: React.FC = () => {
                           okText={t('common.confirm')}
                           cancelText={t('common.cancel')}
                         >
-                          <Button type="primary" danger size="small" icon={<DeleteOutlined />} style={{ flex: 1, minWidth: '80px', borderRadius: '6px', padding: '8px 16px' }}>
-                            {t('common.delete')}
-                          </Button>
+                          <Tooltip title={t('common.delete')}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}>
+                              <DeleteOutlined style={{ fontSize: '18px', color: '#ff4d4f' }} />
+                              <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('common.delete')}</span>
+                            </div>
+                          </Tooltip>
                         </Popconfirm>
                       </div>
                     </Card>
