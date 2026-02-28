@@ -42,7 +42,8 @@
     "pageOf": "第",
     "ascending": "升序",
     "descending": "降序",
-    "day": "天"
+    "day": "天",
+    "orders": "單"
   },
   "account": {
     "title": "賬戶管理",
@@ -176,7 +177,8 @@
     "updateFailed": "更新賬戶失敗",
     "getDetailFailedForEdit": "獲取賬戶詳情失敗",
     "loading": "加載中...",
-    "fetchFailed": "獲取賬戶列表失敗"
+    "fetchFailed": "獲取賬戶列表失敗",
+    "noData": "暫無賬戶數據"
   },
   "accountImport": {
     "title": "導入賬戶",
@@ -660,7 +662,8 @@
     "deleteSuccess": "刪除用戶成功",
     "deleteFailed": "刪除用戶失敗",
     "deleteConfirm": "確定要刪除這個用戶嗎？",
-    "total": "共 {{total}} 條"
+    "total": "共 {{total}} 條",
+    "noData": "暫無用戶數據"
   },
   "statistics": {
     "title": "統計信息",
@@ -1121,7 +1124,9 @@
     "updateStatusFailed": "更新跟單狀態失敗",
     "deleteSuccess": "刪除跟單成功",
     "deleteFailed": "刪除跟單失敗",
-    "deleteConfirm": "確定要刪除這個跟單關係嗎？"
+    "deleteConfirm": "確定要刪除這個跟單關係嗎？",
+    "profitRate": "收益率",
+    "noData": "暫無跟單配置"
   },
   "notificationSettings": {
     "title": "消息推送設置",
@@ -1351,6 +1356,8 @@
     "title": "回測",
     "taskName": "任務名稱",
     "leader": "Leader",
+    "balance": "資金 (初始→最終)",
+    "profit": "收益 (金額/比例)",
     "initialBalance": "初始資金",
     "backtestDays": "回測天數",
     "status": "狀態",
@@ -1399,6 +1406,7 @@
     "createCopyTradingSuccess": "跟單配置創建成功",
     "noTasks": "暫無回測任務",
     "noTrades": "暫無交易記錄",
+    "noData": "暫無回測數據",
     "fetchTasksFailed": "獲取任務列表失敗",
     "fetchTaskDetailFailed": "獲取任務詳情失敗",
     "fetchTradesFailed": "獲取交易記錄失敗",

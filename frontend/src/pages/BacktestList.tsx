@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Table, Card, Button, Select, Tag, Space, Modal, message, Row, Col, Form, Input, InputNumber, Switch, Statistic, Descriptions } from 'antd'
+import { Table, Card, Button, Select, Tag, Space, Modal, message, Row, Col, Form, Input, InputNumber, Switch, Statistic, Descriptions, List, Empty, Spin, Tooltip, Popconfirm } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { PlusOutlined, ReloadOutlined, DeleteOutlined, StopOutlined, EyeOutlined, RedoOutlined, CopyOutlined, SyncOutlined } from '@ant-design/icons'
 import { formatUSDC } from '../utils'
@@ -118,49 +118,35 @@ const BacktestList: React.FC = () => {
   }
 
   // 删除任务
-  const handleDelete = (id: number) => {
-    Modal.confirm({
-      title: t('backtest.deleteConfirm'),
-      okText: t('common.confirm'),
-      cancelText: t('common.cancel'),
-      onOk: async () => {
-        try {
-          const response = await backtestService.delete({ id })
-          if (response.data.code === 0) {
-            message.success(t('backtest.deleteSuccess'))
-            fetchTasks()
-          } else {
-            message.error(response.data.msg || t('backtest.deleteFailed'))
-          }
-        } catch (error) {
-          console.error('Failed to delete backtest task:', error)
-          message.error(t('backtest.deleteFailed'))
-        }
+  const handleDelete = async (id: number) => {
+    try {
+      const response = await backtestService.delete({ id })
+      if (response.data.code === 0) {
+        message.success(t('backtest.deleteSuccess'))
+        fetchTasks()
+      } else {
+        message.error(response.data.msg || t('backtest.deleteFailed'))
       }
-    })
+    } catch (error) {
+      console.error('Failed to delete backtest task:', error)
+      message.error(t('backtest.deleteFailed'))
+    }
   }
 
   // 停止任务
-  const handleStop = (id: number) => {
-    Modal.confirm({
-      title: t('backtest.stopConfirm'),
-      okText: t('common.confirm'),
-      cancelText: t('common.cancel'),
-      onOk: async () => {
-        try {
-          const response = await backtestService.stop({ id })
-          if (response.data.code === 0) {
-            message.success(t('backtest.stopSuccess'))
-            fetchTasks()
-          } else {
-            message.error(response.data.msg || t('backtest.stopFailed'))
-          }
-        } catch (error) {
-          console.error('Failed to stop backtest task:', error)
-          message.error(t('backtest.stopFailed'))
-        }
+  const handleStop = async (id: number) => {
+    try {
+      const response = await backtestService.stop({ id })
+      if (response.data.code === 0) {
+        message.success(t('backtest.stopSuccess'))
+        fetchTasks()
+      } else {
+        message.error(response.data.msg || t('backtest.stopFailed'))
       }
-    })
+    } catch (error) {
+      console.error('Failed to stop backtest task:', error)
+      message.error(t('backtest.stopFailed'))
+    }
   }
 
   // 按配置重新测试（仅已完成任务）
@@ -502,168 +488,227 @@ const BacktestList: React.FC = () => {
       title: t('backtest.taskName'),
       dataIndex: 'taskName',
       key: 'taskName',
-      width: isMobile ? 120 : 150
+      width: isMobile ? 120 : 140,
+      ellipsis: true
     },
     {
       title: t('backtest.leader'),
       dataIndex: 'leaderName',
       key: 'leaderName',
-      width: isMobile ? 100 : 150,
+      width: isMobile ? 100 : 120,
+      ellipsis: true,
       render: (_: any, record: BacktestTaskDto) => record.leaderName || `Leader ${record.leaderId}`
     },
     {
-      title: t('backtest.initialBalance'),
-      dataIndex: 'initialBalance',
-      key: 'initialBalance',
-      width: 120,
-      render: (value: string) => formatUSDC(value)
+      title: t('backtest.balance'),
+      key: 'balance',
+      width: 160,
+      render: (_: any, record: BacktestTaskDto) => (
+        <div>
+          <div style={{ fontSize: 12, color: '#8c8c8c' }}>{formatUSDC(record.initialBalance)}</div>
+          <div style={{ fontWeight: 500 }}>{record.finalBalance ? formatUSDC(record.finalBalance) : '-'}</div>
+        </div>
+      )
     },
     {
-      title: t('backtest.finalBalance'),
-      dataIndex: 'finalBalance',
-      key: 'finalBalance',
-      width: 120,
-      render: (value: string | null) => value ? formatUSDC(value) : '-'
-    },
-    {
-      title: t('backtest.profitAmount'),
-      dataIndex: 'profitAmount',
-      key: 'profitAmount',
-      width: 120,
-      render: (value: string | null) => value ? (
-        <span style={{ color: parseFloat(value) >= 0 ? '#52c41a' : '#ff4d4f' }}>
-          {formatUSDC(value)}
-        </span>
-      ) : '-'
-    },
-    {
-      title: t('backtest.profitRate'),
-      dataIndex: 'profitRate',
-      key: 'profitRate',
-      width: 100,
-      render: (value: string | null) => value ? (
-        <span style={{ color: parseFloat(value) >= 0 ? '#52c41a' : '#ff4d4f' }}>
-          {value}%
-        </span>
-      ) : '-'
-    },
-    {
-      title: t('backtest.backtestDays'),
-      dataIndex: 'backtestDays',
-      key: 'backtestDays',
-      width: 100,
-      render: (value: number) => `${value} ${t('common.day')}`
+      title: t('backtest.profit'),
+      key: 'profit',
+      width: 140,
+      render: (_: any, record: BacktestTaskDto) => {
+        const profitAmount = record.profitAmount ? parseFloat(record.profitAmount) : null
+        const profitRate = record.profitRate ? parseFloat(record.profitRate) : null
+        const color = profitAmount !== null ? (profitAmount >= 0 ? '#52c41a' : '#ff4d4f') : undefined
+        return (
+          <div>
+            <div style={{ fontWeight: 500, color }}>
+              {profitAmount !== null ? formatUSDC(record.profitAmount) : '-'}
+            </div>
+            <div style={{ fontSize: 12, color }}>
+              {profitRate !== null ? `${record.profitRate}%` : '-'}
+            </div>
+          </div>
+        )
+      }
     },
     {
       title: t('backtest.status'),
       dataIndex: 'status',
       key: 'status',
-      width: 100,
-      render: (status: string) => (
-        <Tag color={getStatusColor(status)}>{getStatusText(status)}</Tag>
-      )
-    },
-    {
-      title: t('backtest.progress'),
-      dataIndex: 'progress',
-      key: 'progress',
-      width: 120,
-      render: (progress: number) => (
-        <div style={{ width: '100%' }}>
-          <div style={{ marginBottom: 4 }}>{progress}%</div>
-          <div style={{ width: '100%', height: 6, backgroundColor: '#f0f0f0', borderRadius: 3 }}>
-            <div
-              style={{
-                width: `${progress}%`,
-                height: '100%',
-                backgroundColor: progress === 100 ? '#52c41a' : '#1890ff',
-                borderRadius: 3,
-                transition: 'width 0.3s ease'
-              }}
-            />
+      width: 130,
+      render: (status: string, record: BacktestTaskDto) => {
+        const isRunning = status === 'RUNNING' || status === 'PENDING'
+        return (
+          <div>
+            <Tag color={getStatusColor(status)}>{getStatusText(status)}</Tag>
+            {isRunning && record.progress !== undefined && (
+              <div style={{ marginTop: 4, fontSize: 11, color: '#8c8c8c' }}>
+                {record.progress}%
+              </div>
+            )}
           </div>
-        </div>
-      )
+        )
+      }
     },
     {
       title: t('backtest.totalTrades'),
       dataIndex: 'totalTrades',
       key: 'totalTrades',
-      width: 100
+      width: 80,
+      align: 'center' as const
     },
     {
       title: t('backtest.createdAt'),
       dataIndex: 'createdAt',
       key: 'createdAt',
-      width: isMobile ? 150 : 180,
+      width: isMobile ? 150 : 150,
       render: (timestamp: number) => new Date(timestamp).toLocaleString()
     },
     {
       title: t('common.actions'),
       key: 'actions',
       fixed: isMobile ? false : ('right' as const),
-      width: isMobile ? 100 : 150,
+      width: isMobile ? 100 : 180,
       render: (_: any, record: BacktestTaskDto) => (
-        <Space size="small">
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleViewDetail(record.id)}
-          >
-            {t('common.viewDetail')}
-          </Button>
+        <Space size={4}>
+          <Tooltip title={t('common.viewDetail')}>
+            <div
+              onClick={() => handleViewDetail(record.id)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '32px',
+                height: '32px',
+                cursor: 'pointer',
+                borderRadius: '6px',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f0f0'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              <EyeOutlined style={{ fontSize: '16px', color: '#1890ff' }} />
+            </div>
+          </Tooltip>
+
           {record.status === 'COMPLETED' && (
             <>
-              <Button
-                type="link"
-                size="small"
-                icon={<SyncOutlined />}
-                onClick={() => handleRerun(record)}
-              >
-                {t('backtest.rerun')}
-              </Button>
-              <Button
-                type="link"
-                size="small"
-                icon={<CopyOutlined />}
-                onClick={() => handleCreateCopyTrading(record)}
-              >
-                {t('backtest.createCopyTrading')}
-              </Button>
+              <Tooltip title={t('backtest.rerun')}>
+                <div
+                  onClick={() => handleRerun(record)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '32px',
+                    height: '32px',
+                    cursor: 'pointer',
+                    borderRadius: '6px',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f0f0'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <SyncOutlined style={{ fontSize: '16px', color: '#1890ff' }} />
+                </div>
+              </Tooltip>
+              <Tooltip title={t('backtest.createCopyTrading')}>
+                <div
+                  onClick={() => handleCreateCopyTrading(record)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '32px',
+                    height: '32px',
+                    cursor: 'pointer',
+                    borderRadius: '6px',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f0f0'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <CopyOutlined style={{ fontSize: '16px', color: '#1890ff' }} />
+                </div>
+              </Tooltip>
             </>
           )}
+
           {record.status === 'RUNNING' && (
-            <Button
-              type="link"
-              size="small"
-              danger
-              icon={<StopOutlined />}
-              onClick={() => handleStop(record.id)}
+            <Popconfirm
+              title={t('backtest.stopConfirm')}
+              onConfirm={() => handleStop(record.id)}
+              okText={t('common.confirm')}
+              cancelText={t('common.cancel')}
             >
-              {t('backtest.stop')}
-            </Button>
+              <Tooltip title={t('backtest.stop')}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '32px',
+                    height: '32px',
+                    cursor: 'pointer',
+                    borderRadius: '6px',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f0f0'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <StopOutlined style={{ fontSize: '16px', color: '#1890ff' }} />
+                </div>
+              </Tooltip>
+            </Popconfirm>
           )}
+
           {(record.status === 'STOPPED' || record.status === 'FAILED') && (
-            <Button
-              type="link"
-              size="small"
-              icon={<RedoOutlined />}
-              onClick={() => handleRetry(record.id)}
-            >
-              {t('backtest.retry')}
-            </Button>
+            <Tooltip title={t('backtest.retry')}>
+              <div
+                onClick={() => handleRetry(record.id)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  cursor: 'pointer',
+                  borderRadius: '6px',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f0f0'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                <RedoOutlined style={{ fontSize: '16px', color: '#1890ff' }} />
+              </div>
+            </Tooltip>
           )}
+
           {(record.status === 'PENDING' || record.status === 'COMPLETED' || record.status === 'STOPPED' || record.status === 'FAILED') && (
-            <Button
-              type="link"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => handleDelete(record.id)}
+            <Popconfirm
+              title={t('backtest.deleteConfirm')}
+              onConfirm={() => handleDelete(record.id)}
+              okText={t('common.confirm')}
+              cancelText={t('common.cancel')}
             >
-              {t('common.delete')}
-            </Button>
+              <Tooltip title={t('common.delete')}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '32px',
+                    height: '32px',
+                    cursor: 'pointer',
+                    borderRadius: '6px',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fff1f0'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <DeleteOutlined style={{ fontSize: '16px', color: '#ff4d4f' }} />
+                </div>
+              </Tooltip>
+            </Popconfirm>
           )}
         </Space>
       )
@@ -671,94 +716,205 @@ const BacktestList: React.FC = () => {
   ]
 
   return (
-    <div style={{ padding: 24 }}>
-      <Card>
+    <div style={{ padding: isMobile ? 0 : 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px', padding: isMobile ? '0 8px' : 0 }}>
+        <h2 style={{ margin: 0, fontSize: isMobile ? '20px' : '24px' }}>{t('backtest.title')}</h2>
+        <Space size={8}>
+          <Tooltip title={t('backtest.createTask')}>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={handleCreate}
+              size={isMobile ? 'middle' : 'large'}
+              style={{ borderRadius: '8px', height: isMobile ? '40px' : '48px', fontSize: isMobile ? '14px' : '16px' }}
+            />
+          </Tooltip>
+          <Tooltip title={t('common.refresh')}>
+            <Button icon={<ReloadOutlined />} onClick={handleRefresh} loading={loading} size={isMobile ? 'middle' : 'large'} style={{ borderRadius: '8px', height: isMobile ? '40px' : '48px' }} />
+          </Tooltip>
+        </Space>
+      </div>
+
+      <Card style={{ borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #e8e8e8' }} bodyStyle={{ padding: isMobile ? '12px' : '24px' }}>
         <Space direction="vertical" size="large" style={{ width: '100%' }}>
-          {/* 头部操作栏 */}
-          <Row justify="space-between" align="middle" gutter={[16, 16]}>
-            <Col xs={24} sm={24} md={12} lg={16}>
-              <Space size="middle" direction={isMobile ? 'vertical' : 'horizontal'} style={{ width: isMobile ? '100%' : 'auto' }}>
-                <LeaderSelect
-                  style={{ width: isMobile ? '100%' : 180 }}
-                  placeholder={t('backtest.leader')}
-                  allowClear
-                  value={leaderIdFilter}
-                  onChange={(value) => setLeaderIdFilter(value)}
-                  leaders={leaders}
-                />
-                <Select
-                  style={{ width: isMobile ? '100%' : 150 }}
-                  placeholder={t('backtest.status')}
-                  allowClear
-                  onChange={(value) => setStatusFilter(value)}
-                  value={statusFilter}
-                >
-                  <Select.Option value="PENDING">{t('backtest.statusPending')}</Select.Option>
-                  <Select.Option value="RUNNING">{t('backtest.statusRunning')}</Select.Option>
-                  <Select.Option value="COMPLETED">{t('backtest.statusCompleted')}</Select.Option>
-                  <Select.Option value="STOPPED">{t('backtest.statusStopped')}</Select.Option>
-                  <Select.Option value="FAILED">{t('backtest.statusFailed')}</Select.Option>
-                </Select>
-                <Select
-                  style={{ width: isMobile ? '100%' : 150 }}
-                  placeholder={t('backtest.sortBy')}
-                  onChange={(value) => setSortBy(value)}
-                  value={sortBy}
-                >
-                  <Select.Option value="profitAmount">{t('backtest.profitAmount')}</Select.Option>
-                  <Select.Option value="profitRate">{t('backtest.profitRate')}</Select.Option>
-                  <Select.Option value="createdAt">{t('backtest.createdAt')}</Select.Option>
-                </Select>
-                <Select
-                  style={{ width: isMobile ? '100%' : 120 }}
-                  placeholder={t('backtest.sortOrder')}
-                  onChange={(value) => setSortOrder(value)}
-                  value={sortOrder}
-                >
-                  <Select.Option value="asc">{t('common.ascending')}</Select.Option>
-                  <Select.Option value="desc">{t('common.descending')}</Select.Option>
-                </Select>
-              </Space>
+          {/* 筛选栏 */}
+          <Row gutter={[16, 16]} style={{ marginBottom: isMobile ? 12 : 0 }}>
+            <Col xs={24} sm={12} md={6}>
+              <LeaderSelect
+                style={{ width: '100%' }}
+                placeholder={t('backtest.leader')}
+                allowClear
+                value={leaderIdFilter}
+                onChange={(value) => setLeaderIdFilter(value)}
+                leaders={leaders}
+              />
             </Col>
-            <Col xs={24} sm={24} md={12} lg={8} style={{ textAlign: isMobile ? 'left' : 'right' }}>
-              <Space style={{ width: isMobile ? '100%' : 'auto' }}>
-                <Button
-                  type="primary"
-                  icon={<PlusOutlined />}
-                  onClick={handleCreate}
-                  style={{ flex: isMobile ? 1 : undefined }}
-                >
-                  {isMobile ? t('common.create') : t('backtest.createTask')}
-                </Button>
-                <Button
-                  icon={<ReloadOutlined />}
-                  onClick={handleRefresh}
-                  loading={loading}
-                  style={{ flex: isMobile ? 1 : undefined }}
-                >
-                  {t('common.refresh')}
-                </Button>
-              </Space>
+            <Col xs={24} sm={12} md={6}>
+              <Select
+                style={{ width: '100%' }}
+                placeholder={t('backtest.status')}
+                allowClear
+                onChange={(value) => setStatusFilter(value)}
+                value={statusFilter}
+              >
+                <Select.Option value="PENDING">{t('backtest.statusPending')}</Select.Option>
+                <Select.Option value="RUNNING">{t('backtest.statusRunning')}</Select.Option>
+                <Select.Option value="COMPLETED">{t('backtest.statusCompleted')}</Select.Option>
+                <Select.Option value="STOPPED">{t('backtest.statusStopped')}</Select.Option>
+                <Select.Option value="FAILED">{t('backtest.statusFailed')}</Select.Option>
+              </Select>
+            </Col>
+            <Col xs={24} sm={12} md={6}>
+              <Select style={{ width: '100%' }} placeholder={t('backtest.sortBy')} onChange={(value) => setSortBy(value)} value={sortBy}>
+                <Select.Option value="profitAmount">{t('backtest.profitAmount')}</Select.Option>
+                <Select.Option value="profitRate">{t('backtest.profitRate')}</Select.Option>
+                <Select.Option value="createdAt">{t('backtest.createdAt')}</Select.Option>
+              </Select>
+            </Col>
+            <Col xs={24} sm={12} md={6}>
+              <Select style={{ width: '100%' }} placeholder={t('backtest.sortOrder')} onChange={(value) => setSortOrder(value)} value={sortOrder}>
+                <Select.Option value="asc">{t('common.ascending')}</Select.Option>
+                <Select.Option value="desc">{t('common.descending')}</Select.Option>
+              </Select>
             </Col>
           </Row>
 
-          {/* 数据表格 */}
-          <Table
-            columns={columns}
-            dataSource={tasks}
-            rowKey="id"
-            loading={loading}
-            pagination={{
-              current: page,
-              pageSize: size,
-              total,
-              showSizeChanger: false,
-              showTotal: (total) => `${t('common.total')} ${total} ${t('common.items')}`,
-              onChange: (newPage) => setPage(newPage),
-              simple: isMobile
-            }}
-            scroll={isMobile ? { x: 1200 } : { x: 1400 }}
-          />
+          {/* 数据：移动端卡片 / 桌面端表格 */}
+          {isMobile ? (
+            <>
+              {loading ? (
+                <div style={{ textAlign: 'center', padding: '40px' }}>
+                  <Spin size="large" />
+                </div>
+              ) : tasks.length === 0 ? (
+                <Empty description={t('backtest.noData') || t('common.noData')} />
+              ) : (
+                <List
+                  dataSource={tasks}
+                  renderItem={(task) => (
+                    <Card
+                      key={task.id}
+                      style={{
+                        marginBottom: '10px',
+                        borderRadius: '10px',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                        border: '1px solid #e8e8e8',
+                        overflow: 'hidden'
+                      }}
+                      bodyStyle={{ padding: 0 }}
+                    >
+                      <div style={{
+                        padding: '10px 12px',
+                        background: 'var(--ant-color-primary, #1677ff)',
+                        color: '#fff'
+                      }}>
+                        <div style={{ fontSize: '15px', fontWeight: '600', marginBottom: '2px' }}>{task.taskName}</div>
+                        <div style={{ fontSize: '12px', opacity: '0.9' }}>{task.leaderName || `Leader ${task.leaderId}`}</div>
+                      </div>
+                      <div style={{ padding: '8px 12px', backgroundColor: '#fafafa', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontSize: '10px', color: '#8c8c8c' }}>{t('backtest.profitAmount')}</div>
+                          {task.profitAmount != null ? (
+                            <div style={{ fontSize: '14px', fontWeight: '600', color: parseFloat(task.profitAmount) >= 0 ? '#52c41a' : '#ff4d4f' }}>{formatUSDC(task.profitAmount)} USDC</div>
+                          ) : (
+                            <div style={{ fontSize: '14px', color: '#8c8c8c' }}>-</div>
+                          )}
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '10px', color: '#8c8c8c' }}>{t('backtest.profitRate')}</div>
+                          {task.profitRate != null ? (
+                            <div style={{ fontSize: '14px', fontWeight: '600', color: parseFloat(task.profitRate) >= 0 ? '#52c41a' : '#ff4d4f' }}>{task.profitRate}%</div>
+                          ) : (
+                            <div style={{ fontSize: '14px', color: '#8c8c8c' }}>-</div>
+                          )}
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '10px', color: '#8c8c8c' }}>{t('backtest.status')}</div>
+                          <Tag color={getStatusColor(task.status)}>{getStatusText(task.status)}</Tag>
+                        </div>
+                      </div>
+                      <div style={{ padding: '6px 12px', fontSize: '11px', color: '#8c8c8c', borderBottom: '1px solid #f0f0f0' }}>
+                        {t('backtest.initialBalance')}: {formatUSDC(task.initialBalance)} · {t('backtest.backtestDays')}: {task.backtestDays} {t('common.day')} · {t('backtest.progress')}: {task.progress}%
+                      </div>
+                      <div style={{ padding: '8px 12px', display: 'flex', justifyContent: 'space-around', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                        <Tooltip title={t('common.viewDetail')}>
+                          <div onClick={() => handleViewDetail(task.id)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}>
+                            <EyeOutlined style={{ fontSize: '18px', color: '#1890ff' }} />
+                            <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('common.viewDetail')}</span>
+                          </div>
+                        </Tooltip>
+                        {task.status === 'COMPLETED' && (
+                          <>
+                            <Tooltip title={t('backtest.rerun')}>
+                              <div onClick={() => handleRerun(task)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}>
+                                <SyncOutlined style={{ fontSize: '18px', color: '#1890ff' }} />
+                                <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('backtest.rerun')}</span>
+                              </div>
+                            </Tooltip>
+                            <Tooltip title={t('backtest.createCopyTrading')}>
+                              <div onClick={() => handleCreateCopyTrading(task)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}>
+                                <CopyOutlined style={{ fontSize: '18px', color: '#1890ff' }} />
+                                <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('backtest.createCopyTrading')}</span>
+                              </div>
+                            </Tooltip>
+                          </>
+                        )}
+                        {task.status === 'RUNNING' && (
+                          <Tooltip title={t('backtest.stop')}>
+                            <div onClick={() => handleStop(task.id)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}>
+                              <StopOutlined style={{ fontSize: '18px', color: '#1890ff' }} />
+                              <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('backtest.stop')}</span>
+                            </div>
+                          </Tooltip>
+                        )}
+                        {(task.status === 'STOPPED' || task.status === 'FAILED') && (
+                          <Tooltip title={t('backtest.retry')}>
+                            <div onClick={() => handleRetry(task.id)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}>
+                              <RedoOutlined style={{ fontSize: '18px', color: '#1890ff' }} />
+                              <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('backtest.retry')}</span>
+                            </div>
+                          </Tooltip>
+                        )}
+                        {(task.status === 'PENDING' || task.status === 'COMPLETED' || task.status === 'STOPPED' || task.status === 'FAILED') && (
+                          <Tooltip title={t('common.delete')}>
+                            <div onClick={() => handleDelete(task.id)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}>
+                              <DeleteOutlined style={{ fontSize: '18px', color: '#ff4d4f' }} />
+                              <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('common.delete')}</span>
+                            </div>
+                          </Tooltip>
+                        )}
+                      </div>
+                    </Card>
+                  )}
+                />
+              )}
+              {/* 移动端分页 */}
+              {!loading && tasks.length > 0 && total > size && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
+                  <Button size="small" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>{t('common.prev')}</Button>
+                  <span style={{ margin: '0 12px', lineHeight: '24px' }}>{page} / {Math.ceil(total / size)}</span>
+                  <Button size="small" disabled={page >= Math.ceil(total / size)} onClick={() => setPage(p => p + 1)}>{t('common.next')}</Button>
+                </div>
+              )}
+            </>
+          ) : (
+            <Table
+              columns={columns}
+              dataSource={tasks}
+              rowKey="id"
+              loading={loading}
+              pagination={{
+                current: page,
+                pageSize: size,
+                total,
+                showSizeChanger: false,
+                showTotal: (totalCount) => `${t('common.total')} ${totalCount} ${t('common.items')}`,
+                onChange: (newPage) => setPage(newPage),
+                simple: isMobile
+              }}
+              scroll={{ x: 1000 }}
+            />
+          )}
         </Space>
       </Card>
 

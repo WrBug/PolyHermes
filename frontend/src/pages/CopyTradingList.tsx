@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Card, Table, Button, Space, Tag, Popconfirm, Switch, message, Select, Dropdown, Divider, Spin } from 'antd'
-import { PlusOutlined, DeleteOutlined, BarChartOutlined, UnorderedListOutlined, ArrowUpOutlined, ArrowDownOutlined, EditOutlined } from '@ant-design/icons'
+import { Card, Table, Button, Space, Tag, Popconfirm, Switch, message, Select, Dropdown, Spin, List, Empty, Tooltip } from 'antd'
+import { PlusOutlined, DeleteOutlined, BarChartOutlined, UnorderedListOutlined, ArrowUpOutlined, ArrowDownOutlined, EditOutlined, WalletOutlined, UserOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import type { MenuProps } from 'antd'
 import { apiService } from '../services/api'
@@ -384,19 +384,21 @@ const CopyTradingList: React.FC = () => {
   
   return (
     <div>
-      <Card>
-        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
-          <h2 style={{ margin: 0 }}>{t('copyTradingList.title') || '跟单配置管理'}</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+        <h2 style={{ margin: 0, fontSize: isMobile ? '20px' : '24px' }}>{t('copyTradingList.title') || '跟单配置管理'}</h2>
+        <Tooltip title={t('copyTradingList.addCopyTrading') || '新增跟单'}>
           <Button
             type="primary"
             icon={<PlusOutlined />}
             onClick={() => setAddModalOpen(true)}
-          >
-            {t('copyTradingList.addCopyTrading') || '新增跟单'}
-          </Button>
-        </div>
-        
-        <div style={{ marginBottom: 16, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+            size={isMobile ? 'middle' : 'large'}
+            style={{ borderRadius: '8px', height: isMobile ? '40px' : '48px', fontSize: isMobile ? '14px' : '16px' }}
+          />
+        </Tooltip>
+      </div>
+
+      <Card style={{ borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #e8e8e8' }} bodyStyle={{ padding: isMobile ? '12px' : '24px' }}>
+        <div style={{ marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <Select
             placeholder={t('copyTradingList.filterWallet') || '筛选钱包'}
             allowClear
@@ -421,14 +423,14 @@ const CopyTradingList: React.FC = () => {
           />
           
           <Select
-            placeholder="筛选状态"
+            placeholder={t('common.status') || '状态'}
             allowClear
             style={{ width: isMobile ? '100%' : 150 }}
             value={filters.enabled}
             onChange={(value) => setFilters({ ...filters, enabled: value !== undefined ? value : undefined })}
           >
-            <Option value={true}>开启</Option>
-            <Option value={false}>停止</Option>
+            <Option value={true}>{t('common.enabled') || '开启'}</Option>
+            <Option value={false}>{t('common.disabled') || '停止'}</Option>
           </Select>
         </div>
         
@@ -440,207 +442,180 @@ const CopyTradingList: React.FC = () => {
                 <Spin size="large" />
               </div>
             ) : copyTradings.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
-                暂无跟单配置
-              </div>
+              <Empty description={t('copyTradingList.noData') || '暂无跟单配置'} />
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {copyTradings.map((record) => {
+              <List
+                dataSource={copyTradings}
+                renderItem={(record) => {
                   const stats = statisticsMap[record.id]
-                  const date = new Date(record.createdAt)
-                  const formattedDate = date.toLocaleString('zh-CN', {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })
                   
                   return (
                     <Card
                       key={record.id}
                       style={{
-                        borderRadius: '12px',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                        border: '1px solid #e8e8e8'
+                        marginBottom: '10px',
+                        borderRadius: '10px',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                        border: '1px solid #e8e8e8',
+                        overflow: 'hidden'
                       }}
-                      bodyStyle={{ padding: '16px' }}
+                      bodyStyle={{ padding: '0' }}
                     >
-                      {/* 基本信息 */}
-                      <div style={{ marginBottom: '12px' }}>
-                        <div style={{ 
-                          fontSize: '18px', 
-                          fontWeight: 'bold', 
-                          marginBottom: '8px',
-                          color: '#1890ff'
-                        }}>
-                          {record.configName || t('copyTradingList.configNameNotProvided') || '未提供'}
-                        </div>
-                        <div style={{ 
-                          fontSize: '14px', 
-                          marginBottom: '8px',
-                          color: '#666'
-                        }}>
-                          {record.copyMode === 'RATIO' 
-                            ? `${t('copyTradingList.ratioMode') || '比例'} ${(parseFloat(record.copyRatio || '0') * 100).toFixed(2).replace(/\.0+$/, '')}%`
-                            : `${t('copyTradingList.fixedAmountMode') || '固定'} ${formatUSDC(record.fixedAmount || '0')}`
-                          }
-                        </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <Tag color={record.enabled ? 'green' : 'red'}>
-                            {record.enabled ? '启用' : '禁用'}
-                          </Tag>
+                      {/* 头部区域 - 配置名称 */}
+                      <div style={{
+                        padding: '10px 12px',
+                        background: 'var(--ant-color-primary, #1677ff)',
+                        color: '#fff'
+                      }}>
+                        <div style={{ fontSize: '15px', fontWeight: '600', marginBottom: '2px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span>{record.configName || t('copyTradingList.configNameNotProvided') || '未提供'}</span>
                           <Switch
                             checked={record.enabled}
                             onChange={() => handleToggleStatus(record)}
-                            checkedChildren="开启"
-                            unCheckedChildren="停止"
+                            checkedChildren={t('copyTradingList.enabled') || '开启'}
+                            unCheckedChildren={t('copyTradingList.disabled') || '停止'}
                             size="small"
                           />
                         </div>
-                      </div>
-                      
-                      <Divider style={{ margin: '12px 0' }} />
-                      
-                      {/* 账户信息 */}
-                      <div style={{ marginBottom: '12px' }}>
-                        <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>账户</div>
-                        <div style={{ fontSize: '14px', fontWeight: '500' }}>
-                          {record.accountName || `账户 ${record.accountId}`}
-                        </div>
-                        <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>
-                          {record.walletAddress.slice(0, 6)}...{record.walletAddress.slice(-4)}
+                        <div style={{ fontSize: '12px', opacity: '0.9' }}>
+                          {record.copyMode === 'RATIO' 
+                            ? `${t('copyTradingList.ratioMode') || '比例'} ${(parseFloat(record.copyRatio || '0') * 100).toFixed(0).replace(/\.0+$/, '')}%`
+                            : `${t('copyTradingList.fixedAmountMode') || '固定'} ${formatUSDC(record.fixedAmount || '0')} USDC`
+                          }
                         </div>
                       </div>
-                      
-                      {/* Leader 信息 */}
-                      <div style={{ marginBottom: '12px' }}>
-                        <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Leader</div>
-                        <div style={{ fontSize: '14px', fontWeight: '500' }}>
-                          {record.leaderName || `Leader ${record.leaderId}`}
-                        </div>
-                        <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>
-                          {record.leaderAddress.slice(0, 6)}...{record.leaderAddress.slice(-4)}
-                        </div>
-                      </div>
-                      
-                      {/* 总盈亏 */}
-                      {stats && (
-                        <div style={{ marginBottom: '12px' }}>
-                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>总盈亏</div>
-                          <div style={{ 
-                            fontSize: '16px', 
-                            fontWeight: 'bold',
-                            color: getPnlColor(stats.totalPnl),
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}>
-                            {getPnlIcon(stats.totalPnl)}
-                            {formatUSDC(stats.totalPnl)} USDC
+
+                      {/* 盈亏区域 - 常驻显示 */}
+                      <div style={{
+                        padding: '8px 12px',
+                        backgroundColor: '#fafafa',
+                        borderBottom: '1px solid #f0f0f0',
+                        minHeight: '42px',
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                          <div>
+                            <div style={{ fontSize: '10px', color: '#8c8c8c' }}>
+                              {t('copyTradingList.totalPnl') || '总盈亏'}
+                            </div>
+                            {stats ? (
+                              <div style={{ 
+                                fontSize: '14px', 
+                                fontWeight: '600',
+                                color: getPnlColor(stats.totalPnl),
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}>
+                                {getPnlIcon(stats.totalPnl)}
+                                {formatUSDC(stats.totalPnl)} USDC
+                              </div>
+                            ) : loadingStatistics.has(record.id) ? (
+                              <Spin size="small" />
+                            ) : (
+                              <div style={{ fontSize: '14px', color: '#8c8c8c' }}>-</div>
+                            )}
                           </div>
-                          <div style={{ 
-                            fontSize: '12px', 
-                            color: getPnlColor(stats.totalPnlPercent),
-                            marginTop: '4px'
-                          }}>
-                            {formatPercent(stats.totalPnlPercent)}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {loadingStatistics.has(record.id) && (
-                        <div style={{ marginBottom: '12px', fontSize: '12px', color: '#999' }}>
-                          加载统计中...
-                        </div>
-                      )}
-                      
-                      {/* 创建时间 */}
-                      <div style={{ marginBottom: '16px' }}>
-                        <div style={{ fontSize: '12px', color: '#999' }}>
-                          创建时间: {formattedDate}
+                          {stats && (
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontSize: '10px', color: '#8c8c8c' }}>
+                                {t('copyTradingList.profitRate') || '收益率'}
+                              </div>
+                              <div style={{ 
+                                fontSize: '12px', 
+                                fontWeight: '500',
+                                color: getPnlColor(stats.totalPnlPercent)
+                              }}>
+                                {formatPercent(stats.totalPnlPercent)}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
-                      
-                      {/* 操作按钮 */}
-                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        <Button
-                          type="primary"
-                          size="small"
-                          icon={<EditOutlined />}
-                          onClick={() => {
-                            setEditModalCopyTradingId(record.id.toString())
-                            setEditModalOpen(true)
-                          }}
-                          style={{ flex: 1, minWidth: '80px' }}
-                        >
-                          {t('common.edit') || '编辑'}
-                        </Button>
-                        <Button
-                          size="small"
-                          icon={<BarChartOutlined />}
-                          onClick={() => {
-                            setStatisticsModalCopyTradingId(record.id.toString())
-                            setStatisticsModalOpen(true)
-                          }}
-                          style={{ flex: 1, minWidth: '80px' }}
-                        >
-                          {t('copyTradingList.statistics') || '统计'}
-                        </Button>
-                        <Dropdown 
-                          menu={{ 
-                            items: [
-                              {
-                                key: 'matchedOrders',
-                                label: t('copyTradingList.matchedOrders') || '已成交订单',
-                                icon: <UnorderedListOutlined />,
-                                onClick: () => {
-                                  setOrdersModalCopyTradingId(record.id.toString())
-                                  setOrdersModalTab('buy')
-                                  setOrdersModalOpen(true)
-                                }
-                              },
-                              {
-                                key: 'filteredOrders',
-                                label: t('copyTradingList.filteredOrders') || '已过滤订单',
-                                icon: <UnorderedListOutlined />,
-                                onClick: () => {
-                                  setFilteredOrdersModalCopyTradingId(record.id.toString())
-                                  setFilteredOrdersModalOpen(true)
-                                }
-                              }
-                            ]
-                          }} 
-                          trigger={['click']}
-                        >
-                          <Button
-                            size="small"
-                            icon={<UnorderedListOutlined />}
-                            style={{ flex: 1, minWidth: '80px' }}
+
+                      {/* 账户和Leader信息区域 */}
+                      <div style={{
+                        padding: '8px 12px',
+                        fontSize: '11px',
+                        color: '#8c8c8c',
+                        borderBottom: '1px solid #f0f0f0'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
+                          <WalletOutlined style={{ fontSize: '12px', marginRight: '4px', color: '#1890ff' }} />
+                          <span>{t('copyTradingList.wallet') || '账户'}: {record.accountName || `#${record.accountId}`}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <UserOutlined style={{ fontSize: '12px', marginRight: '4px', color: '#722ed1' }} />
+                          <span>Leader: {record.leaderName || `#${record.leaderId}`}</span>
+                        </div>
+                      </div>
+
+                      {/* 图标操作栏 */}
+                      <div style={{
+                        padding: '8px 12px',
+                        display: 'flex',
+                        justifyContent: 'space-around',
+                        alignItems: 'center'
+                      }}>
+                        <Tooltip title={t('common.edit') || '编辑'}>
+                          <div
+                            onClick={() => {
+                              setEditModalCopyTradingId(record.id.toString())
+                              setEditModalOpen(true)
+                            }}
+                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}
                           >
-                            {t('copyTradingList.orders') || '订单'}
-                          </Button>
-                        </Dropdown>
+                            <EditOutlined style={{ fontSize: '18px', color: '#1890ff' }} />
+                            <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('common.edit') || '编辑'}</span>
+                          </div>
+                        </Tooltip>
+
+                        <Tooltip title={t('copyTradingList.statistics') || '统计'}>
+                          <div
+                            onClick={() => {
+                              setStatisticsModalCopyTradingId(record.id.toString())
+                              setStatisticsModalOpen(true)
+                            }}
+                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}
+                          >
+                            <BarChartOutlined style={{ fontSize: '18px', color: '#1890ff' }} />
+                            <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('copyTradingList.statistics') || '统计'}</span>
+                          </div>
+                        </Tooltip>
+
+                        <Tooltip title={t('copyTradingList.orders') || '订单'}>
+                          <div
+                            onClick={() => {
+                              setOrdersModalCopyTradingId(record.id.toString())
+                              setOrdersModalTab('buy')
+                              setOrdersModalOpen(true)
+                            }}
+                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}
+                          >
+                            <UnorderedListOutlined style={{ fontSize: '18px', color: '#1890ff' }} />
+                            <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('copyTradingList.orders') || '订单'}</span>
+                          </div>
+                        </Tooltip>
+
                         <Popconfirm
                           title={t('copyTradingList.deleteConfirm') || '确定要删除这个跟单关系吗？'}
                           onConfirm={() => handleDelete(record.id)}
                           okText={t('common.confirm') || '确定'}
                           cancelText={t('common.cancel') || '取消'}
                         >
-                          <Button
-                            danger
-                            size="small"
-                            icon={<DeleteOutlined />}
-                            style={{ flex: 1, minWidth: '80px' }}
-                          >
-                            {t('common.delete') || '删除'}
-                          </Button>
+                          <Tooltip title={t('common.delete') || '删除'}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}>
+                              <DeleteOutlined style={{ fontSize: '18px', color: '#ff4d4f' }} />
+                              <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('common.delete') || '删除'}</span>
+                            </div>
+                          </Tooltip>
                         </Popconfirm>
                       </div>
                     </Card>
                   )
-                })}
-              </div>
+                }}
+              />
             )}
           </div>
         ) : (

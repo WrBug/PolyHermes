@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Card, Table, Button, Space, Tag, Popconfirm, message, Input, Modal, Form, Radio, InputNumber, Switch, Divider, Spin } from 'antd'
+import { Card, Table, Button, Space, Tag, Popconfirm, message, Input, Modal, Form, Radio, InputNumber, Switch, Divider, Spin, Empty, List, Tooltip } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, CopyOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { apiService } from '../services/api'
@@ -212,25 +212,50 @@ const TemplateList: React.FC = () => {
     {
       title: t('common.actions') || '操作',
       key: 'action',
-      width: isMobile ? 120 : 200,
+      width: isMobile ? 120 : 120,
+      fixed: 'right' as const,
       render: (_: any, record: CopyTradingTemplate) => (
-        <Space size="small">
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => navigate(`/templates/edit/${record.id}`)}
-          >
-            {t('common.edit') || '编辑'}
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<CopyOutlined />}
-            onClick={() => handleCopy(record)}
-          >
-            {t('templateList.copy') || '复制'}
-          </Button>
+        <Space size={4}>
+          <Tooltip title={t('common.edit') || '编辑'}>
+            <div
+              onClick={() => navigate(`/templates/edit/${record.id}`)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '32px',
+                height: '32px',
+                cursor: 'pointer',
+                borderRadius: '6px',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f0f0'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              <EditOutlined style={{ fontSize: '16px', color: '#1890ff' }} />
+            </div>
+          </Tooltip>
+
+          <Tooltip title={t('templateList.copy') || '复制'}>
+            <div
+              onClick={() => handleCopy(record)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '32px',
+                height: '32px',
+                cursor: 'pointer',
+                borderRadius: '6px',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f0f0'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              <CopyOutlined style={{ fontSize: '16px', color: '#1890ff' }} />
+            </div>
+          </Tooltip>
+
           <Popconfirm
             title={t('templateList.deleteConfirm') || '确定要删除这个模板吗？'}
             description={t('templateList.deleteConfirmDesc') || '删除后无法恢复，请确保没有跟单关系在使用该模板'}
@@ -238,14 +263,24 @@ const TemplateList: React.FC = () => {
             okText={t('common.confirm') || '确定'}
             cancelText={t('common.cancel') || '取消'}
           >
-            <Button
-              type="link"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-            >
-              {t('common.delete') || '删除'}
-            </Button>
+            <Tooltip title={t('common.delete') || '删除'}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  cursor: 'pointer',
+                  borderRadius: '6px',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fff1f0'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                <DeleteOutlined style={{ fontSize: '16px', color: '#ff4d4f' }} />
+              </div>
+            </Tooltip>
           </Popconfirm>
         </Space>
       )
@@ -254,26 +289,29 @@ const TemplateList: React.FC = () => {
   
   return (
     <div>
-      <Card>
-        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
-          <h2 style={{ margin: 0 }}>{t('templateList.title') || '跟单模板管理'}</h2>
-          <Space>
-            <Search
-              placeholder={t('templateList.searchPlaceholder') || '搜索模板名称'}
-              allowClear
-              style={{ width: isMobile ? 150 : 250 }}
-              onSearch={setSearchText}
-              onChange={(e) => setSearchText(e.target.value)}
-            />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+        <h2 style={{ margin: 0, fontSize: isMobile ? '20px' : '24px' }}>{t('templateList.title') || '跟单模板管理'}</h2>
+        <Space size={8}>
+          <Search
+            placeholder={t('templateList.searchPlaceholder') || '搜索模板名称'}
+            allowClear
+            style={{ width: isMobile ? 120 : 200 }}
+            onSearch={setSearchText}
+            onChange={(e) => setSearchText(e.target.value)}
+          />
+          <Tooltip title={t('templateList.addTemplate') || '新增模板'}>
             <Button
               type="primary"
               icon={<PlusOutlined />}
               onClick={() => navigate('/templates/add')}
-            >
-              {t('templateList.addTemplate') || '新增模板'}
-            </Button>
-          </Space>
-        </div>
+              size={isMobile ? 'middle' : 'large'}
+              style={{ borderRadius: '8px', height: isMobile ? '40px' : '48px', fontSize: isMobile ? '14px' : '16px' }}
+            />
+          </Tooltip>
+        </Space>
+      </div>
+
+      <Card style={{ borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #e8e8e8' }} bodyStyle={{ padding: isMobile ? '12px' : '24px' }}>
         
         {isMobile ? (
           // 移动端卡片布局
@@ -283,116 +321,133 @@ const TemplateList: React.FC = () => {
                 <Spin size="large" />
               </div>
             ) : filteredTemplates.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
-                {t('templateList.noData') || '暂无模板数据'}
-              </div>
+              <Empty description={t('templateList.noData') || '暂无模板数据'} />
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {filteredTemplates.map((template) => {
-                  const date = new Date(template.createdAt)
-                  const formattedDate = date.toLocaleString(i18n.language || 'zh-CN', {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })
-                  
+              <List
+                dataSource={filteredTemplates}
+                renderItem={(template) => {
                   return (
                     <Card
                       key={template.id}
                       style={{
-                        borderRadius: '12px',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                        border: '1px solid #e8e8e8'
+                        marginBottom: '10px',
+                        borderRadius: '10px',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                        border: '1px solid #e8e8e8',
+                        overflow: 'hidden'
                       }}
-                      bodyStyle={{ padding: '16px' }}
+                      bodyStyle={{ padding: '0' }}
                     >
-                      {/* 模板名称和模式 */}
-                      <div style={{ marginBottom: '12px' }}>
-                        <div style={{ 
-                          fontSize: '16px', 
-                          fontWeight: 'bold', 
-                          marginBottom: '8px',
-                          color: '#1890ff'
-                        }}>
+                      {/* 头部区域 - 模板名称 */}
+                      <div style={{
+                        padding: '10px 12px',
+                        background: 'var(--ant-color-primary, #1677ff)',
+                        color: '#fff'
+                      }}>
+                        <div style={{ fontSize: '15px', fontWeight: '600', marginBottom: '2px' }}>
                           {template.templateName}
                         </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
-                          <Tag color={template.copyMode === 'RATIO' ? 'blue' : 'green'}>
-                            {template.copyMode === 'RATIO' ? (t('templateList.ratioMode') || '比例模式') : (t('templateList.fixedAmountMode') || '固定金额模式')}
-                          </Tag>
-                          <Tag color={template.supportSell ? 'green' : 'red'}>
-                            {template.supportSell ? (t('templateList.supportSell') || '跟单卖出') : (t('templateList.notSupportSell') || '不跟单卖出')}
-                          </Tag>
-                        </div>
-                      </div>
-                      
-                      <Divider style={{ margin: '12px 0' }} />
-                      
-                      {/* 跟单配置 */}
-                      <div style={{ marginBottom: '12px' }}>
-                        <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>{t('templateList.copyConfig') || '跟单配置'}</div>
-                        <div style={{ fontSize: '14px', fontWeight: '500' }}>
+                        <div style={{ fontSize: '12px', opacity: '0.9' }}>
                           {template.copyMode === 'RATIO' 
-                            ? `${t('templateList.ratio') || '比例'} ${template.copyRatio}x`
-                            : template.fixedAmount 
-                              ? `${t('templateList.fixedAmount') || '固定'} ${formatUSDC(template.fixedAmount)} USDC`
-                              : '-'
+                            ? `${t('templateList.ratioMode') || '比例模式'} ${(parseFloat(template.copyRatio || '0') * 100).toFixed(0).replace(/\.0+$/, '')}%`
+                            : `${t('templateList.fixedAmountMode') || '固定金额'} ${formatUSDC(template.fixedAmount || '0')} USDC`
                           }
                         </div>
                       </div>
-                      
-                      {/* 其他配置信息 */}
-                      {template.copyMode === 'RATIO' && (
-                        <div style={{ marginBottom: '12px' }}>
-                          <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>{t('templateList.amountLimit') || '金额限制'}</div>
-                          <div style={{ fontSize: '13px', color: '#333' }}>
-                            {template.maxOrderSize && (
-                              <span>{t('templateList.max') || '最大'}: {formatUSDC(template.maxOrderSize)} USDC</span>
-                            )}
-                            {template.maxOrderSize && template.minOrderSize && <span> | </span>}
-                            {template.minOrderSize && (
-                              <span>{t('templateList.min') || '最小'}: {formatUSDC(template.minOrderSize)} USDC</span>
-                            )}
-                            {!template.maxOrderSize && !template.minOrderSize && <span style={{ color: '#999' }}>{t('templateList.notSet') || '未设置'}</span>}
+
+                      {/* 配置信息区域 */}
+                      <div style={{
+                        padding: '8px 12px',
+                        backgroundColor: '#fafafa',
+                        borderBottom: '1px solid #f0f0f0',
+                        minHeight: '42px',
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                          <div>
+                            <div style={{ fontSize: '10px', color: '#8c8c8c' }}>
+                              {t('templateList.supportSell') || '跟单卖出'}
+                            </div>
+                            <div style={{ fontSize: '12px', fontWeight: '500' }}>
+                              <Tag color={template.supportSell ? 'green' : 'red'} style={{ margin: 0, fontSize: '10px' }}>
+                                {template.supportSell ? (t('common.yes') || '是') : (t('common.no') || '否')}
+                              </Tag>
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '10px', color: '#8c8c8c' }}>
+                              {t('templateList.maxDailyOrders') || '每日最大'}
+                            </div>
+                            <div style={{ fontSize: '12px', fontWeight: '500', color: '#1890ff' }}>
+                              {template.maxDailyOrders} {t('common.orders') || '单'}
+                            </div>
                           </div>
                         </div>
+                      </div>
+
+                      {/* 金额限制区域（仅比例模式显示） */}
+                      {template.copyMode === 'RATIO' && (
+                        <div style={{
+                          padding: '6px 12px',
+                          fontSize: '11px',
+                          color: '#8c8c8c',
+                          borderBottom: '1px solid #f0f0f0'
+                        }}>
+                          <span style={{ color: '#d48806' }}>{t('templateList.amountLimit') || '金额限制'}: </span>
+                          {template.maxOrderSize && (
+                            <span>{t('templateList.max') || '最大'} {formatUSDC(template.maxOrderSize)} USDC</span>
+                          )}
+                          {template.maxOrderSize && template.minOrderSize && <span> | </span>}
+                          {template.minOrderSize && (
+                            <span>{t('templateList.min') || '最小'} {formatUSDC(template.minOrderSize)} USDC</span>
+                          )}
+                          {!template.maxOrderSize && !template.minOrderSize && <span style={{ color: '#bfbfbf' }}>{t('templateList.notSet') || '未设置'}</span>}
+                        </div>
                       )}
-                      
-                      <div style={{ marginBottom: '12px' }}>
-                        <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>{t('templateList.otherConfig') || '其他配置'}</div>
-                        <div style={{ fontSize: '13px', color: '#333' }}>
-                          {t('templateList.maxDailyOrders') || '每日最大订单'}: {template.maxDailyOrders} | {t('templateList.priceTolerance') || '价格容忍度'}: {template.priceTolerance}%
-                        </div>
-                      </div>
-                      
+
                       {/* 创建时间 */}
-                      <div style={{ marginBottom: '16px' }}>
-                        <div style={{ fontSize: '12px', color: '#999' }}>
-                          {t('common.createdAt') || '创建时间'}: {formattedDate}
-                        </div>
+                      <div style={{
+                        padding: '6px 12px',
+                        fontSize: '11px',
+                        color: '#8c8c8c'
+                      }}>
+                        {t('common.createdAt') || '创建时间'}: {new Date(template.createdAt).toLocaleString(i18n.language || 'zh-CN', {
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
                       </div>
-                      
-                      {/* 操作按钮 */}
-                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        <Button
-                          type="primary"
-                          size="small"
-                          icon={<EditOutlined />}
-                          onClick={() => navigate(`/templates/edit/${template.id}`)}
-                          style={{ flex: 1, minWidth: '80px' }}
-                        >
-                          {t('common.edit') || '编辑'}
-                        </Button>
-                        <Button
-                          size="small"
-                          icon={<CopyOutlined />}
-                          onClick={() => handleCopy(template)}
-                          style={{ flex: 1, minWidth: '80px' }}
-                        >
-                          {t('templateList.copy') || '复制'}
-                        </Button>
+
+                      {/* 图标操作栏 */}
+                      <div style={{
+                        padding: '8px 12px',
+                        display: 'flex',
+                        justifyContent: 'space-around',
+                        alignItems: 'center'
+                      }}>
+                        <Tooltip title={t('common.edit') || '编辑'}>
+                          <div
+                            onClick={() => navigate(`/templates/edit/${template.id}`)}
+                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}
+                          >
+                            <EditOutlined style={{ fontSize: '18px', color: '#1890ff' }} />
+                            <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('common.edit') || '编辑'}</span>
+                          </div>
+                        </Tooltip>
+
+                        <Tooltip title={t('templateList.copy') || '复制'}>
+                          <div
+                            onClick={() => handleCopy(template)}
+                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}
+                          >
+                            <CopyOutlined style={{ fontSize: '18px', color: '#1890ff' }} />
+                            <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('templateList.copy') || '复制'}</span>
+                          </div>
+                        </Tooltip>
+
                         <Popconfirm
                           title={t('templateList.deleteConfirm') || '确定要删除这个模板吗？'}
                           description={t('templateList.deleteConfirmDesc') || '删除后无法恢复，请确保没有跟单关系在使用该模板'}
@@ -400,20 +455,18 @@ const TemplateList: React.FC = () => {
                           okText={t('common.confirm') || '确定'}
                           cancelText={t('common.cancel') || '取消'}
                         >
-                          <Button
-                            danger
-                            size="small"
-                            icon={<DeleteOutlined />}
-                            style={{ flex: 1, minWidth: '80px' }}
-                          >
-                            {t('common.delete') || '删除'}
-                          </Button>
+                          <Tooltip title={t('common.delete') || '删除'}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}>
+                              <DeleteOutlined style={{ fontSize: '18px', color: '#ff4d4f' }} />
+                              <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('common.delete') || '删除'}</span>
+                            </div>
+                          </Tooltip>
                         </Popconfirm>
                       </div>
                     </Card>
                   )
-                })}
-              </div>
+                }}
+              />
             )}
           </div>
         ) : (

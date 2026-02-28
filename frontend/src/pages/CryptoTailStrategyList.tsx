@@ -21,12 +21,11 @@ import {
   Tabs,
   DatePicker,
   Empty,
-  Typography,
-  Divider
+  Typography
 } from 'antd'
 import type { Dayjs } from 'dayjs'
 import dayjs from 'dayjs'
-import { PlusOutlined, EditOutlined, UnorderedListOutlined, InfoCircleOutlined, WarningOutlined, CalendarOutlined, FileTextOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, UnorderedListOutlined, InfoCircleOutlined, WarningOutlined, CalendarOutlined, FileTextOutlined, DeleteOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useMediaQuery } from 'react-responsive'
 import { apiService } from '../services/api'
@@ -543,17 +542,28 @@ const CryptoTailStrategyList: React.FC = () => {
   }
 
   return (
-    <div style={{ padding: isMobile ? 12 : 24 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
-        <h1 style={{ margin: 0, fontSize: isMobile ? 20 : 24 }}>{t('cryptoTailStrategy.list.title')}</h1>
-        <Button
-          type="link"
-          icon={<FileTextOutlined />}
-          onClick={() => window.open(getGuideUrl(), '_blank')}
-          style={{ padding: 0, height: 'auto', fontSize: isMobile ? 14 : 16 }}
-        >
-          {t('cryptoTailStrategy.list.configGuide')}
-        </Button>
+    <div style={{ padding: isMobile ? 0 : 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px', padding: isMobile ? '0 8px' : 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <h2 style={{ margin: 0, fontSize: isMobile ? '20px' : '24px' }}>{t('cryptoTailStrategy.list.title')}</h2>
+          <Button
+            type="link"
+            icon={<FileTextOutlined />}
+            onClick={() => window.open(getGuideUrl(), '_blank')}
+            style={{ padding: 0, height: 'auto', fontSize: isMobile ? 14 : 16 }}
+          >
+            {t('cryptoTailStrategy.list.configGuide')}
+          </Button>
+        </div>
+        <Tooltip title={t('cryptoTailStrategy.list.addStrategy')}>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={openAddModal}
+            size={isMobile ? 'middle' : 'large'}
+            style={{ borderRadius: '8px', height: isMobile ? '40px' : '48px', fontSize: isMobile ? '14px' : '16px' }}
+          />
+        </Tooltip>
       </div>
       {binanceUnhealthy.length > 0 && list.some((s) => s.enabled) && (
         <Alert
@@ -583,20 +593,17 @@ const CryptoTailStrategyList: React.FC = () => {
               </Button>
             </div>
           }
-          style={{ marginBottom: 16 }}
+          style={{ marginBottom: 16, margin: isMobile ? '0 8px 16px' : undefined }}
         />
       )}
       <Alert
         type="warning"
         showIcon
         message={t('cryptoTailStrategy.list.walletTip')}
-        style={{ marginBottom: 16 }}
+        style={{ marginBottom: 16, margin: isMobile ? '0 8px 16px' : undefined }}
       />
-      <Card>
+      <Card style={{ borderRadius: isMobile ? 0 : '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: isMobile ? 'none' : '1px solid #e8e8e8' }} styles={{ body: { padding: isMobile ? 12 : 24 } }}>
         <div style={{ marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-          <Button type="primary" icon={<PlusOutlined />} onClick={openAddModal}>
-            {t('cryptoTailStrategy.list.addStrategy')}
-          </Button>
           <Select
             placeholder={t('cryptoTailStrategy.form.selectAccount')}
             allowClear
@@ -619,86 +626,80 @@ const CryptoTailStrategyList: React.FC = () => {
         </div>
         <Spin spinning={loading}>
           {isMobile ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {list.map((item) => (
-                <Card
-                  key={item.id}
-                  size="small"
-                  styles={{ body: { padding: 16 } }}
-                  style={{ borderLeft: `3px solid ${item.enabled ? 'var(--ant-colorSuccess)' : 'var(--ant-colorBorder)'}` }}
-                >
-                  <Typography.Text strong style={{ fontSize: 15, wordBreak: 'break-word', whiteSpace: 'normal', display: 'block', marginBottom: 8 }}>
-                    {item.name || (item.marketTitle ?? item.marketSlugPrefix) || '-'}
-                  </Typography.Text>
-                  <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 13, wordBreak: 'break-word', whiteSpace: 'normal' }}>
-                    {t('cryptoTailStrategy.list.account')}: {getAccountLabel(item.accountId)}
-                  </Typography.Text>
-                  <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 13, wordBreak: 'break-word', whiteSpace: 'normal' }}>
-                    {marketOptions.find((m) => m.slug === item.marketSlugPrefix)?.title ?? item.marketSlugPrefix ?? '-'}
-                  </Typography.Text>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 16px', marginBottom: 12 }}>
-                    <Typography.Text type="secondary" style={{ fontSize: 12, wordBreak: 'break-word', whiteSpace: 'normal' }}>
-                      {t('cryptoTailStrategy.list.timeWindow')}
-                    </Typography.Text>
-                    <Typography.Text style={{ fontSize: 12 }}>{formatTimeWindow(item.windowStartSeconds, item.windowEndSeconds, false)}</Typography.Text>
-                    <Typography.Text type="secondary" style={{ fontSize: 12, wordBreak: 'break-word', whiteSpace: 'normal' }}>
-                      {t('cryptoTailStrategy.list.priceRange')}
-                    </Typography.Text>
-                    <Typography.Text style={{ fontSize: 12, wordBreak: 'break-word', whiteSpace: 'normal' }}>{formatPriceRange(item.minPrice, item.maxPrice)}</Typography.Text>
-                    <Typography.Text type="secondary" style={{ fontSize: 12, wordBreak: 'break-word', whiteSpace: 'normal' }}>
-                      {t('cryptoTailStrategy.list.amountMode')}
-                    </Typography.Text>
-                    <Typography.Text style={{ fontSize: 12, wordBreak: 'break-word', whiteSpace: 'normal' }}>
-                      {(item.amountMode?.toUpperCase() ?? '') === 'RATIO'
-                        ? `${t('cryptoTailStrategy.list.ratio')} ${formatNumber(item.amountValue, 2) || '0'}%`
-                        : `${t('cryptoTailStrategy.list.fixed')} ${formatUSDC(item.amountValue)} USDC`}
-                    </Typography.Text>
-                  </div>
-                  <Divider style={{ margin: '10px 0' }} />
-                  <Space wrap style={{ marginBottom: 12 }}>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      {t('cryptoTailStrategy.list.totalRealizedPnl')}:{' '}
-                    </Typography.Text>
-                    {item.totalRealizedPnl != null ? (
-                      <Typography.Text style={{ color: pnlColor(item.totalRealizedPnl) ?? undefined, fontWeight: 500, fontSize: 12 }}>
-                        {formatUSDC(item.totalRealizedPnl)} USDC
-                      </Typography.Text>
-                    ) : (
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>-</Typography.Text>
-                    )}
-                    {item.winRate != null && (
-                      <>
-                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>·</Typography.Text>
-                        <Tag color="blue" style={{ margin: 0 }}>{t('cryptoTailStrategy.list.winRate')} {(Number(item.winRate) * 100).toFixed(1)}%</Tag>
-                      </>
-                    )}
-                  </Space>
-                  <Divider style={{ margin: '10px 0' }} />
-                  <Space wrap size="small">
-                    <Switch
-                      checked={item.enabled}
-                      onChange={() => handleToggle(item)}
-                      size="small"
-                    />
-                    <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEditModal(item)}>
-                      {t('cryptoTailStrategy.list.edit')}
-                    </Button>
-                    <Button type="link" size="small" icon={<UnorderedListOutlined />} onClick={() => openTriggers(item.id)}>
-                      {t('cryptoTailStrategy.list.viewTriggers')}
-                    </Button>
-                    <Popconfirm
-                      title={t('cryptoTailStrategy.list.deleteConfirm')}
-                      onConfirm={() => handleDelete(item.id)}
-                      okText={t('common.confirm')}
-                      cancelText={t('common.cancel')}
-                    >
-                      <Button type="link" size="small" danger>
-                        {t('cryptoTailStrategy.list.delete')}
-                      </Button>
-                    </Popconfirm>
-                  </Space>
-                </Card>
-              ))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {list.map((item) => {
+                const accountLabel = getAccountLabel(item.accountId)
+                const marketTitle = marketOptions.find((m) => m.slug === item.marketSlugPrefix)?.title ?? item.marketTitle ?? item.marketSlugPrefix ?? '-'
+                return (
+                  <Card
+                    key={item.id}
+                    style={{
+                      marginBottom: 0,
+                      borderRadius: '10px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                      border: '1px solid #e8e8e8',
+                      overflow: 'hidden'
+                    }}
+                    bodyStyle={{ padding: 0 }}
+                  >
+                    <div style={{
+                      padding: '10px 12px',
+                      background: item.enabled ? 'var(--ant-color-primary, #1677ff)' : 'var(--ant-color-fill-secondary, #f0f0f0)',
+                      color: item.enabled ? '#fff' : 'var(--ant-color-text-secondary, #666)'
+                    }}>
+                      <div style={{ fontSize: '15px', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ wordBreak: 'break-word', whiteSpace: 'normal' }}>{item.name || marketTitle || '-'}</span>
+                        <Switch checked={item.enabled} onChange={() => handleToggle(item)} size="small" />
+                      </div>
+                    </div>
+                    <div style={{ padding: '8px 12px', backgroundColor: '#fafafa', borderBottom: '1px solid #f0f0f0' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontSize: '10px', color: '#8c8c8c' }}>{t('cryptoTailStrategy.list.totalRealizedPnl')}</div>
+                          {item.totalRealizedPnl != null ? (
+                            <div style={{ fontSize: '14px', fontWeight: '600', color: pnlColor(item.totalRealizedPnl) }}>{formatUSDC(item.totalRealizedPnl)} USDC</div>
+                          ) : (
+                            <div style={{ fontSize: '14px', color: '#8c8c8c' }}>-</div>
+                          )}
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '10px', color: '#8c8c8c' }}>{t('cryptoTailStrategy.list.winRate')}</div>
+                          {item.winRate != null ? <Tag color="blue" style={{ margin: 0 }}>{(Number(item.winRate) * 100).toFixed(1)}%</Tag> : <span style={{ fontSize: '12px', color: '#8c8c8c' }}>-</span>}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ padding: '6px 12px', fontSize: '11px', color: '#8c8c8c', borderBottom: '1px solid #f0f0f0' }}>
+                      <div>{t('cryptoTailStrategy.list.account')}: {accountLabel}</div>
+                      <div>{t('cryptoTailStrategy.list.market')}: {marketTitle}</div>
+                    </div>
+                    <div style={{ padding: '6px 12px', fontSize: '11px', color: '#8c8c8c', borderBottom: '1px solid #f0f0f0' }}>
+                      {t('cryptoTailStrategy.list.timeWindow')}: {formatTimeWindow(item.windowStartSeconds, item.windowEndSeconds, false)} · {t('cryptoTailStrategy.list.priceRange')}: {formatPriceRange(item.minPrice, item.maxPrice)}
+                    </div>
+                    <div style={{ padding: '8px 12px', display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
+                      <Tooltip title={t('cryptoTailStrategy.list.edit')}>
+                        <div onClick={() => openEditModal(item)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}>
+                          <EditOutlined style={{ fontSize: '18px', color: '#52c41a' }} />
+                          <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('cryptoTailStrategy.list.edit')}</span>
+                        </div>
+                      </Tooltip>
+                      <Tooltip title={t('cryptoTailStrategy.list.viewTriggers')}>
+                        <div onClick={() => openTriggers(item.id)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}>
+                          <UnorderedListOutlined style={{ fontSize: '18px', color: '#1890ff' }} />
+                          <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('cryptoTailStrategy.list.viewTriggers')}</span>
+                        </div>
+                      </Tooltip>
+                      <Popconfirm title={t('cryptoTailStrategy.list.deleteConfirm')} onConfirm={() => handleDelete(item.id)} okText={t('common.confirm')} cancelText={t('common.cancel')}>
+                        <Tooltip title={t('cryptoTailStrategy.list.delete')}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}>
+                            <DeleteOutlined style={{ fontSize: '18px', color: '#ff4d4f' }} />
+                            <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('cryptoTailStrategy.list.delete')}</span>
+                          </div>
+                        </Tooltip>
+                      </Popconfirm>
+                    </div>
+                  </Card>
+                )
+              })}
             </div>
           ) : (
             <Table

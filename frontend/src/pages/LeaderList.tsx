@@ -307,7 +307,7 @@ const LeaderList: React.FC = () => {
                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f0f0'}
                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
               >
-                <GlobalOutlined style={{ fontSize: '16px', color: '#fa8c16' }} />
+                <GlobalOutlined style={{ fontSize: '16px', color: '#1890ff' }} />
               </div>
             </Tooltip>
           )}
@@ -328,7 +328,7 @@ const LeaderList: React.FC = () => {
               onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f0f0'}
               onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
             >
-              <EditOutlined style={{ fontSize: '16px', color: '#52c41a' }} />
+              <EditOutlined style={{ fontSize: '16px', color: '#1890ff' }} />
             </div>
           </Tooltip>
 
@@ -354,7 +354,7 @@ const LeaderList: React.FC = () => {
               onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
             >
               <Badge count={record.copyTradingCount} size="small" offset={[-4, -4]}>
-                <CopyOutlined style={{ fontSize: '16px', color: '#13c2c2' }} />
+                <CopyOutlined style={{ fontSize: '16px', color: '#1890ff' }} />
               </Badge>
             </div>
           </Tooltip>
@@ -381,7 +381,7 @@ const LeaderList: React.FC = () => {
               onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
             >
               <Badge count={record.backtestCount} size="small" offset={[-4, -4]}>
-                <LineChartOutlined style={{ fontSize: '16px', color: '#722ed1' }} />
+                <LineChartOutlined style={{ fontSize: '16px', color: '#1890ff' }} />
               </Badge>
             </div>
           </Tooltip>
@@ -421,9 +421,9 @@ const LeaderList: React.FC = () => {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
         <h2 style={{ margin: 0, fontSize: isMobile ? '20px' : '24px' }}>{t('leaderList.title')}</h2>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/leaders/add')} size={isMobile ? 'middle' : 'large'} style={{ borderRadius: '8px', height: isMobile ? '40px' : '48px', fontSize: isMobile ? '14px' : '16px' }}>
-          {t('leaderList.addLeader')}
-        </Button>
+        <Tooltip title={t('leaderList.addLeader')}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/leaders/add')} size={isMobile ? 'middle' : 'large'} style={{ borderRadius: '8px', height: isMobile ? '40px' : '48px', fontSize: isMobile ? '14px' : '16px' }} />
+        </Tooltip>
       </div>
 
       <Card style={{ borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #e8e8e8' }} bodyStyle={{ padding: isMobile ? '12px' : '24px' }}>
@@ -440,7 +440,6 @@ const LeaderList: React.FC = () => {
                 dataSource={leaders}
                 renderItem={(leader) => {
                   const balance = balanceMap[leader.id]
-                  const isLoading = balanceLoading[leader.id]
 
                   return (
                     <Card
@@ -457,7 +456,7 @@ const LeaderList: React.FC = () => {
                       {/* 头部区域 - 名称和地址 */}
                       <div style={{
                         padding: '10px 12px',
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                        background: 'var(--ant-color-primary, #1677ff)',
                         color: '#fff'
                       }}>
                         <div style={{ fontSize: '15px', fontWeight: '600', marginBottom: '2px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -539,7 +538,7 @@ const LeaderList: React.FC = () => {
                             onClick={() => navigate(`/leaders/edit?id=${leader.id}`)}
                             style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}
                           >
-                            <EditOutlined style={{ fontSize: '18px', color: '#52c41a' }} />
+                            <EditOutlined style={{ fontSize: '18px', color: '#1890ff' }} />
                             <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('common.edit')}</span>
                           </div>
                         </Tooltip>
@@ -557,7 +556,7 @@ const LeaderList: React.FC = () => {
                             }}
                           >
                             <Badge count={leader.copyTradingCount} size="small" offset={[-2, -2]}>
-                              <CopyOutlined style={{ fontSize: '18px', color: '#13c2c2' }} />
+                              <CopyOutlined style={{ fontSize: '18px', color: '#1890ff' }} />
                             </Badge>
                             <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('leaderList.viewCopyTradings')}</span>
                           </div>
@@ -576,7 +575,7 @@ const LeaderList: React.FC = () => {
                             }}
                           >
                             <Badge count={leader.backtestCount} size="small" offset={[-2, -2]}>
-                              <LineChartOutlined style={{ fontSize: '18px', color: '#722ed1' }} />
+                              <LineChartOutlined style={{ fontSize: '18px', color: '#1890ff' }} />
                             </Badge>
                             <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('leaderList.viewBacktests')}</span>
                           </div>

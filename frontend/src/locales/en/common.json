@@ -42,7 +42,8 @@
     "pageOf": "Page",
     "ascending": "Ascending",
     "descending": "Descending",
-    "day": "day"
+    "day": "day",
+    "orders": "orders"
   },
   "account": {
     "title": "Account Management",
@@ -176,7 +177,8 @@
     "updateFailed": "Failed to update account",
     "getDetailFailedForEdit": "Failed to get account detail",
     "loading": "Loading...",
-    "fetchFailed": "Failed to get account list"
+    "fetchFailed": "Failed to get account list",
+    "noData": "No account data"
   },
   "accountImport": {
     "title": "Import Account",
@@ -660,7 +662,8 @@
     "deleteSuccess": "User deleted successfully",
     "deleteFailed": "Failed to delete user",
     "deleteConfirm": "Are you sure you want to delete this user?",
-    "total": "Total {{total}} items"
+    "total": "Total {{total}} items",
+    "noData": "No user data"
   },
   "statistics": {
     "title": "Statistics",
@@ -1121,7 +1124,9 @@
     "updateStatusFailed": "Failed to update copy trading status",
     "deleteSuccess": "Copy trading deleted successfully",
     "deleteFailed": "Failed to delete copy trading",
-    "deleteConfirm": "Are you sure you want to delete this copy trading relationship?"
+    "deleteConfirm": "Are you sure you want to delete this copy trading relationship?",
+    "profitRate": "Profit Rate",
+    "noData": "No copy trading configuration"
   },
   "notificationSettings": {
     "title": "Notification Settings",
@@ -1351,6 +1356,8 @@
     "title": "Backtest",
     "taskName": "Task Name",
     "leader": "Leader",
+    "balance": "Balance (Init→Final)",
+    "profit": "Profit (Amount/Rate)",
     "initialBalance": "Initial Balance",
     "backtestDays": "Backtest Days",
     "status": "Status",
@@ -1399,6 +1406,7 @@
     "createCopyTradingSuccess": "Copy trading config created successfully",
     "noTasks": "No backtest tasks",
     "noTrades": "No trade records",
+    "noData": "No backtest data",
     "fetchTasksFailed": "Failed to fetch task list",
     "fetchTaskDetailFailed": "Failed to fetch task detail",
     "fetchTradesFailed": "Failed to fetch trade records",

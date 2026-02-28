@@ -42,7 +42,8 @@
     "copyFailed": "复制失败",
     "ascending": "升序",
     "descending": "降序",
-    "day": "天"
+    "day": "天",
+    "orders": "单"
   },
   "login": {
     "title": "登录",
@@ -176,7 +177,8 @@
     "updateFailed": "更新账户失败",
     "getDetailFailedForEdit": "获取账户详情失败",
     "loading": "加载中...",
-    "fetchFailed": "获取账户列表失败"
+    "fetchFailed": "获取账户列表失败",
+    "noData": "暂无账户数据"
   },
   "accountImport": {
     "title": "导入账户",
@@ -660,7 +662,8 @@
     "deleteSuccess": "删除用户成功",
     "deleteFailed": "删除用户失败",
     "deleteConfirm": "确定要删除这个用户吗？",
-    "total": "共 {{total}} 条"
+    "total": "共 {{total}} 条",
+    "noData": "暂无用户数据"
   },
   "statistics": {
     "title": "统计信息",
@@ -1121,7 +1124,9 @@
     "updateStatusFailed": "更新跟单状态失败",
     "deleteSuccess": "删除跟单成功",
     "deleteFailed": "删除跟单失败",
-    "deleteConfirm": "确定要删除这个跟单关系吗？"
+    "deleteConfirm": "确定要删除这个跟单关系吗？",
+    "profitRate": "收益率",
+    "noData": "暂无跟单配置"
   },
   "notificationSettings": {
     "title": "消息推送设置",
@@ -1351,6 +1356,8 @@
     "title": "回测",
     "taskName": "任务名称",
     "leader": "Leader",
+    "balance": "资金 (初始→最终)",
+    "profit": "收益 (金额/比例)",
     "initialBalance": "初始资金",
     "backtestDays": "回测天数",
     "status": "状态",
@@ -1399,6 +1406,7 @@
     "createCopyTradingSuccess": "跟单配置创建成功",
     "noTasks": "暂无回测任务",
     "noTrades": "暂无交易记录",
+    "noData": "暂无回测数据",
     "fetchTasksFailed": "获取任务列表失败",
     "fetchTaskDetailFailed": "获取任务详情失败",
     "fetchTradesFailed": "获取交易记录失败",
