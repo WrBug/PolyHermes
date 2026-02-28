@@ -38,7 +38,8 @@ class OrderStatusUpdateService(
     private val cryptoUtils: CryptoUtils,
     private val trackingService: CopyOrderTrackingService,
     private val marketService: MarketService,  // 市场信息服务
-    private val telegramNotificationService: TelegramNotificationService?
+    private val telegramNotificationService: TelegramNotificationService?,
+    private val blockchainService: com.wrbug.polymarketbot.service.common.BlockchainService
 ) : ApplicationContextAware {
 
     private val logger = LoggerFactory.getLogger(OrderStatusUpdateService::class.java)
@@ -930,6 +931,14 @@ class OrderStatusUpdateService(
                     null
                 }
 
+            // 查询可用余额
+            val availableBalance = try {
+                blockchainService.getUsdcBalance(finalAccount.walletAddress, finalAccount.proxyAddress).getOrNull()
+            } catch (e: Exception) {
+                logger.warn("查询可用余额失败: accountId=${finalAccount.id}, ${e.message}")
+                null
+            }
+
             // 发送通知
             telegramNotificationService.sendOrderSuccessNotification(
                 orderId = order.buyOrderId,
@@ -950,7 +959,8 @@ class OrderStatusUpdateService(
                 locale = locale,
                 leaderName = leaderName,
                 configName = configName,
-                orderTime = orderCreatedAt  // 使用订单创建时间
+                orderTime = orderCreatedAt,  // 使用订单创建时间
+                availableBalance = availableBalance
             )
 
             logger.info("买入订单通知已发送: orderId=${order.buyOrderId}, copyTradingId=${order.copyTradingId}")
@@ -1023,6 +1033,14 @@ class OrderStatusUpdateService(
                     null
                 }
 
+            // 查询可用余额
+            val availableBalance = try {
+                blockchainService.getUsdcBalance(finalAccount.walletAddress, finalAccount.proxyAddress).getOrNull()
+            } catch (e: Exception) {
+                logger.warn("查询可用余额失败: accountId=${finalAccount.id}, ${e.message}")
+                null
+            }
+
             // 发送通知
             telegramNotificationService.sendOrderSuccessNotification(
                 orderId = record.sellOrderId,
@@ -1043,7 +1061,8 @@ class OrderStatusUpdateService(
                 locale = locale,
                 leaderName = leaderName,
                 configName = configName,
-                orderTime = orderCreatedAt  // 使用订单创建时间
+                orderTime = orderCreatedAt,  // 使用订单创建时间
+                availableBalance = availableBalance
             )
 
             logger.info("卖出订单通知已发送: orderId=${record.sellOrderId}, copyTradingId=${record.copyTradingId}")

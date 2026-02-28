@@ -1331,6 +1331,14 @@ class AccountService(
 
                             // 使用当前时间作为订单创建时间
                             val orderTime = System.currentTimeMillis()
+                            
+                            // 查询可用余额
+                            val availableBalance = try {
+                                blockchainService.getUsdcBalance(account.walletAddress, account.proxyAddress).getOrNull()
+                            } catch (e: Exception) {
+                                logger.warn("查询可用余额失败: accountId=${account.id}, ${e.message}")
+                                null
+                            }
 
                             telegramNotificationService?.sendOrderSuccessNotification(
                                 orderId = orderId,
@@ -1348,7 +1356,8 @@ class AccountService(
                                 apiPassphrase = try { cryptoUtils.decrypt(account.apiPassphrase!!) } catch (e: Exception) { null },
                                 walletAddressForApi = account.walletAddress,
                                 locale = locale,
-                                orderTime = orderTime  // 使用订单创建时间
+                                orderTime = orderTime,  // 使用订单创建时间
+                                availableBalance = availableBalance
                             )
                         } catch (e: Exception) {
                             logger.warn("发送订单成功通知失败: ${e.message}", e)
@@ -1800,16 +1809,42 @@ class AccountService(
                     for (transaction in accountTransactions) {
                         val account = accounts[transaction.accountId]
                         if (account != null) {
-                            telegramNotificationService?.sendRedeemNotification(
-                                accountName = account.accountName,
-                                walletAddress = account.walletAddress,
-                                transactionHash = transaction.transactionHash,
-                                totalRedeemedValue = transaction.positions.fold(BigDecimal.ZERO) { sum, info ->
-                                    sum.add(info.value.toSafeBigDecimal())
-                                }.toPlainString(),
-                                positions = transaction.positions,
-                                locale = locale
-                            )
+                            // 查询可用余额
+                            val availableBalance = try {
+                                blockchainService.getUsdcBalance(account.walletAddress, account.proxyAddress).getOrNull()
+                            } catch (e: Exception) {
+                                logger.warn("查询可用余额失败: accountId=${account.id}, ${e.message}")
+                                null
+                            }
+                            
+                            // 计算该账户的赎回总价值
+                            val accountTotalValue = transaction.positions.fold(BigDecimal.ZERO) { sum, info ->
+                                sum.add(info.value.toSafeBigDecimal())
+                            }
+                            
+                            // 根据赎回价值选择不同的通知类型
+                            if (accountTotalValue.gt(BigDecimal.ZERO)) {
+                                // 有收益：发送赎回成功通知
+                                telegramNotificationService?.sendRedeemNotification(
+                                    accountName = account.accountName,
+                                    walletAddress = account.walletAddress,
+                                    transactionHash = transaction.transactionHash,
+                                    totalRedeemedValue = accountTotalValue.toPlainString(),
+                                    positions = transaction.positions,
+                                    locale = locale,
+                                    availableBalance = availableBalance
+                                )
+                            } else {
+                                // 无收益（输的仓位）：发送已结算无收益通知
+                                telegramNotificationService?.sendRedeemNoReturnNotification(
+                                    accountName = account.accountName,
+                                    walletAddress = account.walletAddress,
+                                    transactionHash = transaction.transactionHash,
+                                    positions = transaction.positions,
+                                    locale = locale,
+                                    availableBalance = availableBalance
+                                )
+                            }
                         }
                     }
                 } catch (e: Exception) {

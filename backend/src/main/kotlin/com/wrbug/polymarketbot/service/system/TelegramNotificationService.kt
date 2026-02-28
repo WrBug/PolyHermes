@@ -98,7 +98,8 @@ class TelegramNotificationService(
         locale: java.util.Locale? = null,
         leaderName: String? = null,  // Leader 名称（备注）
         configName: String? = null,  // 跟单配置名
-        orderTime: Long? = null  // 订单创建时间（毫秒时间戳），用于通知中的时间显示
+        orderTime: Long? = null,  // 订单创建时间（毫秒时间戳），用于通知中的时间显示
+        availableBalance: String? = null  // 可用余额（可选）
     ) {
         // 1. 如果提供了 orderId，检查是否已发送过通知（去重）
         if (orderId != null) {
@@ -192,7 +193,8 @@ class TelegramNotificationService(
             locale = currentLocale,
             leaderName = leaderName,
             configName = configName,
-            orderTime = orderTime
+            orderTime = orderTime,
+            availableBalance = availableBalance
         )
         sendMessage(message)
     }
@@ -766,7 +768,8 @@ class TelegramNotificationService(
         locale: java.util.Locale,
         leaderName: String? = null,  // Leader 名称（备注）
         configName: String? = null,  // 跟单配置名
-        orderTime: Long? = null  // 订单创建时间（毫秒时间戳）
+        orderTime: Long? = null,  // 订单创建时间（毫秒时间戳）
+        availableBalance: String? = null  // 可用余额
     ): String {
         
         // 获取多语言文本
@@ -781,6 +784,7 @@ class TelegramNotificationService(
         val amountLabel = messageSource.getMessage("notification.order.amount", null, "金额", locale)
         val accountLabel = messageSource.getMessage("notification.order.account", null, "账户", locale)
         val timeLabel = messageSource.getMessage("notification.order.time", null, "时间", locale)
+        val availableBalanceLabel = messageSource.getMessage("notification.order.available_balance", null, "可用余额", locale)
         val unknown = messageSource.getMessage("common.unknown", null, "未知", locale)
         val unknownAccount: String = messageSource.getMessage("notification.order.unknown_account", null, "未知账户", locale) ?: "未知账户"
         val calculateFailed = messageSource.getMessage("notification.order.calculate_failed", null, "计算失败", locale)
@@ -879,6 +883,23 @@ class TelegramNotificationService(
         val priceDisplay = formatPrice(price)
         val sizeDisplay = formatQuantity(size)
 
+        // 格式化可用余额
+        val availableBalanceDisplay = if (!availableBalance.isNullOrBlank()) {
+            try {
+                val balanceDecimal = availableBalance.toSafeBigDecimal()
+                val formatted = if (balanceDecimal.scale() > 4) {
+                    balanceDecimal.setScale(4, java.math.RoundingMode.DOWN).stripTrailingZeros()
+                } else {
+                    balanceDecimal.stripTrailingZeros()
+                }
+                "\n• $availableBalanceLabel: <code>${formatted.toPlainString()}</code> USDC"
+            } catch (e: Exception) {
+                "\n• $availableBalanceLabel: <code>$availableBalance</code> USDC"
+            }
+        } else {
+            ""
+        }
+
         return """$icon <b>$orderCreatedSuccess</b>
 
 📊 <b>$orderInfo：</b>
@@ -888,7 +909,7 @@ class TelegramNotificationService(
 • $priceLabel: <code>$priceDisplay</code>
 • $quantityLabel: <code>$sizeDisplay</code> shares
 • $amountLabel: <code>$amountDisplay</code> USDC
-• $accountLabel: $escapedAccountInfo$escapedCopyTradingInfo
+• $accountLabel: $escapedAccountInfo$escapedCopyTradingInfo$availableBalanceDisplay
 
 ⏰ $timeLabel: <code>$time</code>"""
     }
@@ -1095,6 +1116,7 @@ class TelegramNotificationService(
     /**
      * 发送仓位赎回通知
      * @param locale 语言设置（可选，如果提供则使用，否则使用 LocaleContextHolder 获取）
+     * @param availableBalance 可用余额（可选）
      */
     suspend fun sendRedeemNotification(
         accountName: String?,
@@ -1102,7 +1124,8 @@ class TelegramNotificationService(
         transactionHash: String,
         totalRedeemedValue: String,
         positions: List<com.wrbug.polymarketbot.dto.RedeemedPositionInfo>,
-        locale: java.util.Locale? = null
+        locale: java.util.Locale? = null,
+        availableBalance: String? = null
     ) {
         // 获取语言设置（优先使用传入的 locale，否则从 LocaleContextHolder 获取）
         val currentLocale = locale ?: try {
@@ -1118,7 +1141,8 @@ class TelegramNotificationService(
             transactionHash = transactionHash,
             totalRedeemedValue = totalRedeemedValue,
             positions = positions,
-            locale = currentLocale
+            locale = currentLocale,
+            availableBalance = availableBalance
         )
         sendMessage(message)
     }
@@ -1132,7 +1156,8 @@ class TelegramNotificationService(
         transactionHash: String,
         totalRedeemedValue: String,
         positions: List<com.wrbug.polymarketbot.dto.RedeemedPositionInfo>,
-        locale: java.util.Locale
+        locale: java.util.Locale,
+        availableBalance: String? = null
     ): String {
         // 获取多语言文本
         val redeemSuccess = messageSource.getMessage("notification.redeem.success", null, "仓位赎回成功", locale)
@@ -1145,6 +1170,7 @@ class TelegramNotificationService(
         val quantityLabel = messageSource.getMessage("notification.order.quantity", null, "数量", locale)
         val valueLabel = messageSource.getMessage("notification.order.amount", null, "金额", locale)
         val timeLabel = messageSource.getMessage("notification.order.time", null, "时间", locale)
+        val availableBalanceLabel = messageSource.getMessage("notification.redeem.available_balance", null, "可用余额", locale)
         val unknownAccount: String = messageSource.getMessage("notification.order.unknown_account", null, "未知账户", locale) ?: "未知账户"
         
         // 构建账户信息（格式：账户名(钱包地址)）
@@ -1186,19 +1212,129 @@ class TelegramNotificationService(
             "  • ${position.marketId.substring(0, 8)}... (${position.side}): $quantityDisplay shares = $valueDisplay USDC"
         }
         
+        // 格式化可用余额
+        val availableBalanceDisplay = if (!availableBalance.isNullOrBlank()) {
+            try {
+                val balanceDecimal = availableBalance.toSafeBigDecimal()
+                val formatted = if (balanceDecimal.scale() > 4) {
+                    balanceDecimal.setScale(4, java.math.RoundingMode.DOWN).stripTrailingZeros()
+                } else {
+                    balanceDecimal.stripTrailingZeros()
+                }
+                "\n• $availableBalanceLabel: <code>${formatted.toPlainString()}</code> USDC"
+            } catch (e: Exception) {
+                "\n• $availableBalanceLabel: <code>$availableBalance</code> USDC"
+            }
+        } else {
+            ""
+        }
+        
         return """💸 <b>$redeemSuccess</b>
 
 📊 <b>$redeemInfo：</b>
 • $accountLabel: $escapedAccountInfo
 • $transactionHashLabel: <code>$escapedTxHash</code>
-• $totalValueLabel: <code>$totalValueDisplay</code> USDC
+• $totalValueLabel: <code>$totalValueDisplay</code> USDC$availableBalanceDisplay
 
 📦 <b>$positionsLabel：</b>
 $positionsText
 
 ⏰ $timeLabel: <code>$time</code>"""
     }
-    
+
+    /**
+     * 发送仓位已结算（无收益）通知
+     * 用于输的仓位，赎回价值为 0 的情况
+     */
+    suspend fun sendRedeemNoReturnNotification(
+        accountName: String?,
+        walletAddress: String?,
+        transactionHash: String,
+        positions: List<com.wrbug.polymarketbot.dto.RedeemedPositionInfo>,
+        locale: java.util.Locale? = null,
+        availableBalance: String? = null
+    ) {
+        val currentLocale = locale ?: try {
+            LocaleContextHolder.getLocale()
+        } catch (e: Exception) {
+            logger.warn("获取语言设置失败，使用默认语言: ${e.message}", e)
+            java.util.Locale("zh", "CN")
+        }
+
+        val message = buildRedeemNoReturnMessage(
+            accountName = accountName,
+            walletAddress = walletAddress,
+            transactionHash = transactionHash,
+            positions = positions,
+            locale = currentLocale,
+            availableBalance = availableBalance
+        )
+        sendMessage(message)
+    }
+
+    /**
+     * 构建仓位已结算（无收益）消息
+     */
+    private fun buildRedeemNoReturnMessage(
+        accountName: String?,
+        walletAddress: String?,
+        transactionHash: String,
+        positions: List<com.wrbug.polymarketbot.dto.RedeemedPositionInfo>,
+        locale: java.util.Locale,
+        availableBalance: String? = null
+    ): String {
+        val noReturnTitle = messageSource.getMessage("notification.redeem.no_return.title", null, "仓位已结算（无收益）", locale)
+        val noReturnInfo = messageSource.getMessage("notification.redeem.no_return.info", null, "结算信息", locale)
+        val noReturnMessage = messageSource.getMessage("notification.redeem.no_return.message", null, "市场已结算，您的预测未命中，赎回价值为 0。", locale)
+        val accountLabel = messageSource.getMessage("notification.order.account", null, "账户", locale)
+        val transactionHashLabel = messageSource.getMessage("notification.redeem.transaction_hash", null, "交易哈希", locale)
+        val positionsLabel = messageSource.getMessage("notification.redeem.no_return.positions", null, "结算仓位", locale)
+        val timeLabel = messageSource.getMessage("notification.order.time", null, "时间", locale)
+        val availableBalanceLabel = messageSource.getMessage("notification.redeem.available_balance", null, "可用余额", locale)
+        val unknownAccount: String = messageSource.getMessage("notification.order.unknown_account", null, "未知账户", locale) ?: "未知账户"
+
+        val accountInfo = buildAccountInfo(accountName, walletAddress, unknownAccount)
+        val time = DateUtils.formatDateTime()
+
+        val escapedAccountInfo = accountInfo.replace("<", "&lt;").replace(">", "&gt;")
+        val escapedTxHash = transactionHash.replace("<", "&lt;").replace(">", "&gt;")
+
+        val positionsText = positions.joinToString("\n") { position ->
+            val quantityDisplay = formatQuantity(position.quantity)
+            "  • ${position.marketId.substring(0, 8)}... (${position.side}): $quantityDisplay shares"
+        }
+
+        // 格式化可用余额
+        val availableBalanceDisplay = if (!availableBalance.isNullOrBlank()) {
+            try {
+                val balanceDecimal = availableBalance.toSafeBigDecimal()
+                val formatted = if (balanceDecimal.scale() > 4) {
+                    balanceDecimal.setScale(4, java.math.RoundingMode.DOWN).stripTrailingZeros()
+                } else {
+                    balanceDecimal.stripTrailingZeros()
+                }
+                "\n• $availableBalanceLabel: <code>${formatted.toPlainString()}</code> USDC"
+            } catch (e: Exception) {
+                "\n• $availableBalanceLabel: <code>$availableBalance</code> USDC"
+            }
+        } else {
+            ""
+        }
+
+        return """📋 <b>$noReturnTitle</b>
+
+📊 <b>$noReturnInfo：</b>
+<i>$noReturnMessage</i>
+
+• $accountLabel: $escapedAccountInfo
+• $transactionHashLabel: <code>$escapedTxHash</code>$availableBalanceDisplay
+
+📦 <b>$positionsLabel：</b>
+$positionsText
+
+⏰ $timeLabel: <code>$time</code>"""
+    }
+
     /**
      * 脱敏显示地址（只显示前6位和后4位）
      */
