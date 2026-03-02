@@ -833,7 +833,7 @@ const PositionList: React.FC = () => {
     )
   }
 
-  // 根据仓位类型动态生成列（历史仓位不显示当前价格、当前价值、状态列）
+  // 根据仓位类型动态生成列（优化后的紧凑布局）
   const columns = useMemo(() => {
     const baseColumns: any[] = [
       {
@@ -853,7 +853,6 @@ const PositionList: React.FC = () => {
                 objectFit: 'cover'
               }}
               onError={(e) => {
-                // 图片加载失败时隐藏
                 e.currentTarget.style.display = 'none'
               }}
             />
@@ -876,7 +875,7 @@ const PositionList: React.FC = () => {
           </div>
         ),
         fixed: isMobile ? ('left' as const) : undefined,
-        width: isMobile ? 150 : 200
+        width: isMobile ? 120 : 160
       },
       {
         title: '市场',
@@ -924,7 +923,7 @@ const PositionList: React.FC = () => {
             </div>
           )
         },
-        width: isMobile ? 200 : 250
+        width: isMobile ? 180 : 220
       },
       {
         title: '方向',
@@ -933,136 +932,77 @@ const PositionList: React.FC = () => {
         render: (side: string) => (
           <Tag color={getSideColor(side)}>{side}</Tag>
         ),
-        width: 80
+        width: 70
       },
       {
-        title: '数量',
-        dataIndex: 'quantity',
-        key: 'quantity',
-        render: (quantity: string) => formatNumber(quantity, 4),
+        title: '持仓',
+        key: 'position',
+        render: (_: any, record: AccountPosition) => (
+          <div>
+            <div style={{ fontWeight: '500' }}>{formatNumber(record.quantity, 4)}</div>
+            <div style={{ fontSize: '12px', color: '#999' }}>@{formatNumber(record.avgPrice, 4)}</div>
+          </div>
+        ),
         align: 'right' as const,
         width: 100
-      },
-      {
-        title: '平均价格',
-        dataIndex: 'avgPrice',
-        key: 'avgPrice',
-        render: (price: string) => formatNumber(price, 4),
-        align: 'right' as const,
-        width: 120
       },
       {
         title: '开仓价值',
         dataIndex: 'initialValue',
         key: 'initialValue',
         render: (value: string) => (
-          <span>
-            {formatUSDC(value)} USDC
-          </span>
+          <span>{formatUSDC(value)} USDC</span>
         ),
         align: 'right' as const,
-        width: 120
+        width: 110
       },
     ]
 
-    // 只有当前仓位才显示当前价格和当前价值列
+    // 只有当前仓位才显示当前价值/盈亏合并列
     if (positionFilter === 'current') {
-      baseColumns.push(
-        {
-          title: '当前价格',
-          dataIndex: 'currentPrice',
-          key: 'currentPrice',
-          render: (price: string) => formatNumber(price, 4),
-          align: 'right' as const,
-          width: 120
-        },
-        {
-          title: '当前价值',
-          dataIndex: 'currentValue',
-          key: 'currentValue',
-          render: (value: string) => (
-            <span style={{ fontWeight: 'bold' }}>
-              {formatUSDC(value)} USDC
-            </span>
-          ),
-          align: 'right' as const,
-          width: 120,
-          sorter: (a: AccountPosition, b: AccountPosition) => {
-            const valA = parseFloat(a.currentValue || '0')
-            const valB = parseFloat(b.currentValue || '0')
-            return valA - valB
-          },
-          defaultSortOrder: 'descend' as const
-        }
-      )
-    }
+      baseColumns.push({
+        title: '当前价值 / 盈亏',
+        key: 'valueAndPnl',
+        render: (_: any, record: AccountPosition) => {
+          const pnlNum = parseFloat(record.pnl || '0')
+          const percentPnl = parseFloat(record.percentPnl || '0')
+          const realizedPnl = record.realizedPnl ? parseFloat(record.realizedPnl) : null
+          const percentRealizedPnl = record.percentRealizedPnl ? parseFloat(record.percentRealizedPnl) : null
 
-    // 只有当前仓位才显示盈亏和已实现盈亏列
-    if (positionFilter === 'current') {
-      baseColumns.push(
-        {
-          title: '盈亏',
-          dataIndex: 'pnl',
-          key: 'pnl',
-          render: (pnl: string, record: AccountPosition) => {
-            const pnlNum = parseFloat(pnl || '0')
-            const percentPnl = parseFloat(record.percentPnl || '0')
-            return (
-              <div>
-                <div style={{
-                  color: pnlNum >= 0 ? '#3f8600' : '#cf1322',
-                  fontWeight: 'bold'
-                }}>
-                  {pnlNum >= 0 ? '+' : ''}{formatUSDC(pnl)} USDC
-                </div>
-                <div style={{
-                  fontSize: '12px',
-                  color: percentPnl >= 0 ? '#3f8600' : '#cf1322'
-                }}>
-                  {formatPercent(record.percentPnl)}
-                </div>
+          return (
+            <div>
+              <div style={{ fontWeight: '600', marginBottom: '2px' }}>
+                {formatUSDC(record.currentValue)} USDC
               </div>
-            )
-          },
-          align: 'right' as const,
-          width: 150,
-          sorter: (a: AccountPosition, b: AccountPosition) => {
-            const pnlA = parseFloat(a.pnl || '0')
-            const pnlB = parseFloat(b.pnl || '0')
-            return pnlA - pnlB
-          }
+              <div style={{
+                fontSize: '13px',
+                color: pnlNum >= 0 ? '#3f8600' : '#cf1322',
+                fontWeight: '500'
+              }}>
+                {pnlNum >= 0 ? '+' : ''}{formatUSDC(record.pnl)} ({formatPercent(record.percentPnl)})
+              </div>
+              {realizedPnl !== null && (
+                <div style={{
+                  fontSize: '11px',
+                  color: '#999',
+                  marginTop: '2px'
+                }}>
+                  已实现: {realizedPnl >= 0 ? '+' : ''}{formatUSDC(record.realizedPnl)}
+                  {percentRealizedPnl !== null && ` (${formatPercent(record.percentRealizedPnl)})`}
+                </div>
+              )}
+            </div>
+          )
         },
-        {
-          title: '已实现盈亏',
-          dataIndex: 'realizedPnl',
-          key: 'realizedPnl',
-          render: (realizedPnl: string | undefined, record: AccountPosition) => {
-            if (!realizedPnl) return '-'
-            const pnlNum = parseFloat(realizedPnl)
-            const percentPnl = parseFloat(record.percentRealizedPnl || '0')
-            return (
-              <div>
-                <div style={{
-                  color: pnlNum >= 0 ? '#3f8600' : '#cf1322',
-                  fontWeight: 'bold'
-                }}>
-                  {pnlNum >= 0 ? '+' : ''}{formatUSDC(realizedPnl)} USDC
-                </div>
-                {record.percentRealizedPnl && (
-                  <div style={{
-                    fontSize: '12px',
-                    color: percentPnl >= 0 ? '#3f8600' : '#cf1322'
-                  }}>
-                    {formatPercent(record.percentRealizedPnl)}
-                  </div>
-                )}
-              </div>
-            )
-          },
-          align: 'right' as const,
-          width: 150
-        }
-      )
+        align: 'right' as const,
+        width: 160,
+        sorter: (a: AccountPosition, b: AccountPosition) => {
+          const valA = parseFloat(a.currentValue || '0')
+          const valB = parseFloat(b.currentValue || '0')
+          return valA - valB
+        },
+        defaultSortOrder: 'descend' as const
+      })
     }
 
     // 只有当前仓位才显示操作列
@@ -1084,7 +1024,7 @@ const PositionList: React.FC = () => {
             )}
           </Space>
         ),
-        width: 150,
+        width: 80,
         fixed: isMobile ? ('right' as const) : undefined
       })
     }
