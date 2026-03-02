@@ -297,7 +297,7 @@ const CopyTradingList: React.FC = () => {
     {
       title: t('common.actions') || '操作',
       key: 'action',
-      width: isMobile ? 100 : 200,
+      width: isMobile ? 100 : 160,
       fixed: 'right' as const,
       render: (_: any, record: CopyTrading) => {
         const menuItems: MenuProps['items'] = [
@@ -321,61 +321,101 @@ const CopyTradingList: React.FC = () => {
             }
           }
         ]
-        
+
         return (
-          <Space size={isMobile ? 'small' : 'middle'} wrap>
-            {!isMobile && (
-              <>
-                <Button
-                  type="link"
-                  size="small"
-                  icon={<EditOutlined />}
-                  onClick={() => {
-                    setEditModalCopyTradingId(record.id.toString())
-                    setEditModalOpen(true)
-                  }}
-                >
-                  {t('common.edit') || '编辑'}
-                </Button>
-                <Button
-                  type="link"
-                  size="small"
-                  icon={<BarChartOutlined />}
-                  onClick={() => {
-                    setStatisticsModalCopyTradingId(record.id.toString())
-                    setStatisticsModalOpen(true)
-                  }}
-                >
-                  {t('copyTradingList.statistics') || '统计'}
-                </Button>
-              </>
-            )}
+          <Space size={4}>
+            <Tooltip title={t('common.edit') || '编辑'}>
+              <div
+                onClick={() => {
+                  setEditModalCopyTradingId(record.id.toString())
+                  setEditModalOpen(true)
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  cursor: 'pointer',
+                  borderRadius: '6px',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#f0f0f0' }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
+              >
+                <EditOutlined style={{ fontSize: '16px', color: '#1890ff' }} />
+              </div>
+            </Tooltip>
+
+            <Tooltip title={t('copyTradingList.statistics') || '统计'}>
+              <div
+                onClick={() => {
+                  setStatisticsModalCopyTradingId(record.id.toString())
+                  setStatisticsModalOpen(true)
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  cursor: 'pointer',
+                  borderRadius: '6px',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#f0f0f0' }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
+              >
+                <BarChartOutlined style={{ fontSize: '16px', color: '#1890ff' }} />
+              </div>
+            </Tooltip>
+
             <Dropdown menu={{ items: menuItems }} trigger={['click']}>
-              <Button
-                type="link"
-                size="small"
-                icon={<UnorderedListOutlined />}
-              >
-                {isMobile ? '' : (t('copyTradingList.orders') || '订单')}
-              </Button>
-            </Dropdown>
-            {!isMobile && (
-              <Popconfirm
-                title={t('copyTradingList.deleteConfirm') || '确定要删除这个跟单关系吗？'}
-                onConfirm={() => handleDelete(record.id)}
-                okText={t('common.confirm') || '确定'}
-                cancelText={t('common.cancel') || '取消'}
-              >
-                <Button
-                  type="link"
-                  size="small"
-                  danger
-                  icon={<DeleteOutlined />}
+              <Tooltip title={t('copyTradingList.orders') || '订单'}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '32px',
+                    height: '32px',
+                    cursor: 'pointer',
+                    borderRadius: '6px',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#f0f0f0' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
                 >
-                  {t('common.delete') || '删除'}
-                </Button>
-              </Popconfirm>
-            )}
+                  <UnorderedListOutlined style={{ fontSize: '16px', color: '#1890ff' }} />
+                </div>
+              </Tooltip>
+            </Dropdown>
+
+            <Popconfirm
+              title={t('copyTradingList.deleteConfirm') || '确定要删除这个跟单关系吗？'}
+              onConfirm={() => handleDelete(record.id)}
+              okText={t('common.confirm') || '确定'}
+              cancelText={t('common.cancel') || '取消'}
+            >
+              <Tooltip title={t('common.delete') || '删除'}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '32px',
+                    height: '32px',
+                    cursor: 'pointer',
+                    borderRadius: '6px',
+                    transition: 'background-color 0.2s'
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#fff1f0' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                >
+                  <DeleteOutlined style={{ fontSize: '16px', color: '#ff4d4f' }} />
+                </div>
+              </Tooltip>
+            </Popconfirm>
           </Space>
         )
       }
