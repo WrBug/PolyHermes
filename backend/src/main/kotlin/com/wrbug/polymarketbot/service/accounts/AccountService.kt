@@ -10,7 +10,10 @@ import com.wrbug.polymarketbot.util.toSafeBigDecimal
 import com.wrbug.polymarketbot.util.eq
 import com.wrbug.polymarketbot.util.gt
 import com.wrbug.polymarketbot.util.JsonUtils
+import com.wrbug.polymarketbot.util.fromJson
 import com.wrbug.polymarketbot.util.getEventSlug
+import com.google.gson.JsonObject
+import com.google.gson.JsonPrimitive
 import com.wrbug.polymarketbot.service.common.PolymarketClobService
 import com.wrbug.polymarketbot.service.common.BlockchainService
 import com.wrbug.polymarketbot.service.common.MarketService
@@ -1424,9 +1427,9 @@ class AccountService(
                     null
                 }
                 
-                // 尝试从 errorBody 解析 error 字段
+                // 尝试从 errorBody 解析 error 字段（使用 Gson）
                 val apiError = try {
-                    errorBody?.let { objectMapper.readTree(it).get("error")?.asText() }
+                    (errorBody?.fromJson<JsonObject>()?.get("error") as? JsonPrimitive)?.asString
                 } catch (e: Exception) {
                     null
                 }
