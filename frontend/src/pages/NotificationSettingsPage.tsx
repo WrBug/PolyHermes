@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
-import { Card, Table, Button, Space, Tag, Popconfirm, message, Typography, Modal, Form, Input, Switch, Tooltip, Row, Col, Menu } from 'antd'
+import { Card, Table, Button, Space, Tag, Popconfirm, message, Typography, Modal, Form, Input, Switch, Tooltip, Row, Col, Tabs } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, SendOutlined, CopyOutlined, ReloadOutlined, CheckOutlined, RobotOutlined, FormOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { apiService } from '../services/api'
@@ -10,28 +10,27 @@ import TextArea from 'antd/es/input/TextArea'
 
 const { Title, Text, Paragraph } = Typography
 
-const templateTypeMenuStyle: React.CSSProperties = {
-  border: 'none',
-  background: 'transparent',
-}
-
-const variableChipStyle: React.CSSProperties = {
-  display: 'inline-block',
+const variableTagStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
   cursor: 'pointer',
-  marginBottom: 8,
-  marginRight: 8,
-  borderRadius: 16,
-  padding: '6px 12px',
-  fontSize: 13,
-  transition: 'all 0.2s',
-  border: '1px solid #d9d9d9',
-  background: '#fafafa',
+  marginBottom: 6,
+  marginRight: 6,
+  borderRadius: 6,
+  padding: '4px 10px',
+  fontSize: 12,
+  transition: 'all 0.2s ease',
+  border: '1px solid #e8e8e8',
+  background: '#ffffff',
+  color: 'rgba(0, 0, 0, 0.65)',
 }
 
-const variableChipHoverStyle: React.CSSProperties = {
+const variableTagHoverStyle: React.CSSProperties = {
   borderColor: '#1890ff',
   background: '#e6f7ff',
   color: '#1890ff',
+  transform: 'translateY(-1px)',
+  boxShadow: '0 2px 4px rgba(24, 144, 255, 0.2)',
 }
 
 /**
@@ -61,12 +60,10 @@ const NotificationSettingsPage: React.FC = () => {
 
   // 模板配置相关状态
   const [templateTypes, setTemplateTypes] = useState<TemplateTypeInfo[]>([])
-  const [templates, setTemplates] = useState<NotificationTemplate[]>([])
   const [selectedTemplateType, setSelectedTemplateType] = useState<string>('ORDER_SUCCESS')
   const [currentTemplate, setCurrentTemplate] = useState<NotificationTemplate | null>(null)
   const [templateVariables, setTemplateVariables] = useState<TemplateVariablesResponse | null>(null)
   const [templateContent, setTemplateContent] = useState('')
-  const [templateLoading, setTemplateLoading] = useState(false)
   const [testTemplateLoading, setTestTemplateLoading] = useState(false)
 
   // 加载机器人配置
@@ -77,11 +74,6 @@ const NotificationSettingsPage: React.FC = () => {
   // 加载模板类型
   useEffect(() => {
     fetchTemplateTypes()
-  }, [])
-
-  // 加载模板数据
-  useEffect(() => {
-    fetchTemplates()
   }, [])
 
   // 当选中的模板类型改变时，加载模板详情和变量
@@ -116,20 +108,6 @@ const NotificationSettingsPage: React.FC = () => {
       }
     } catch (error) {
         console.error('获取模板类型失败:', error)
-      }
-  }
-
-  const fetchTemplates = async () => {
-    setTemplateLoading(true)
-    try {
-      const response = await apiService.notifications.getTemplates()
-      if (response.data.code === 0 && response.data.data) {
-        setTemplates(response.data.data)
-      }
-    } catch (error) {
-        console.error('获取模板列表失败:', error)
-    } finally {
-      setTemplateLoading(false)
       }
   }
 
@@ -332,7 +310,6 @@ const NotificationSettingsPage: React.FC = () => {
       })
       if (response.data.code === 0) {
         message.success(t('notificationSettings.templates.saveSuccess'))
-        fetchTemplates()
         fetchTemplateDetail(selectedTemplateType)
       } else {
         message.error(response.data.msg || t('notificationSettings.templates.saveFailed'))
@@ -349,7 +326,6 @@ const NotificationSettingsPage: React.FC = () => {
       })
       if (response.data.code === 0) {
         message.success(t('notificationSettings.templates.resetSuccess'))
-        fetchTemplates()
         fetchTemplateDetail(selectedTemplateType)
       } else {
         message.error(response.data.msg || t('notificationSettings.templates.resetFailed'))
@@ -387,19 +363,21 @@ const NotificationSettingsPage: React.FC = () => {
 
   const renderVariableItem = (variable: TemplateVariable) => {
     const isHover = variableHoverKey === variable.key
+    const label = t(`notificationSettings.templates.variableLabels.${variable.key}`)
+    const description = t(`notificationSettings.templates.variableDescriptions.${variable.key}`)
     return (
-      <Tooltip key={variable.key} title={variable.description || `{{${variable.key}}}`}>
+      <Tooltip key={variable.key} title={description || `{{${variable.key}}}`} placement="top">
         <span
           role="button"
           tabIndex={0}
-          style={{ ...variableChipStyle, ...(isHover ? variableChipHoverStyle : {}) }}
+          style={{ ...variableTagStyle, ...(isHover ? variableTagHoverStyle : {}) }}
           onClick={() => handleCopyVariable(variable.key)}
           onMouseEnter={() => setVariableHoverKey(variable.key)}
           onMouseLeave={() => setVariableHoverKey(null)}
           onKeyDown={(e) => e.key === 'Enter' && handleCopyVariable(variable.key)}
         >
-          <CopyOutlined style={{ marginRight: 6, fontSize: 12 }} />
-          {variable.label}
+          <CopyOutlined style={{ marginRight: 4, fontSize: 11, opacity: 0.6 }} />
+          <span style={{ fontFamily: 'monospace' }}>{label}</span>
         </span>
       </Tooltip>
     )
@@ -412,20 +390,20 @@ const NotificationSettingsPage: React.FC = () => {
       <Card
         size="small"
         title={
-          <span style={{ fontSize: 14, fontWeight: 600 }}>
+          <span style={{ fontSize: 13, fontWeight: 500 }}>
             {t('notificationSettings.templates.variables')}
           </span>
         }
         style={{ height: '100%', borderRadius: 8 }}
-        bodyStyle={{ paddingTop: 12 }}
+        bodyStyle={{ padding: '12px 16px', maxHeight: 420, overflowY: 'auto' }}
       >
         {templateVariables.categories.map(category => {
           const categoryVariables = templateVariables.variables.filter(v => v.category === category.key)
           if (categoryVariables.length === 0) return null
           return (
-            <div key={category.key} style={{ marginBottom: 20 }}>
-              <Text strong style={{ marginBottom: 10, display: 'block', fontSize: 13, color: 'rgba(0,0,0,0.65)' }}>
-                {t(CATEGORY_LABELS[category.key] || category.label)}
+            <div key={category.key} style={{ marginBottom: 16 }}>
+              <Text type="secondary" style={{ marginBottom: 8, display: 'block', fontSize: 12 }}>
+                {t(CATEGORY_LABELS[category.key])}
               </Text>
               <div style={{ display: 'flex', flexWrap: 'wrap' }}>
                 {categoryVariables.sort((a, b) => a.sortOrder - b.sortOrder).map(renderVariableItem)}
@@ -433,7 +411,7 @@ const NotificationSettingsPage: React.FC = () => {
             </div>
           )
         })}
-        <Paragraph type="secondary" style={{ marginTop: 16, marginBottom: 0, fontSize: 12 }}>
+        <Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0, fontSize: 11, textAlign: 'center' }}>
           {t('notificationSettings.templates.clickToCopy')}
         </Paragraph>
       </Card>
@@ -544,14 +522,12 @@ const NotificationSettingsPage: React.FC = () => {
     }
   ]
 
-  const templateTypeMenuItems = templateTypes.map(type => ({
+  const templateTypeTabItems = templateTypes.map(type => ({
     key: type.type,
-    icon: <FormOutlined />,
     label: (
-      <div>
-        <div style={{ fontWeight: 500 }}>{t(`notificationSettings.templateTypes.${type.type}`)}</div>
-        <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)', marginTop: 2 }}>{type.description}</div>
-      </div>
+      <Tooltip title={t(`notificationSettings.templateTypeDescriptions.${type.type}`)} placement="top">
+        <span>{t(`notificationSettings.templateTypes.${type.type}`)}</span>
+      </Tooltip>
     ),
   }))
 
@@ -594,31 +570,26 @@ const NotificationSettingsPage: React.FC = () => {
             <span>{t('notificationSettings.templateConfig')}</span>
           </Space>
         }
-        loading={templateLoading}
         style={{ marginBottom: '16px' }}
       >
-        <Row gutter={[20, 20]}>
-          <Col xs={24} sm={24} md={6}>
-            <div style={{ marginBottom: 8 }}>
-              <Text strong style={{ display: 'block', marginBottom: 12, fontSize: 14 }}>
-                {t('notificationSettings.templates.templateType')}
-              </Text>
-              <Menu
-                mode="inline"
-                selectedKeys={[selectedTemplateType]}
-                style={{ ...templateTypeMenuStyle, minHeight: 320 }}
-                items={templateTypeMenuItems}
-                onClick={({ key }) => handleTemplateTypeChange(key)}
-              />
-            </div>
-          </Col>
-          <Col xs={24} sm={24} md={10}>
-            <Card size="small" bordered style={{ marginBottom: 12 }}>
+        <Tabs
+          activeKey={selectedTemplateType}
+          onChange={handleTemplateTypeChange}
+          items={templateTypeTabItems}
+          style={{ marginBottom: 16 }}
+          tabBarStyle={{ marginBottom: 0 }}
+          type={isMobile ? 'line' : 'card'}
+          size={isMobile ? 'small' : 'middle'}
+        />
+        
+        <Row gutter={[16, 16]}>
+          <Col xs={24} sm={24} md={17}>
+            <Card size="small" bordered={false} style={{ background: '#fafafa', marginBottom: 12, borderRadius: 8 }} bodyStyle={{ padding: '10px 16px' }}>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', justifyContent: 'space-between' }}>
                 <Space wrap size="small">
-                  <Text strong style={{ fontSize: 14 }}>{t('notificationSettings.templates.templateContent')}</Text>
+                  <Text type="secondary" style={{ fontSize: 13 }}>{t('notificationSettings.templates.templateContent')}</Text>
                   {currentTemplate && (
-                    <Tag color={currentTemplate.isDefault ? 'green' : 'blue'}>
+                    <Tag color={currentTemplate.isDefault ? 'green' : 'blue'} style={{ margin: 0 }}>
                       {currentTemplate.isDefault ? t('notificationSettings.templates.isDefault') : t('notificationSettings.templates.isCustom')}
                     </Tag>
                   )}
@@ -630,14 +601,14 @@ const NotificationSettingsPage: React.FC = () => {
                     okText={t('common.confirm')}
                     cancelText={t('common.cancel')}
                   >
-                    <Button size={isMobile ? 'small' : 'middle'} icon={<ReloadOutlined />}>
+                    <Button size="small" icon={<ReloadOutlined />}>
                       {t('notificationSettings.templates.resetToDefault')}
                     </Button>
                   </Popconfirm>
-                  <Button size={isMobile ? 'small' : 'middle'} type="primary" icon={<CheckOutlined />} onClick={handleSaveTemplate}>
+                  <Button size="small" type="primary" icon={<CheckOutlined />} onClick={handleSaveTemplate}>
                     {t('common.save')}
                   </Button>
-                  <Button size={isMobile ? 'small' : 'middle'} icon={<SendOutlined />} loading={testTemplateLoading} onClick={handleTestTemplate}>
+                  <Button size="small" icon={<SendOutlined />} loading={testTemplateLoading} onClick={handleTestTemplate}>
                     {t('notificationSettings.test')}
                   </Button>
                 </Space>
@@ -646,11 +617,12 @@ const NotificationSettingsPage: React.FC = () => {
             <TextArea
               value={templateContent}
               onChange={handleTemplateContentChange}
-              rows={14}
-              style={{ fontFamily: 'monospace', fontSize: 13 }}
+              rows={isMobile ? 10 : 16}
+              style={{ fontFamily: 'monospace', fontSize: 13, borderRadius: 8, resize: 'none' }}
+              placeholder={t('notificationSettings.templates.contentPlaceholder')}
             />
           </Col>
-          <Col xs={24} sm={24} md={8}>
+          <Col xs={24} sm={24} md={7}>
             {renderVariablesPanel()}
           </Col>
         </Row>

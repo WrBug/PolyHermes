@@ -1193,7 +1193,52 @@
       "redeemVariables": "Redeem Variables",
       "errorVariables": "Error Variables",
       "filterVariables": "Filter Variables",
-      "strategyVariables": "Strategy Variables"
+      "strategyVariables": "Strategy Variables",
+      "contentPlaceholder": "Enter template content here, use {{variable}} to insert dynamic content",
+      "variableLabels": {
+        "account_name": "Account Name",
+        "wallet_address": "Wallet Address",
+        "time": "Time",
+        "order_id": "Order ID",
+        "market_title": "Market Title",
+        "market_link": "Market Link",
+        "side": "Side",
+        "outcome": "Outcome",
+        "price": "Price",
+        "quantity": "Quantity",
+        "amount": "Amount",
+        "available_balance": "Available Balance",
+        "leader_name": "Leader Name",
+        "config_name": "Copy Trading Config Name",
+        "error_message": "Error Message",
+        "filter_type": "Filter Type",
+        "filter_reason": "Filter Reason",
+        "strategy_name": "Strategy Name",
+        "transaction_hash": "Transaction Hash",
+        "total_value": "Total Redeem Value"
+      },
+      "variableDescriptions": {
+        "account_name": "Account name executing the order",
+        "wallet_address": "Wallet address (masked)",
+        "time": "Notification send time",
+        "order_id": "Unique order identifier",
+        "market_title": "Market/Event name",
+        "market_link": "Polymarket market link",
+        "side": "Order direction (Buy/Sell)",
+        "outcome": "Market outcome (YES/NO, etc.)",
+        "price": "Order price",
+        "quantity": "Order quantity (shares)",
+        "amount": "Order amount (USDC)",
+        "available_balance": "Account available balance (USDC)",
+        "leader_name": "Leader name/alias being copied",
+        "config_name": "Copy trading configuration name",
+        "error_message": "Order failure reason",
+        "filter_type": "Type of order filter",
+        "filter_reason": "Detailed reason for order filtering",
+        "strategy_name": "Crypto spread strategy name",
+        "transaction_hash": "Redeem transaction hash",
+        "total_value": "Total redeem value (USDC)"
+      }
     },
     "templateTypes": {
       "ORDER_SUCCESS": "Order Success",
@@ -1202,6 +1247,14 @@
       "CRYPTO_TAIL_SUCCESS": "Crypto Spread Strategy Success",
       "REDEEM_SUCCESS": "Position Redeem Success",
       "REDEEM_NO_RETURN": "Position Settled (No Return)"
+    },
+    "templateTypeDescriptions": {
+      "ORDER_SUCCESS": "Notification sent when order is successfully created",
+      "ORDER_FAILED": "Notification sent when order creation fails",
+      "ORDER_FILTERED": "Notification sent when order is filtered by risk control",
+      "CRYPTO_TAIL_SUCCESS": "Notification sent when crypto spread strategy order succeeds",
+      "REDEEM_SUCCESS": "Notification sent when position is successfully redeemed",
+      "REDEEM_NO_RETURN": "Notification sent when position is settled with no return"
     }
   },
   "telegramConfig": {

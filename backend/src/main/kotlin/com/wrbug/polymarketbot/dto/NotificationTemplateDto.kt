@@ -17,8 +17,6 @@ data class NotificationTemplateDto(
  */
 data class TemplateVariableDto(
     val key: String,  // 变量名，如 account_name
-    val label: String,  // 显示名称，如 账户名称
-    val description: String,  // 变量说明
     val category: String,  // 分类：common, order, copy_trading, redeem, error
     val sortOrder: Int = 0  // 排序顺序
 )
@@ -28,7 +26,6 @@ data class TemplateVariableDto(
  */
 data class TemplateVariableCategoryDto(
     val key: String,  // 分类 key
-    val label: String,  // 分类名称
     val sortOrder: Int = 0  // 排序顺序
 )
 
@@ -37,7 +34,6 @@ data class TemplateVariableCategoryDto(
  */
 data class TemplateVariablesResponse(
     val templateType: String,  // 模板类型
-    val templateTypeName: String,  // 模板类型名称
     val categories: List<TemplateVariableCategoryDto>,  // 分类列表
     val variables: List<TemplateVariableDto>  // 变量列表
 )

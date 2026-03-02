@@ -56,104 +56,104 @@ class NotificationTemplateService(
 
         // 变量分类
         val VARIABLE_CATEGORIES = listOf(
-            TemplateVariableCategoryDto("common", "通用变量", 0),
-            TemplateVariableCategoryDto("order", "订单变量", 10),
-            TemplateVariableCategoryDto("copy_trading", "跟单变量", 20),
-            TemplateVariableCategoryDto("redeem", "赎回变量", 30),
-            TemplateVariableCategoryDto("error", "错误变量", 40),
-            TemplateVariableCategoryDto("filter", "过滤变量", 50),
-            TemplateVariableCategoryDto("strategy", "策略变量", 60)
+            TemplateVariableCategoryDto("common", 0),
+            TemplateVariableCategoryDto("order", 10),
+            TemplateVariableCategoryDto("copy_trading", 20),
+            TemplateVariableCategoryDto("redeem", 30),
+            TemplateVariableCategoryDto("error", 40),
+            TemplateVariableCategoryDto("filter", 50),
+            TemplateVariableCategoryDto("strategy", 60)
         )
 
         // 各模板类型可用的变量
         val TEMPLATE_VARIABLES = mapOf(
             "ORDER_SUCCESS" to listOf(
                 // 通用变量
-                TemplateVariableDto("account_name", "账户名称", "执行订单的账户名称", "common", 1),
-                TemplateVariableDto("wallet_address", "钱包地址", "钱包地址（已脱敏）", "common", 2),
-                TemplateVariableDto("time", "时间", "通知发送时间", "common", 3),
+                TemplateVariableDto("account_name", "common", 1),
+                TemplateVariableDto("wallet_address", "common", 2),
+                TemplateVariableDto("time", "common", 3),
                 // 订单变量
-                TemplateVariableDto("order_id", "订单ID", "订单唯一标识", "order", 10),
-                TemplateVariableDto("market_title", "市场标题", "市场/事件名称", "order", 11),
-                TemplateVariableDto("market_link", "市场链接", "Polymarket 市场链接", "order", 12),
-                TemplateVariableDto("side", "方向", "订单方向（买入/卖出）", "order", 13),
-                TemplateVariableDto("outcome", "市场方向", "市场方向（YES/NO 等）", "order", 14),
-                TemplateVariableDto("price", "价格", "订单价格", "order", 15),
-                TemplateVariableDto("quantity", "数量", "订单数量（shares）", "order", 16),
-                TemplateVariableDto("amount", "金额", "订单金额（USDC）", "order", 17),
-                TemplateVariableDto("available_balance", "可用余额", "账户可用余额（USDC）", "order", 18),
+                TemplateVariableDto("order_id", "order", 10),
+                TemplateVariableDto("market_title", "order", 11),
+                TemplateVariableDto("market_link", "order", 12),
+                TemplateVariableDto("side", "order", 13),
+                TemplateVariableDto("outcome", "order", 14),
+                TemplateVariableDto("price", "order", 15),
+                TemplateVariableDto("quantity", "order", 16),
+                TemplateVariableDto("amount", "order", 17),
+                TemplateVariableDto("available_balance", "order", 18),
                 // 跟单变量
-                TemplateVariableDto("leader_name", "Leader 名称", "跟单的 Leader 名称/备注", "copy_trading", 21),
-                TemplateVariableDto("config_name", "跟单配置名", "跟单配置名称", "copy_trading", 22)
+                TemplateVariableDto("leader_name", "copy_trading", 21),
+                TemplateVariableDto("config_name", "copy_trading", 22)
             ),
             "ORDER_FAILED" to listOf(
                 // 通用变量
-                TemplateVariableDto("account_name", "账户名称", "执行订单的账户名称", "common", 1),
-                TemplateVariableDto("wallet_address", "钱包地址", "钱包地址（已脱敏）", "common", 2),
-                TemplateVariableDto("time", "时间", "通知发送时间", "common", 3),
+                TemplateVariableDto("account_name", "common", 1),
+                TemplateVariableDto("wallet_address", "common", 2),
+                TemplateVariableDto("time", "common", 3),
                 // 订单变量
-                TemplateVariableDto("market_title", "市场标题", "市场/事件名称", "order", 10),
-                TemplateVariableDto("market_link", "市场链接", "Polymarket 市场链接", "order", 11),
-                TemplateVariableDto("side", "方向", "订单方向（买入/卖出）", "order", 12),
-                TemplateVariableDto("outcome", "市场方向", "市场方向（YES/NO 等）", "order", 13),
-                TemplateVariableDto("price", "价格", "订单价格", "order", 14),
-                TemplateVariableDto("quantity", "数量", "订单数量（shares）", "order", 15),
-                TemplateVariableDto("amount", "金额", "订单金额（USDC）", "order", 16),
+                TemplateVariableDto("market_title", "order", 10),
+                TemplateVariableDto("market_link", "order", 11),
+                TemplateVariableDto("side", "order", 12),
+                TemplateVariableDto("outcome", "order", 13),
+                TemplateVariableDto("price", "order", 14),
+                TemplateVariableDto("quantity", "order", 15),
+                TemplateVariableDto("amount", "order", 16),
                 // 错误变量
-                TemplateVariableDto("error_message", "错误信息", "订单失败原因", "error", 20)
+                TemplateVariableDto("error_message", "error", 20)
             ),
             "ORDER_FILTERED" to listOf(
                 // 通用变量
-                TemplateVariableDto("account_name", "账户名称", "执行订单的账户名称", "common", 1),
-                TemplateVariableDto("wallet_address", "钱包地址", "钱包地址（已脱敏）", "common", 2),
-                TemplateVariableDto("time", "时间", "通知发送时间", "common", 3),
+                TemplateVariableDto("account_name", "common", 1),
+                TemplateVariableDto("wallet_address", "common", 2),
+                TemplateVariableDto("time", "common", 3),
                 // 订单变量
-                TemplateVariableDto("market_title", "市场标题", "市场/事件名称", "order", 10),
-                TemplateVariableDto("market_link", "市场链接", "Polymarket 市场链接", "order", 11),
-                TemplateVariableDto("side", "方向", "订单方向（买入/卖出）", "order", 12),
-                TemplateVariableDto("outcome", "市场方向", "市场方向（YES/NO 等）", "order", 13),
-                TemplateVariableDto("price", "价格", "订单价格", "order", 14),
-                TemplateVariableDto("quantity", "数量", "订单数量（shares）", "order", 15),
-                TemplateVariableDto("amount", "金额", "订单金额（USDC）", "order", 16),
+                TemplateVariableDto("market_title", "order", 10),
+                TemplateVariableDto("market_link", "order", 11),
+                TemplateVariableDto("side", "order", 12),
+                TemplateVariableDto("outcome", "order", 13),
+                TemplateVariableDto("price", "order", 14),
+                TemplateVariableDto("quantity", "order", 15),
+                TemplateVariableDto("amount", "order", 16),
                 // 过滤变量
-                TemplateVariableDto("filter_type", "过滤类型", "订单被过滤的类型", "filter", 20),
-                TemplateVariableDto("filter_reason", "过滤原因", "订单被过滤的详细原因", "filter", 21)
+                TemplateVariableDto("filter_type", "filter", 20),
+                TemplateVariableDto("filter_reason", "filter", 21)
             ),
             "CRYPTO_TAIL_SUCCESS" to listOf(
                 // 通用变量
-                TemplateVariableDto("account_name", "账户名称", "执行订单的账户名称", "common", 1),
-                TemplateVariableDto("wallet_address", "钱包地址", "钱包地址（已脱敏）", "common", 2),
-                TemplateVariableDto("time", "时间", "通知发送时间", "common", 3),
+                TemplateVariableDto("account_name", "common", 1),
+                TemplateVariableDto("wallet_address", "common", 2),
+                TemplateVariableDto("time", "common", 3),
                 // 订单变量
-                TemplateVariableDto("order_id", "订单ID", "订单唯一标识", "order", 10),
-                TemplateVariableDto("market_title", "市场标题", "市场/事件名称", "order", 11),
-                TemplateVariableDto("market_link", "市场链接", "Polymarket 市场链接", "order", 12),
-                TemplateVariableDto("side", "方向", "订单方向（买入/卖出）", "order", 13),
-                TemplateVariableDto("outcome", "市场方向", "市场方向（YES/NO 等）", "order", 14),
-                TemplateVariableDto("price", "价格", "订单价格", "order", 15),
-                TemplateVariableDto("quantity", "数量", "订单数量（shares）", "order", 16),
-                TemplateVariableDto("amount", "金额", "订单金额（USDC）", "order", 17),
+                TemplateVariableDto("order_id", "order", 10),
+                TemplateVariableDto("market_title", "order", 11),
+                TemplateVariableDto("market_link", "order", 12),
+                TemplateVariableDto("side", "order", 13),
+                TemplateVariableDto("outcome", "order", 14),
+                TemplateVariableDto("price", "order", 15),
+                TemplateVariableDto("quantity", "order", 16),
+                TemplateVariableDto("amount", "order", 17),
                 // 策略变量
-                TemplateVariableDto("strategy_name", "策略名称", "加密价差策略名称", "strategy", 20)
+                TemplateVariableDto("strategy_name", "strategy", 20)
             ),
             "REDEEM_SUCCESS" to listOf(
                 // 通用变量
-                TemplateVariableDto("account_name", "账户名称", "执行赎回的账户名称", "common", 1),
-                TemplateVariableDto("wallet_address", "钱包地址", "钱包地址（已脱敏）", "common", 2),
-                TemplateVariableDto("time", "时间", "通知发送时间", "common", 3),
+                TemplateVariableDto("account_name", "common", 1),
+                TemplateVariableDto("wallet_address", "common", 2),
+                TemplateVariableDto("time", "common", 3),
                 // 赎回变量
-                TemplateVariableDto("transaction_hash", "交易哈希", "赎回交易的哈希值", "redeem", 10),
-                TemplateVariableDto("total_value", "赎回总价值", "赎回的总价值（USDC）", "redeem", 11),
-                TemplateVariableDto("available_balance", "可用余额", "账户可用余额（USDC）", "redeem", 12)
+                TemplateVariableDto("transaction_hash", "redeem", 10),
+                TemplateVariableDto("total_value", "redeem", 11),
+                TemplateVariableDto("available_balance", "redeem", 12)
             ),
             "REDEEM_NO_RETURN" to listOf(
                 // 通用变量
-                TemplateVariableDto("account_name", "账户名称", "执行赎回的账户名称", "common", 1),
-                TemplateVariableDto("wallet_address", "钱包地址", "钱包地址（已脱敏）", "common", 2),
-                TemplateVariableDto("time", "时间", "通知发送时间", "common", 3),
+                TemplateVariableDto("account_name", "common", 1),
+                TemplateVariableDto("wallet_address", "common", 2),
+                TemplateVariableDto("time", "common", 3),
                 // 赎回变量
-                TemplateVariableDto("transaction_hash", "交易哈希", "赎回交易的哈希值", "redeem", 10),
-                TemplateVariableDto("available_balance", "可用余额", "账户可用余额（USDC）", "redeem", 11)
+                TemplateVariableDto("transaction_hash", "redeem", 10),
+                TemplateVariableDto("available_balance", "redeem", 11)
             )
         )
 
@@ -285,7 +285,7 @@ class NotificationTemplateService(
      * 获取模板可用变量
      */
     fun getTemplateVariables(templateType: String): TemplateVariablesResponse? {
-        val typeInfo = TEMPLATE_TYPES[templateType] ?: return null
+        if (!TEMPLATE_TYPES.containsKey(templateType)) return null
         val variables = TEMPLATE_VARIABLES[templateType] ?: emptyList()
 
         // 获取使用的分类
@@ -294,7 +294,6 @@ class NotificationTemplateService(
 
         return TemplateVariablesResponse(
             templateType = templateType,
-            templateTypeName = typeInfo.name,
             categories = categories,
             variables = variables
         )

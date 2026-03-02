@@ -1193,7 +1193,52 @@
       "redeemVariables": "贖回變量",
       "errorVariables": "錯誤變量",
       "filterVariables": "過濾變量",
-      "strategyVariables": "策略變量"
+      "strategyVariables": "策略變量",
+      "contentPlaceholder": "在此輸入模板內容，使用 {{變量名}} 插入動態內容",
+      "variableLabels": {
+        "account_name": "賬戶名稱",
+        "wallet_address": "錢包地址",
+        "time": "時間",
+        "order_id": "訂單ID",
+        "market_title": "市場標題",
+        "market_link": "市場鏈接",
+        "side": "方向",
+        "outcome": "市場方向",
+        "price": "價格",
+        "quantity": "數量",
+        "amount": "金額",
+        "available_balance": "可用餘額",
+        "leader_name": "Leader 名稱",
+        "config_name": "跟單配置名",
+        "error_message": "錯誤信息",
+        "filter_type": "過濾類型",
+        "filter_reason": "過濾原因",
+        "strategy_name": "策略名稱",
+        "transaction_hash": "交易哈希",
+        "total_value": "贖回總價值"
+      },
+      "variableDescriptions": {
+        "account_name": "執行訂單的賬戶名稱",
+        "wallet_address": "錢包地址（已脫敏）",
+        "time": "通知發送時間",
+        "order_id": "訂單唯一標識",
+        "market_title": "市場/事件名稱",
+        "market_link": "Polymarket 市場鏈接",
+        "side": "訂單方向（買入/賣出）",
+        "outcome": "市場方向（YES/NO 等）",
+        "price": "訂單價格",
+        "quantity": "訂單數量（shares）",
+        "amount": "訂單金額（USDC）",
+        "available_balance": "賬戶可用餘額（USDC）",
+        "leader_name": "跟單的 Leader 名稱/備註",
+        "config_name": "跟單配置名稱",
+        "error_message": "訂單失敗原因",
+        "filter_type": "訂單被過濾的類型",
+        "filter_reason": "訂單被過濾的詳細原因",
+        "strategy_name": "加密價差策略名稱",
+        "transaction_hash": "贖回交易的哈希值",
+        "total_value": "贖回的總價值（USDC）"
+      }
     },
     "templateTypes": {
       "ORDER_SUCCESS": "訂單成功通知",
@@ -1202,6 +1247,14 @@
       "CRYPTO_TAIL_SUCCESS": "加密價差策略成功通知",
       "REDEEM_SUCCESS": "倉位贖回成功通知",
       "REDEEM_NO_RETURN": "倉位結算（無收益）通知"
+    },
+    "templateTypeDescriptions": {
+      "ORDER_SUCCESS": "訂單創建成功時發送的通知",
+      "ORDER_FAILED": "訂單創建失敗時發送的通知",
+      "ORDER_FILTERED": "訂單被風控過濾時發送的通知",
+      "CRYPTO_TAIL_SUCCESS": "加密價差策略下單成功時發送的通知",
+      "REDEEM_SUCCESS": "倉位贖回成功時發送的通知",
+      "REDEEM_NO_RETURN": "倉位結算但無收益時發送的通知"
     }
   },
   "telegramConfig": {

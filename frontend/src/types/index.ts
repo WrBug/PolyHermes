@@ -1287,8 +1287,6 @@ export interface TemplateTypeInfo {
  */
 export interface TemplateVariable {
   key: string  // 变量名
-  label: string  // 显示名称
-  description: string  // 变量说明
   category: string  // 分类
   sortOrder: number  // 排序顺序
 }
@@ -1298,7 +1296,6 @@ export interface TemplateVariable {
  */
 export interface TemplateVariableCategory {
   key: string  // 分类 key
-  label: string  // 分类名称
   sortOrder: number  // 排序顺序
 }
 
@@ -1307,7 +1304,6 @@ export interface TemplateVariableCategory {
  */
 export interface TemplateVariablesResponse {
   templateType: string  // 模板类型
-  templateTypeName: string  // 模板类型名称
   categories: TemplateVariableCategory[]  // 分类列表
   variables: TemplateVariable[]  // 变量列表
 }

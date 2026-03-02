@@ -1193,7 +1193,52 @@
       "redeemVariables": "赎回变量",
       "errorVariables": "错误变量",
       "filterVariables": "过滤变量",
-      "strategyVariables": "策略变量"
+      "strategyVariables": "策略变量",
+      "contentPlaceholder": "在此输入模板内容，使用 {{变量名}} 插入动态内容",
+      "variableLabels": {
+        "account_name": "账户名称",
+        "wallet_address": "钱包地址",
+        "time": "时间",
+        "order_id": "订单ID",
+        "market_title": "市场标题",
+        "market_link": "市场链接",
+        "side": "方向",
+        "outcome": "市场方向",
+        "price": "价格",
+        "quantity": "数量",
+        "amount": "金额",
+        "available_balance": "可用余额",
+        "leader_name": "Leader 名称",
+        "config_name": "跟单配置名",
+        "error_message": "错误信息",
+        "filter_type": "过滤类型",
+        "filter_reason": "过滤原因",
+        "strategy_name": "策略名称",
+        "transaction_hash": "交易哈希",
+        "total_value": "赎回总价值"
+      },
+      "variableDescriptions": {
+        "account_name": "执行订单的账户名称",
+        "wallet_address": "钱包地址（已脱敏）",
+        "time": "通知发送时间",
+        "order_id": "订单唯一标识",
+        "market_title": "市场/事件名称",
+        "market_link": "Polymarket 市场链接",
+        "side": "订单方向（买入/卖出）",
+        "outcome": "市场方向（YES/NO 等）",
+        "price": "订单价格",
+        "quantity": "订单数量（shares）",
+        "amount": "订单金额（USDC）",
+        "available_balance": "账户可用余额（USDC）",
+        "leader_name": "跟单的 Leader 名称/备注",
+        "config_name": "跟单配置名称",
+        "error_message": "订单失败原因",
+        "filter_type": "订单被过滤的类型",
+        "filter_reason": "订单被过滤的详细原因",
+        "strategy_name": "加密价差策略名称",
+        "transaction_hash": "赎回交易的哈希值",
+        "total_value": "赎回的总价值（USDC）"
+      }
     },
     "templateTypes": {
       "ORDER_SUCCESS": "订单成功通知",
@@ -1202,6 +1247,14 @@
       "CRYPTO_TAIL_SUCCESS": "加密价差策略成功通知",
       "REDEEM_SUCCESS": "仓位赎回成功通知",
       "REDEEM_NO_RETURN": "仓位结算（无收益）通知"
+    },
+    "templateTypeDescriptions": {
+      "ORDER_SUCCESS": "订单创建成功时发送的通知",
+      "ORDER_FAILED": "订单创建失败时发送的通知",
+      "ORDER_FILTERED": "订单被风控过滤时发送的通知",
+      "CRYPTO_TAIL_SUCCESS": "加密价差策略下单成功时发送的通知",
+      "REDEEM_SUCCESS": "仓位赎回成功时发送的通知",
+      "REDEEM_NO_RETURN": "仓位结算但无收益时发送的通知"
     }
   },
   "telegramConfig": {
