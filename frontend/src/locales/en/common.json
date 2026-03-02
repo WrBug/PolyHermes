@@ -1167,7 +1167,42 @@
     "getChatIdsFailed": "Failed to get Chat IDs",
     "getChatIdsNoToken": "Please enter Bot Token first",
     "getChatIdsNoMessage": "Chat ID not found, please send a message to the bot first (e.g., /start), then retry",
-    "getChatIdsButton": "Get Chat ID"
+    "getChatIdsButton": "Get Chat ID",
+    "botConfig": "Bot Configuration",
+    "templateConfig": "Template Configuration",
+    "templates": {
+      "title": "Message Template Configuration",
+      "templateType": "Template Type",
+      "templateContent": "Template Content",
+      "isDefault": "Default Template",
+      "isCustom": "Custom Template",
+      "resetToDefault": "Reset to Default",
+      "resetConfirm": "Are you sure you want to reset to default? Your custom content will be lost.",
+      "resetSuccess": "Reset successfully",
+      "resetFailed": "Reset failed",
+      "saveSuccess": "Saved successfully",
+      "saveFailed": "Save failed",
+      "testSuccess": "Test message sent successfully, please check Telegram",
+      "testFailed": "Failed to send test message",
+      "variables": "Available Variables",
+      "clickToCopy": "Click to copy",
+      "copied": "Copied",
+      "commonVariables": "Common Variables",
+      "orderVariables": "Order Variables",
+      "copyTradingVariables": "Copy Trading Variables",
+      "redeemVariables": "Redeem Variables",
+      "errorVariables": "Error Variables",
+      "filterVariables": "Filter Variables",
+      "strategyVariables": "Strategy Variables"
+    },
+    "templateTypes": {
+      "ORDER_SUCCESS": "Order Success",
+      "ORDER_FAILED": "Order Failed",
+      "ORDER_FILTERED": "Order Filtered",
+      "CRYPTO_TAIL_SUCCESS": "Crypto Spread Strategy Success",
+      "REDEEM_SUCCESS": "Position Redeem Success",
+      "REDEEM_NO_RETURN": "Position Settled (No Return)"
+    }
   },
   "telegramConfig": {
     "title": "Telegram Configuration Guide",

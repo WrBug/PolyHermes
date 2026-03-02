@@ -216,6 +216,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           key: '/system-settings/api-health',
           icon: <CheckCircleOutlined />,
           label: t('menu.apiHealth') || 'API健康'
+        },
+        {
+          key: '/system-settings/notification',
+          icon: <NotificationOutlined />,
+          label: t('menu.notifications') || '消息推送设置'
         }
       ]
     },

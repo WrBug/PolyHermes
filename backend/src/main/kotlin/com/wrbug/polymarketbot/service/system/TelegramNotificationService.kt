@@ -26,6 +26,7 @@ import java.util.concurrent.TimeUnit
 @Service
 class TelegramNotificationService(
     private val notificationConfigService: NotificationConfigService,
+    private val notificationTemplateService: NotificationTemplateService,
     private val objectMapper: ObjectMapper,
     private val messageSource: MessageSource
 ) {
@@ -178,7 +179,9 @@ class TelegramNotificationService(
             null
         }
 
-        val message = buildOrderSuccessMessage(
+        val unknownAccount = messageSource.getMessage("notification.order.unknown_account", null, "未知账户", currentLocale).orEmpty().ifEmpty { "未知账户" }
+        val calculateFailed = messageSource.getMessage("notification.order.calculate_failed", null, "计算失败", currentLocale).orEmpty().ifEmpty { "计算失败" }
+        val vars = buildOrderSuccessVariables(
             orderId = orderId,
             marketTitle = marketTitle,
             marketId = marketId,
@@ -194,8 +197,11 @@ class TelegramNotificationService(
             leaderName = leaderName,
             configName = configName,
             orderTime = orderTime,
-            availableBalance = availableBalance
+            availableBalance = availableBalance,
+            unknownAccount = unknownAccount,
+            calculateFailed = calculateFailed
         )
+        val message = notificationTemplateService.renderTemplate("ORDER_SUCCESS", vars)
         sendMessage(message)
     }
 
@@ -234,7 +240,9 @@ class TelegramNotificationService(
             null
         }
 
-        val message = buildOrderFailureMessage(
+        val unknownAccount = messageSource.getMessage("notification.order.unknown_account", null, "未知账户", currentLocale).orEmpty().ifEmpty { "未知账户" }
+        val calculateFailed = messageSource.getMessage("notification.order.calculate_failed", null, "计算失败", currentLocale).orEmpty().ifEmpty { "计算失败" }
+        val vars = buildOrderFailureVariables(
             marketTitle = marketTitle,
             marketId = marketId,
             marketSlug = marketSlug,
@@ -246,9 +254,63 @@ class TelegramNotificationService(
             errorMessage = errorMessage,
             accountName = accountName,
             walletAddress = walletAddress,
-            locale = currentLocale
+            locale = currentLocale,
+            unknownAccount = unknownAccount,
+            calculateFailed = calculateFailed
         )
+        val message = notificationTemplateService.renderTemplate("ORDER_FAILED", vars)
         sendMessage(message)
+    }
+
+    /**
+     * 构建订单失败通知的变量 Map
+     */
+    private fun buildOrderFailureVariables(
+        marketTitle: String,
+        marketId: String?,
+        marketSlug: String?,
+        side: String,
+        outcome: String?,
+        price: String,
+        size: String,
+        amount: String?,
+        errorMessage: String,
+        accountName: String?,
+        walletAddress: String?,
+        locale: java.util.Locale,
+        unknownAccount: String,
+        calculateFailed: String
+    ): Map<String, String> {
+        val sideDisplay = when (side.uppercase()) {
+            "BUY" -> messageSource.getMessage("notification.order.side.buy", null, "买入", locale).orEmpty().ifEmpty { "买入" }
+            "SELL" -> messageSource.getMessage("notification.order.side.sell", null, "卖出", locale).orEmpty().ifEmpty { "卖出" }
+            else -> side
+        }
+        val accountInfo = buildAccountInfo(accountName, walletAddress, unknownAccount)
+        val marketLink = when {
+            !marketSlug.isNullOrBlank() -> "https://polymarket.com/event/$marketSlug"
+            !marketId.isNullOrBlank() && marketId.startsWith("0x") -> "https://polymarket.com/condition/$marketId"
+            else -> ""
+        }
+        val amountDisplay = amount?.let { am ->
+            try {
+                val amountDecimal = am.toSafeBigDecimal()
+                (if (amountDecimal.scale() > 4) amountDecimal.setScale(4, java.math.RoundingMode.DOWN).stripTrailingZeros() else amountDecimal.stripTrailingZeros()).toPlainString()
+            } catch (e: Exception) { am }
+        } ?: calculateFailed
+        val shortError = if (errorMessage.length > 500) errorMessage.substring(0, 500) + "..." else errorMessage
+        return mapOf(
+            "market_title" to marketTitle.replace("<", "&lt;").replace(">", "&gt;"),
+            "market_link" to marketLink,
+            "side" to sideDisplay,
+            "outcome" to (outcome?.replace("<", "&lt;")?.replace(">", "&gt;") ?: ""),
+            "price" to formatPrice(price),
+            "quantity" to formatQuantity(size),
+            "amount" to amountDisplay,
+            "account_name" to accountInfo,
+            "error_message" to shortError.replace("<", "&lt;").replace(">", "&gt;"),
+            "time" to DateUtils.formatDateTime()
+        )
     }
 
     /**
@@ -287,7 +349,9 @@ class TelegramNotificationService(
             null
         }
 
-        val message = buildOrderFilteredMessage(
+        val unknownAccount = messageSource.getMessage("notification.order.unknown_account", null, "未知账户", currentLocale).orEmpty().ifEmpty { "未知账户" }
+        val calculateFailed = messageSource.getMessage("notification.order.calculate_failed", null, "计算失败", currentLocale).orEmpty().ifEmpty { "计算失败" }
+        val vars = buildOrderFilteredVariables(
             marketTitle = marketTitle,
             marketId = marketId,
             marketSlug = marketSlug,
@@ -300,9 +364,68 @@ class TelegramNotificationService(
             filterType = filterType,
             accountName = accountName,
             walletAddress = walletAddress,
-            locale = currentLocale
+            locale = currentLocale,
+            unknownAccount = unknownAccount,
+            calculateFailed = calculateFailed
         )
+        val message = notificationTemplateService.renderTemplate("ORDER_FILTERED", vars)
         sendMessage(message)
+    }
+
+    private fun buildOrderFilteredVariables(
+        marketTitle: String,
+        marketId: String?,
+        marketSlug: String?,
+        side: String,
+        outcome: String?,
+        price: String,
+        size: String,
+        amount: String?,
+        filterReason: String,
+        filterType: String,
+        accountName: String?,
+        walletAddress: String?,
+        locale: java.util.Locale,
+        unknownAccount: String,
+        calculateFailed: String
+    ): Map<String, String> {
+        val sideDisplay = when (side.uppercase()) {
+            "BUY" -> messageSource.getMessage("notification.order.side.buy", null, "买入", locale).orEmpty().ifEmpty { "买入" }
+            "SELL" -> messageSource.getMessage("notification.order.side.sell", null, "卖出", locale).orEmpty().ifEmpty { "卖出" }
+            else -> side
+        }
+        val filterTypeDisplay = when (filterType.uppercase()) {
+            "ORDER_DEPTH" -> messageSource.getMessage("notification.filter.type.order_depth", null, "订单深度不足", locale).orEmpty().ifEmpty { "订单深度不足" }
+            "SPREAD" -> messageSource.getMessage("notification.filter.type.spread", null, "价差过大", locale).orEmpty().ifEmpty { "价差过大" }
+            "ORDERBOOK_DEPTH" -> messageSource.getMessage("notification.filter.type.orderbook_depth", null, "订单簿深度不足", locale).orEmpty().ifEmpty { "订单簿深度不足" }
+            "PRICE_VALIDITY" -> messageSource.getMessage("notification.filter.type.price_validity", null, "价格不合理", locale).orEmpty().ifEmpty { "价格不合理" }
+            "MARKET_STATUS" -> messageSource.getMessage("notification.filter.type.market_status", null, "市场状态不可交易", locale).orEmpty().ifEmpty { "市场状态不可交易" }
+            else -> filterType
+        }
+        val accountInfo = buildAccountInfo(accountName, walletAddress, unknownAccount)
+        val marketLink = when {
+            !marketSlug.isNullOrBlank() -> "https://polymarket.com/event/$marketSlug"
+            !marketId.isNullOrBlank() && marketId.startsWith("0x") -> "https://polymarket.com/condition/$marketId"
+            else -> ""
+        }
+        val amountDisplay = amount?.let { am ->
+            try {
+                (am.toSafeBigDecimal().let { if (it.scale() > 4) it.setScale(4, java.math.RoundingMode.DOWN).stripTrailingZeros() else it.stripTrailingZeros() }.toPlainString())
+            } catch (e: Exception) { am }
+        } ?: calculateFailed
+        return mapOf(
+            "market_title" to marketTitle.replace("<", "&lt;").replace(">", "&gt;"),
+            "market_link" to marketLink,
+            "side" to sideDisplay,
+            "outcome" to (outcome?.replace("<", "&lt;")?.replace(">", "&gt;") ?: ""),
+            "price" to formatPrice(price),
+            "quantity" to formatQuantity(size),
+            "amount" to amountDisplay,
+            "account_name" to accountInfo,
+            "filter_type" to filterTypeDisplay,
+            "filter_reason" to filterReason.replace("<", "&lt;").replace(">", "&gt;"),
+            "time" to DateUtils.formatDateTime()
+        )
     }
 
     /**
@@ -349,7 +472,10 @@ class TelegramNotificationService(
             logger.warn("计算订单金额失败: ${e.message}", e)
             null
         }
-        val message = buildCryptoTailOrderSuccessMessage(
+        val unknown = messageSource.getMessage("common.unknown", null, "未知", currentLocale).orEmpty().ifEmpty { "未知" }
+        val unknownAccount = messageSource.getMessage("notification.order.unknown_account", null, "未知账户", currentLocale).orEmpty().ifEmpty { "未知账户" }
+        val calculateFailed = messageSource.getMessage("notification.order.calculate_failed", null, "计算失败", currentLocale).orEmpty().ifEmpty { "计算失败" }
+        val vars = buildCryptoTailOrderSuccessVariables(
             orderId = orderId,
             marketTitle = marketTitle,
             marketId = marketId,
@@ -362,10 +488,65 @@ class TelegramNotificationService(
             strategyName = strategyName,
             accountName = accountName,
             walletAddress = walletAddress,
-            locale = currentLocale,
-            orderTime = orderTime
+            orderTime = orderTime,
+            unknown = unknown,
+            unknownAccount = unknownAccount,
+            calculateFailed = calculateFailed,
+            locale = currentLocale
         )
+        val message = notificationTemplateService.renderTemplate("CRYPTO_TAIL_SUCCESS", vars)
         sendMessage(message)
+    }
+
+    private fun buildCryptoTailOrderSuccessVariables(
+        orderId: String?,
+        marketTitle: String,
+        marketId: String?,
+        marketSlug: String?,
+        side: String,
+        outcome: String?,
+        price: String,
+        size: String,
+        amount: String?,
+        strategyName: String?,
+        accountName: String?,
+        walletAddress: String?,
+        orderTime: Long?,
+        unknown: String,
+        unknownAccount: String,
+        calculateFailed: String,
+        locale: java.util.Locale
+    ): Map<String, String> {
+        val sideDisplay = when (side.uppercase()) {
+            "BUY" -> messageSource.getMessage("notification.order.side.buy", null, "买入", locale).orEmpty().ifEmpty { "买入" }
+            "SELL" -> messageSource.getMessage("notification.order.side.sell", null, "卖出", locale).orEmpty().ifEmpty { "卖出" }
+            else -> side
+        }
+        val accountInfo = buildAccountInfo(accountName, walletAddress, unknownAccount)
+        val time = if (orderTime != null) DateUtils.formatDateTime(orderTime) else DateUtils.formatDateTime()
+        val marketLink = when {
+            !marketSlug.isNullOrBlank() -> "https://polymarket.com/event/$marketSlug"
+            !marketId.isNullOrBlank() && marketId.startsWith("0x") -> "https://polymarket.com/condition/$marketId"
+            else -> ""
+        }
+        val amountDisplay = amount?.let { am ->
+            try {
+                (am.toSafeBigDecimal().let { if (it.scale() > 4) it.setScale(4, java.math.RoundingMode.DOWN).stripTrailingZeros() else it.stripTrailingZeros() }.toPlainString())
+            } catch (e: Exception) { am }
+        } ?: calculateFailed
+        return mapOf(
+            "order_id" to (orderId ?: unknown),
+            "market_title" to marketTitle.replace("<", "&lt;").replace(">", "&gt;"),
+            "market_link" to marketLink,
+            "side" to sideDisplay,
+            "outcome" to (outcome?.replace("<", "&lt;")?.replace(">", "&gt;") ?: ""),
+            "price" to formatPrice(price),
+            "quantity" to formatQuantity(size),
+            "amount" to amountDisplay,
+            "account_name" to accountInfo,
+            "strategy_name" to (strategyName?.takeIf { it.isNotBlank() } ?: unknown),
+            "time" to time
+        )
     }
 
     /**
@@ -748,6 +929,76 @@ class TelegramNotificationService(
                 unknownAccount
             }
         }
+    }
+
+    /**
+     * 构建订单成功通知的变量 Map（供模板渲染）
+     */
+    private fun buildOrderSuccessVariables(
+        orderId: String?,
+        marketTitle: String,
+        marketId: String?,
+        marketSlug: String?,
+        side: String,
+        outcome: String?,
+        price: String,
+        size: String,
+        amount: String?,
+        accountName: String?,
+        walletAddress: String?,
+        locale: java.util.Locale,
+        leaderName: String?,
+        configName: String?,
+        orderTime: Long?,
+        availableBalance: String?,
+        unknownAccount: String,
+        calculateFailed: String
+    ): Map<String, String> {
+        val sideDisplay = when (side.uppercase()) {
+            "BUY" -> messageSource.getMessage("notification.order.side.buy", null, "买入", locale).orEmpty().ifEmpty { "买入" }
+            "SELL" -> messageSource.getMessage("notification.order.side.sell", null, "卖出", locale).orEmpty().ifEmpty { "卖出" }
+            else -> side
+        }
+        val unknown = messageSource.getMessage("common.unknown", null, "未知", locale).orEmpty().ifEmpty { "未知" }
+        val accountInfo = buildAccountInfo(accountName, walletAddress, unknownAccount)
+        val time = if (orderTime != null) DateUtils.formatDateTime(orderTime) else DateUtils.formatDateTime()
+        val marketLink = when {
+            !marketSlug.isNullOrBlank() -> "https://polymarket.com/event/$marketSlug"
+            !marketId.isNullOrBlank() && marketId.startsWith("0x") -> "https://polymarket.com/condition/$marketId"
+            else -> ""
+        }
+        val amountDisplay = when {
+            amount != null -> try {
+                val amountDecimal = amount.toSafeBigDecimal()
+                val formatted = if (amountDecimal.scale() > 4) amountDecimal.setScale(4, java.math.RoundingMode.DOWN).stripTrailingZeros() else amountDecimal.stripTrailingZeros()
+                formatted.toPlainString()
+            } catch (e: Exception) { amount ?: calculateFailed }
+            else -> calculateFailed
+        }
+        val availableBalanceDisplay = if (!availableBalance.isNullOrBlank()) {
+            try {
+                val balanceDecimal = availableBalance.toSafeBigDecimal()
+                val formatted = if (balanceDecimal.scale() > 4) balanceDecimal.setScale(4, java.math.RoundingMode.DOWN).stripTrailingZeros() else balanceDecimal.stripTrailingZeros()
+                formatted.toPlainString()
+            } catch (e: Exception) { availableBalance ?: "" }
+        } else { "" }
+        val escapedMarketTitle = marketTitle.replace("<", "&lt;").replace(">", "&gt;")
+        val escapedOutcome = outcome?.replace("<", "&lt;")?.replace(">", "&gt;") ?: ""
+        return mapOf(
+            "order_id" to (orderId ?: unknown),
+            "market_title" to escapedMarketTitle,
+            "market_link" to marketLink,
+            "side" to sideDisplay,
+            "outcome" to escapedOutcome,
+            "price" to formatPrice(price),
+            "quantity" to formatQuantity(size),
+            "amount" to amountDisplay,
+            "account_name" to accountInfo,
+            "available_balance" to availableBalanceDisplay,
+            "leader_name" to (leaderName ?: ""),
+            "config_name" to (configName ?: ""),
+            "time" to time
+        )
     }
 
     /**
@@ -1135,16 +1386,45 @@ class TelegramNotificationService(
             java.util.Locale("zh", "CN")  // 默认简体中文
         }
         
-        val message = buildRedeemMessage(
+        val unknownAccount = messageSource.getMessage("notification.order.unknown_account", null, "未知账户", currentLocale) ?: "未知账户"
+        val vars = buildRedeemSuccessVariables(
             accountName = accountName,
             walletAddress = walletAddress,
             transactionHash = transactionHash,
             totalRedeemedValue = totalRedeemedValue,
-            positions = positions,
-            locale = currentLocale,
-            availableBalance = availableBalance
+            availableBalance = availableBalance,
+            unknownAccount = unknownAccount
         )
+        val message = notificationTemplateService.renderTemplate("REDEEM_SUCCESS", vars)
         sendMessage(message)
+    }
+
+    private fun buildRedeemSuccessVariables(
+        accountName: String?,
+        walletAddress: String?,
+        transactionHash: String,
+        totalRedeemedValue: String,
+        availableBalance: String?,
+        unknownAccount: String
+    ): Map<String, String> {
+        val accountInfo = buildAccountInfo(accountName, walletAddress, unknownAccount)
+        val totalValueDisplay = try {
+            val d = totalRedeemedValue.toSafeBigDecimal()
+            (if (d.scale() > 4) d.setScale(4, java.math.RoundingMode.DOWN).stripTrailingZeros() else d.stripTrailingZeros()).toPlainString()
+        } catch (e: Exception) { totalRedeemedValue }
+        val availableBalanceDisplay = availableBalance?.let { ab ->
+            try {
+                val d = ab.toSafeBigDecimal()
+                (if (d.scale() > 4) d.setScale(4, java.math.RoundingMode.DOWN).stripTrailingZeros() else d.stripTrailingZeros()).toPlainString()
+            } catch (e: Exception) { ab }
+        } ?: ""
+        return mapOf(
+            "account_name" to accountInfo,
+            "transaction_hash" to transactionHash.replace("<", "&lt;").replace(">", "&gt;"),
+            "total_value" to totalValueDisplay,
+            "available_balance" to availableBalanceDisplay,
+            "time" to DateUtils.formatDateTime()
+        )
     }
     
     /**
@@ -1261,15 +1541,38 @@ $positionsText
             java.util.Locale("zh", "CN")
         }
 
-        val message = buildRedeemNoReturnMessage(
+        val unknownAccount = messageSource.getMessage("notification.order.unknown_account", null, "未知账户", currentLocale) ?: "未知账户"
+        val vars = buildRedeemNoReturnVariables(
             accountName = accountName,
             walletAddress = walletAddress,
             transactionHash = transactionHash,
-            positions = positions,
-            locale = currentLocale,
-            availableBalance = availableBalance
+            availableBalance = availableBalance,
+            unknownAccount = unknownAccount
         )
+        val message = notificationTemplateService.renderTemplate("REDEEM_NO_RETURN", vars)
         sendMessage(message)
+    }
+
+    private fun buildRedeemNoReturnVariables(
+        accountName: String?,
+        walletAddress: String?,
+        transactionHash: String,
+        availableBalance: String?,
+        unknownAccount: String
+    ): Map<String, String> {
+        val accountInfo = buildAccountInfo(accountName, walletAddress, unknownAccount)
+        val availableBalanceDisplay = availableBalance?.let { ab ->
+            try {
+                val d = ab.toSafeBigDecimal()
+                (if (d.scale() > 4) d.setScale(4, java.math.RoundingMode.DOWN).stripTrailingZeros() else d.stripTrailingZeros()).toPlainString()
+            } catch (e: Exception) { ab }
+        } ?: ""
+        return mapOf(
+            "account_name" to accountInfo,
+            "transaction_hash" to transactionHash.replace("<", "&lt;").replace(">", "&gt;"),
+            "available_balance" to availableBalanceDisplay,
+            "time" to DateUtils.formatDateTime()
+        )
     }
 
     /**

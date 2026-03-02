@@ -1167,7 +1167,42 @@
     "getChatIdsFailed": "获取 Chat IDs 失败",
     "getChatIdsNoToken": "请先填写 Bot Token",
     "getChatIdsNoMessage": "未找到 Chat ID，请先向机器人发送一条消息（如 /start），然后重试",
-    "getChatIdsButton": "获取 Chat ID"
+    "getChatIdsButton": "获取 Chat ID",
+    "botConfig": "机器人配置",
+    "templateConfig": "模板配置",
+    "templates": {
+      "title": "消息模板配置",
+      "templateType": "模板类型",
+      "templateContent": "模板内容",
+      "isDefault": "默认模板",
+      "isCustom": "自定义模板",
+      "resetToDefault": "重置为默认",
+      "resetConfirm": "确定要重置为默认模板吗？您的自定义内容将丢失。",
+      "resetSuccess": "重置成功",
+      "resetFailed": "重置失败",
+      "saveSuccess": "保存成功",
+      "saveFailed": "保存失败",
+      "testSuccess": "测试消息发送成功，请检查 Telegram",
+      "testFailed": "测试消息发送失败",
+      "variables": "可用变量",
+      "clickToCopy": "点击复制",
+      "copied": "已复制",
+      "commonVariables": "通用变量",
+      "orderVariables": "订单变量",
+      "copyTradingVariables": "跟单变量",
+      "redeemVariables": "赎回变量",
+      "errorVariables": "错误变量",
+      "filterVariables": "过滤变量",
+      "strategyVariables": "策略变量"
+    },
+    "templateTypes": {
+      "ORDER_SUCCESS": "订单成功通知",
+      "ORDER_FAILED": "订单失败通知",
+      "ORDER_FILTERED": "订单过滤通知",
+      "CRYPTO_TAIL_SUCCESS": "加密价差策略成功通知",
+      "REDEEM_SUCCESS": "仓位赎回成功通知",
+      "REDEEM_NO_RETURN": "仓位结算（无收益）通知"
+    }
   },
   "telegramConfig": {
     "title": "Telegram 配置说明",

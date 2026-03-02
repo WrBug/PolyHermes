@@ -1258,3 +1258,56 @@ export interface ManualOrderDetails {
   /** 总金额 */
   totalAmount: string
 }
+
+// ==================== 消息模板相关类型 ====================
+
+/**
+ * 消息模板
+ */
+export interface NotificationTemplate {
+  id?: number
+  templateType: string  // 模板类型
+  templateContent: string  // 模板内容
+  isDefault: boolean  // 是否使用默认模板
+  createdAt?: number
+  updatedAt?: number
+}
+
+/**
+ * 模板类型信息
+ */
+export interface TemplateTypeInfo {
+  type: string  // 模板类型
+  name: string  // 类型名称
+  description: string  // 类型描述
+}
+
+/**
+ * 模板变量
+ */
+export interface TemplateVariable {
+  key: string  // 变量名
+  label: string  // 显示名称
+  description: string  // 变量说明
+  category: string  // 分类
+  sortOrder: number  // 排序顺序
+}
+
+/**
+ * 模板变量分类
+ */
+export interface TemplateVariableCategory {
+  key: string  // 分类 key
+  label: string  // 分类名称
+  sortOrder: number  // 排序顺序
+}
+
+/**
+ * 模板变量列表响应
+ */
+export interface TemplateVariablesResponse {
+  templateType: string  // 模板类型
+  templateTypeName: string  // 模板类型名称
+  categories: TemplateVariableCategory[]  // 分类列表
+  variables: TemplateVariable[]  // 变量列表
+}
