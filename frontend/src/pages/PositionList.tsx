@@ -965,7 +965,6 @@ const PositionList: React.FC = () => {
         key: 'valueAndPnl',
         render: (_: any, record: AccountPosition) => {
           const pnlNum = parseFloat(record.pnl || '0')
-          const percentPnl = parseFloat(record.percentPnl || '0')
           const realizedPnl = record.realizedPnl ? parseFloat(record.realizedPnl) : null
           const percentRealizedPnl = record.percentRealizedPnl ? parseFloat(record.percentRealizedPnl) : null
 
