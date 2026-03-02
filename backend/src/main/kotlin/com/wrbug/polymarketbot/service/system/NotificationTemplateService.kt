@@ -352,6 +352,7 @@ class NotificationTemplateService(
 
     /**
      * 渲染模板（按类型取模板内容后替换变量）
+     * 优化：先解析模版中需要的变量，只替换这些变量，未提供的变量使用 "-" 占位
      */
     fun renderTemplate(templateType: String, variables: Map<String, String>): String {
         val template = getTemplate(templateType)
@@ -361,14 +362,41 @@ class NotificationTemplateService(
 
     /**
      * 对给定模板内容做变量替换（不查库）
+     * 优化：先解析模版中的变量占位符，只替换这些变量，未提供的变量使用 "-" 占位
      */
     fun renderTemplateContent(content: String, variables: Map<String, String>): String {
+        // 先解析模版中需要的变量
+        val requiredVariables = extractTemplateVariables(content)
+        
         var result = content
-        variables.forEach { (key, value) ->
-            result = result.replace("{{$key}}", value)
+        // 只替换模版中实际使用的变量
+        requiredVariables.forEach { varName ->
+            val value = variables[varName]
+            result = result.replace("{{$varName}}", value ?: "-")
         }
-        result = result.replace(Regex("\\{\\{[^}]+}}"), "-")
         return result
+    }
+
+    /**
+     * 解析模版中使用的变量名
+     * @return 变量名列表（去重）
+     */
+    private fun extractTemplateVariables(content: String): Set<String> {
+        val regex = Regex("\\{\\{([^}]+)}}")
+        return regex.findAll(content)
+            .map { it.groupValues[1].trim() }
+            .toSet()
+    }
+
+    /**
+     * 根据模版需要的变量过滤输入变量
+     * 只保留模版中实际使用的变量，避免不必要的数据获取
+     */
+    fun filterVariablesForTemplate(templateType: String, variables: Map<String, String>): Map<String, String> {
+        val template = getTemplate(templateType)
+        val content = template?.templateContent ?: DEFAULT_TEMPLATES[templateType] ?: return emptyMap()
+        val requiredVariables = extractTemplateVariables(content)
+        return variables.filterKeys { it in requiredVariables }
     }
 
     /**

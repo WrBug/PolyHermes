@@ -6,6 +6,10 @@ import com.wrbug.polymarketbot.repository.CryptoTailStrategyRepository
 import com.wrbug.polymarketbot.repository.CryptoTailStrategyTriggerRepository
 import com.wrbug.polymarketbot.service.common.MarketService
 import com.wrbug.polymarketbot.service.system.TelegramNotificationService
+import com.wrbug.polymarketbot.util.div
+import com.wrbug.polymarketbot.util.gt
+import com.wrbug.polymarketbot.util.multi
+import com.wrbug.polymarketbot.util.toSafeBigDecimal
 import com.wrbug.polymarketbot.util.CryptoUtils
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import kotlinx.coroutines.CoroutineScope
@@ -20,6 +24,7 @@ import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import jakarta.annotation.PreDestroy
+import java.math.BigDecimal
 
 /**
  * 加密价差策略订单 TG 通知轮询服务（与跟单一致）
@@ -128,6 +133,15 @@ class CryptoTailOrderNotificationPollingService(
         val market = marketService.getMarket(order.market)
         val marketTitle = trigger.marketTitle?.takeIf { it.isNotBlank() } ?: market?.title ?: order.market
         val orderTimeMs = if (order.createdAt < 1_000_000_000_000L) order.createdAt * 1000 else order.createdAt
+        // 实际成交价 = original_size * price / size_matched，数量用 size_matched
+        val sizeMatchedDec = order.sizeMatched.toSafeBigDecimal()
+        val avgFilledPriceStr = if (sizeMatchedDec.gt(BigDecimal.ZERO)) {
+            order.originalSize.toSafeBigDecimal()
+                .multi(order.price)
+                .div(sizeMatchedDec, 18)
+                .toPlainString()
+        } else null
+        val filledSize = order.sizeMatched
         telegramNotificationService.sendCryptoTailOrderSuccessNotification(
             orderId = orderId,
             marketTitle = marketTitle,
@@ -137,6 +151,8 @@ class CryptoTailOrderNotificationPollingService(
             outcome = order.outcome,
             price = order.price,
             size = order.originalSize,
+            avgFilledPrice = avgFilledPriceStr,
+            filled = filledSize,
             strategyName = strategy.name,
             accountName = account.accountName,
             walletAddress = account.walletAddress,

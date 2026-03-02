@@ -20,7 +20,12 @@ import com.wrbug.polymarketbot.repository.CopyTradingRepository
 import com.wrbug.polymarketbot.repository.LeaderRepository
 import com.wrbug.polymarketbot.constants.PolymarketConstants
 import com.wrbug.polymarketbot.service.common.MarketService
+import com.wrbug.polymarketbot.util.div
+import com.wrbug.polymarketbot.util.gt
+import com.wrbug.polymarketbot.util.multi
+import com.wrbug.polymarketbot.util.toSafeBigDecimal
 import org.springframework.stereotype.Service
+import java.math.BigDecimal
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -426,20 +431,29 @@ class OrderPushService(
                     // 获取市场信息（使用 MarketService，优先从数据库/缓存获取）
                     val market = marketService.getMarket(conditionId ?: openOrder.market)
 
-                    // 转换为 DTO
+                    // 有成交时按公式计算实际成交价：original_size * price / size_matched，数量用 size_matched
+                    val sizeMatched = openOrder.sizeMatched.toSafeBigDecimal()
+                    val avgFilledPrice = if (sizeMatched.gt(BigDecimal.ZERO)) {
+                        openOrder.originalSize.toSafeBigDecimal()
+                            .multi(openOrder.price)
+                            .div(sizeMatched, 18)
+                    } else null
+
+                    // 转换为 DTO（展示数量用 size_matched）
                     // 注意：createdAt 是 unix timestamp (Long)，需要转换为字符串
                     OrderDetailDto(
                         id = openOrder.id,
                         market = openOrder.market,
                         side = openOrder.side,
                         price = openOrder.price,
-                        size = openOrder.originalSize,  // 使用 original_size
-                        filled = openOrder.sizeMatched,  // 使用 size_matched
+                        size = openOrder.originalSize,
+                        filled = openOrder.sizeMatched,  // 已成交数量用 size_matched
                         status = openOrder.status,
                         createdAt = openOrder.createdAt.toString(),  // unix timestamp 转换为字符串
                         marketName = market?.title,
                         marketSlug = market?.slug,  // 显示用的 slug
-                        marketIcon = market?.icon
+                        marketIcon = market?.icon,
+                        avgFilledPrice = avgFilledPrice?.toPlainString()  // 实际成交价 = original_size*price/size_matched
                     )
                 },
                 onFailure = { e ->

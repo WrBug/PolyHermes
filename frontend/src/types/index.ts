@@ -580,12 +580,13 @@ export interface OrderMessage {
 
 /**
  * 订单详情（通过 API 获取）
+ * price 为订单限价，avgFilledPrice 为平均成交价（有成交时优先用于展示）
  */
 export interface OrderDetail {
   id: string  // 订单 ID
   market: string  // 市场 ID (condition ID)
   side: string  // BUY/SELL
-  price: string  // 价格
+  price: string  // 订单限价
   size: string  // 订单大小
   filled: string  // 已成交数量
   status: string  // 订单状态
@@ -593,6 +594,7 @@ export interface OrderDetail {
   marketName?: string  // 市场名称
   marketSlug?: string  // 市场 slug
   marketIcon?: string  // 市场图标
+  avgFilledPrice?: string  // 平均成交价（有成交时优先展示）
 }
 
 /**

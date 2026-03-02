@@ -7,8 +7,10 @@ import com.wrbug.polymarketbot.service.common.MarketService
 import com.wrbug.polymarketbot.service.system.TelegramNotificationService
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.CryptoUtils
-import com.wrbug.polymarketbot.util.toSafeBigDecimal
+import com.wrbug.polymarketbot.util.div
+import com.wrbug.polymarketbot.util.gt
 import com.wrbug.polymarketbot.util.multi
+import com.wrbug.polymarketbot.util.toSafeBigDecimal
 import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.event.ApplicationReadyEvent
@@ -556,11 +558,13 @@ class OrderStatusUpdateService(
 
                         logger.info("更新卖出订单价格成功: orderId=${record.sellOrderId}, 原价格=${record.sellPrice}, 新价格=$actualSellPrice")
 
-                        // 发送通知（使用实际价格）
+                        // 发送通知（使用实际成交价）
                         sendSellOrderNotification(
                             record = updatedRecord,
                             actualPrice = actualSellPrice.toString(),
                             actualSize = record.totalMatchedQuantity.toString(),
+                            avgFilledPrice = actualSellPrice.toString(),
+                            filled = record.totalMatchedQuantity.toString(),
                             account = account,
                             copyTrading = copyTrading,
                             clobApi = clobApi,
@@ -589,11 +593,13 @@ class OrderStatusUpdateService(
 
                         logger.debug("卖出订单价格无需更新: orderId=${record.sellOrderId}, price=$actualSellPrice")
 
-                        // 发送通知
+                        // 发送通知（使用实际成交价）
                         sendSellOrderNotification(
                             record = updatedRecord,
                             actualPrice = actualSellPrice.toString(),
                             actualSize = record.totalMatchedQuantity.toString(),
+                            avgFilledPrice = actualSellPrice.toString(),
+                            filled = record.totalMatchedQuantity.toString(),
                             account = account,
                             copyTrading = copyTrading,
                             clobApi = clobApi,
@@ -845,12 +851,24 @@ class OrderStatusUpdateService(
                         logger.debug("买入订单数据无需更新: orderId=${order.buyOrderId}")
                     }
 
-                    // 发送通知（使用实际数据）
+                    // 有成交时按公式计算实际成交价：original_size * price / size_matched，数量用 size_matched
+                    val sizeMatchedDec = orderDetail.sizeMatched.toSafeBigDecimal()
+                    val avgFilledPriceStr = if (sizeMatchedDec.gt(BigDecimal.ZERO)) {
+                        orderDetail.originalSize.toSafeBigDecimal()
+                            .multi(orderDetail.price)
+                            .div(sizeMatchedDec, 18)
+                            .toPlainString()
+                    } else null
+                    val filledSize = orderDetail.sizeMatched
+
+                    // 发送通知（使用实际数据，优先展示平均成交价）
                     sendBuyOrderNotification(
                         order = updatedOrder,
                         actualPrice = actualPrice.toString(),
                         actualSize = actualSize.toString(),
                         actualOutcome = actualOutcome,
+                        avgFilledPrice = avgFilledPriceStr,
+                        filled = filledSize,
                         account = account,
                         copyTrading = copyTrading,
                         clobApi = clobApi,
@@ -877,6 +895,8 @@ class OrderStatusUpdateService(
         actualPrice: String? = null,
         actualSize: String? = null,
         actualOutcome: String? = null,
+        avgFilledPrice: String? = null,  // 平均成交价（有成交时用于 TG 展示）
+        filled: String? = null,  // 已成交数量（与 avgFilledPrice 一起用于金额计算）
         account: Account? = null,
         copyTrading: CopyTrading? = null,
         clobApi: PolymarketClobApi? = null,
@@ -939,14 +959,16 @@ class OrderStatusUpdateService(
                 null
             }
 
-            // 发送通知
+            // 发送通知（优先使用平均成交价展示）
             telegramNotificationService.sendOrderSuccessNotification(
                 orderId = order.buyOrderId,
                 marketTitle = marketTitle,
                 marketId = order.marketId,
                 marketSlug = market?.eventSlug,  // 跳转用的 slug
                 side = "BUY",
-                price = actualPrice ?: order.price.toString(),  // 使用实际价格或临时价格
+                price = actualPrice ?: order.price.toString(),  // 限价，无 avgFilledPrice 时展示
+                avgFilledPrice = avgFilledPrice,
+                filled = filled,
                 size = actualSize ?: order.quantity.toString(),  // 使用实际数量或临时数量
                 outcome = actualOutcome,  // 使用实际 outcome
                 accountName = finalAccount.accountName,
@@ -979,6 +1001,8 @@ class OrderStatusUpdateService(
         actualPrice: String? = null,
         actualSize: String? = null,
         actualOutcome: String? = null,
+        avgFilledPrice: String? = null,  // 平均成交价（有成交时用于 TG 展示）
+        filled: String? = null,  // 已成交数量（与 avgFilledPrice 一起用于金额计算）
         account: Account? = null,
         copyTrading: CopyTrading? = null,
         clobApi: PolymarketClobApi? = null,
@@ -1041,14 +1065,16 @@ class OrderStatusUpdateService(
                 null
             }
 
-            // 发送通知
+            // 发送通知（优先使用平均成交价展示）
             telegramNotificationService.sendOrderSuccessNotification(
                 orderId = record.sellOrderId,
                 marketTitle = marketTitle,
                 marketId = record.marketId,
                 marketSlug = market?.eventSlug,  // 跳转用的 slug
                 side = "SELL",
-                price = actualPrice ?: record.sellPrice.toString(),  // 使用实际价格或临时价格
+                price = actualPrice ?: record.sellPrice.toString(),  // 限价，无 avgFilledPrice 时展示
+                avgFilledPrice = avgFilledPrice,
+                filled = filled,
                 size = actualSize ?: record.totalMatchedQuantity.toString(),  // 使用实际数量或临时数量
                 outcome = actualOutcome,  // 使用实际 outcome
                 accountName = finalAccount.accountName,

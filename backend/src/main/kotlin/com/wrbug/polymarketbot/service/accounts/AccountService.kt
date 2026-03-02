@@ -1345,7 +1345,8 @@ class AccountService(
                                 marketTitle = marketTitle,
                                 marketId = request.marketId,
                                 marketSlug = marketSlug,
-                                side = request.side,
+                                side = "SELL",  // 手动卖出订单，方向固定为 SELL
+                                outcome = request.side,  // request.side 是市场方向（YES/NO）
                                 price = sellPrice,  // 直接传递卖出价格
                                 size = sellQuantity.toPlainString(),  // 直接传递卖出数量
                                 accountName = account.accountName,
@@ -1377,7 +1378,7 @@ class AccountService(
                         )
                     )
                 } else {
-                    val errorMsg = response.errorMsg ?: "未知错误"
+                    val errorMsg = response.getErrorMessage()
                     val fullErrorMsg = "创建订单失败: accountId=${account.id}, marketId=${request.marketId}, side=${request.side}, orderType=${request.orderType}, price=${if (request.orderType == "LIMIT") sellPrice else "MARKET"}, quantity=${sellQuantity.toPlainString()}, errorMsg=$errorMsg"
                     logger.error(fullErrorMsg)
                     
@@ -1422,6 +1423,14 @@ class AccountService(
                 } catch (e: Exception) {
                     null
                 }
+                
+                // 尝试从 errorBody 解析 error 字段
+                val apiError = try {
+                    errorBody?.let { objectMapper.readTree(it).get("error")?.asText() }
+                } catch (e: Exception) {
+                    null
+                }
+                
                 val fullErrorMsg = "创建订单失败: accountId=${account.id}, marketId=${request.marketId}, side=${request.side}, orderType=${request.orderType}, price=${if (request.orderType == "LIMIT") sellPrice else "MARKET"}, quantity=${sellQuantity.toPlainString()}, code=${orderResponse.code()}, message=${orderResponse.message()}${if (errorBody != null) ", errorBody=$errorBody" else ""}"
                 logger.error(fullErrorMsg)
                 
@@ -1440,8 +1449,10 @@ class AccountService(
                             java.util.Locale("zh", "CN")  // 默认简体中文
                         }
 
-                        // 只传递后端返回的 msg，不传递完整堆栈
-                        val errorMsg = orderResponse.body()?.errorMsg ?: "创建订单失败"
+                        // 优先使用解析的 API error，其次使用响应体的 errorMsg，最后使用默认消息
+                        val errorMsg = apiError 
+                            ?: orderResponse.body()?.getErrorMessage() 
+                            ?: "创建订单失败 (HTTP ${orderResponse.code()})"
 
                         telegramNotificationService?.sendOrderFailureNotification(
                             marketTitle = marketTitle,
@@ -1451,7 +1462,7 @@ class AccountService(
                             outcome = null,  // 失败时可能没有 outcome
                             price = if (request.orderType == "LIMIT") sellPrice.toString() else "MARKET",
                             size = sellQuantity.toString(),
-                            errorMessage = errorMsg,  // 只传递后端返回的 msg
+                            errorMessage = errorMsg,  // 只传递后端返回的错误信息
                             accountName = account.accountName,
                             walletAddress = account.walletAddress,
                             locale = locale

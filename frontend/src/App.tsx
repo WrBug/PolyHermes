@@ -117,28 +117,37 @@ function App() {
       }
     }
     
-    // 优先使用订单详情中的数据，如果没有则使用 WebSocket 消息中的数据
-    const price = orderDetail ? parseFloat(orderDetail.price).toFixed(4) : parseFloat(order.price).toFixed(4)
-    const size = orderDetail ? parseFloat(orderDetail.size).toFixed(2) : parseFloat(order.original_size).toFixed(2)
-    const filled = orderDetail ? parseFloat(orderDetail.filled).toFixed(2) : parseFloat(order.size_matched).toFixed(2)
+    // 实际成交价 = original_size*price/size_matched；有成交时数量用 size_matched
+    const size = orderDetail ? orderDetail.size : order.original_size
+    const filled = orderDetail ? orderDetail.filled : order.size_matched
+    const sizeNum = parseFloat(size).toFixed(2)
+    const filledNum = parseFloat(filled).toFixed(2)
+    const hasFilled = parseFloat(filled) > 0
+    const price = orderDetail
+      ? (orderDetail.avgFilledPrice ?? orderDetail.price)
+      : (hasFilled
+          ? (parseFloat(order.original_size) * parseFloat(order.price) / parseFloat(order.size_matched)).toString()
+          : order.price)
+    const priceStr = parseFloat(price).toFixed(4)
     const status = orderDetail?.status || 'UNKNOWN'
-    
+    // 有成交时展示数量用 size_matched（filled），否则用 original_size
+    const displaySize = (orderDetail?.avgFilledPrice || (orderDetail == null && hasFilled)) ? filledNum : sizeNum
+
     // 构建描述信息
-    let description = `${t('order.market')}: ${marketName}\n${sideText} ${size} @ ${price}`
+    let description = `${t('order.market')}: ${marketName}\n${sideText} ${displaySize} @ ${priceStr}`
     
     // 如果有订单详情，显示更详细的信息
     if (orderDetail) {
       description += `\n${t('order.status')}: ${status}`
-      if (parseFloat(filled) > 0) {
-        description += ` | ${t('order.filled')}: ${filled}`
+      if (parseFloat(filledNum) > 0) {
+        description += ` | ${t('order.filled')}: ${filledNum}`
       }
-      const remaining = (parseFloat(size) - parseFloat(filled)).toFixed(2)
+      const remaining = (parseFloat(sizeNum) - parseFloat(filledNum)).toFixed(2)
       if (parseFloat(remaining) > 0) {
         description += ` | ${t('order.remaining')}: ${remaining}`
       }
     } else if (order.type === 'UPDATE' && parseFloat(order.size_matched) > 0) {
-      // 如果没有订单详情，使用 WebSocket 消息中的已成交数量
-      description += `\n${t('order.filled')}: ${filled}`
+      description += `\n${t('order.filled')}: ${filledNum}`
     }
     
     // 根据订单类型选择通知类型

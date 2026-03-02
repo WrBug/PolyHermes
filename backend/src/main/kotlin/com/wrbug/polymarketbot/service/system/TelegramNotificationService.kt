@@ -86,7 +86,9 @@ class TelegramNotificationService(
         marketId: String? = null,
         marketSlug: String? = null,
         side: String,
-        price: String? = null,  // 订单价格（可选，如果提供则直接使用）
+        price: String? = null,  // 订单限价（可选）
+        avgFilledPrice: String? = null,  // 平均成交价（可选，有成交时优先展示）
+        filled: String? = null,  // 已成交数量（可选，与 avgFilledPrice 一起时用于金额计算）
         size: String? = null,  // 订单数量（可选，如果提供则直接使用）
         outcome: String? = null,  // 市场方向（可选，如果提供则直接使用）
         accountName: String? = null,
@@ -130,14 +132,21 @@ class TelegramNotificationService(
             java.util.Locale("zh", "CN")  // 默认简体中文
         }
         
-        // 优先使用传入的价格和数量，如果没有提供则尝试从订单详情获取
-        var actualPrice: String? = price
+        // 优先使用平均成交价（实际成交价），其次传入的限价，若未提供则从订单详情获取
+        var actualPrice: String? = avgFilledPrice?.takeIf { it.isNotBlank() } ?: price
         var actualSize: String? = size
         var actualSide: String = side
         var actualOutcome: String? = outcome
+
+        // 有平均成交价时，已成交数量优先用 filled，用于金额计算
+        val sizeForAmount: String? = if (avgFilledPrice != null && avgFilledPrice.isNotBlank() && filled != null && filled.isNotBlank()) {
+            filled
+        } else {
+            null
+        }
         
-        // 如果价格或数量未提供，尝试从订单详情获取
-        if ((actualPrice == null || actualSize == null) && orderId != null && clobApi != null && apiKey != null && apiSecret != null && apiPassphrase != null && walletAddressForApi != null) {
+        // 如果价格、数量或市场方向未提供，尝试从订单详情获取
+        if ((actualPrice == null || actualSize == null || actualOutcome == null) && orderId != null && clobApi != null && apiKey != null && apiSecret != null && apiPassphrase != null && walletAddressForApi != null) {
             try {
                 val orderResponse = clobApi.getOrder(orderId)
                 if (orderResponse.isSuccessful) {
@@ -149,7 +158,8 @@ class TelegramNotificationService(
                         if (actualSize == null) {
                             actualSize = order.originalSize  // 使用 originalSize 作为订单数量
                         }
-                        actualSide = order.side  // 使用订单详情中的 side
+                        // 注意：不覆盖 side，因为传入的 side（BUY/SELL）是正确的
+                        // actualSide = order.side  // 不要使用订单详情中的 side，因为它可能不准确
                         if (actualOutcome == null) {
                             actualOutcome = order.outcome  // 使用订单详情中的 outcome（市场方向）
                         }
@@ -167,12 +177,19 @@ class TelegramNotificationService(
         
         // 如果仍然没有获取到实际值，使用默认值（这种情况不应该发生，但为了兼容性保留）
         val finalPrice = actualPrice ?: "0"
-        val finalSize = actualSize ?: "0"
+        // 有实际成交价时展示数量用 size_matched（filled），否则用订单数量（original_size）
+        val finalSize = if (avgFilledPrice != null && avgFilledPrice.isNotBlank() && filled != null && filled.isNotBlank()) {
+            filled
+        } else {
+            actualSize ?: "0"
+        }
+        // 金额计算：有实际成交价和已成交数量时用二者乘积，否则用展示价格×订单数量
+        val sizeForCalc = sizeForAmount?.takeIf { it.isNotBlank() } ?: finalSize
         
         // 计算订单金额 = price × size（USDC）
         val amount = try {
             val priceDecimal = finalPrice.toSafeBigDecimal()
-            val sizeDecimal = finalSize.toSafeBigDecimal()
+            val sizeDecimal = sizeForCalc.toSafeBigDecimal()
             priceDecimal.multiply(sizeDecimal).toString()
         } catch (e: Exception) {
             logger.warn("计算订单金额失败: ${e.message}", e)
@@ -430,6 +447,9 @@ class TelegramNotificationService(
 
     /**
      * 发送加密价差策略下单成功通知（与跟单一致：在收到 WS 订单推送时匹配价差策略订单后调用）
+     * @param price 订单限价
+     * @param avgFilledPrice 平均成交价（可选，有成交时优先展示）
+     * @param filled 已成交数量（可选，与 avgFilledPrice 一起时用于金额计算）
      */
     suspend fun sendCryptoTailOrderSuccessNotification(
         orderId: String?,
@@ -440,6 +460,8 @@ class TelegramNotificationService(
         outcome: String? = null,
         price: String,
         size: String,
+        avgFilledPrice: String? = null,
+        filled: String? = null,
         strategyName: String? = null,
         accountName: String? = null,
         walletAddress: String? = null,
@@ -464,9 +486,13 @@ class TelegramNotificationService(
             logger.warn("获取语言设置失败，使用默认语言: ${e.message}", e)
             java.util.Locale("zh", "CN")
         }
+        val displayPrice = avgFilledPrice?.takeIf { it.isNotBlank() } ?: price
+        val hasAvgFilled = avgFilledPrice != null && avgFilledPrice.isNotBlank() && filled != null && filled.isNotBlank()
+        val sizeForAmount = if (hasAvgFilled) filled else size
+        val quantityDisplay = if (hasAvgFilled) filled else size  // 有实际成交价时展示数量用 size_matched
         val amount = try {
-            val priceDecimal = price.toSafeBigDecimal()
-            val sizeDecimal = size.toSafeBigDecimal()
+            val priceDecimal = displayPrice.toSafeBigDecimal()
+            val sizeDecimal = sizeForAmount.toSafeBigDecimal()
             priceDecimal.multiply(sizeDecimal).toString()
         } catch (e: Exception) {
             logger.warn("计算订单金额失败: ${e.message}", e)
@@ -482,8 +508,8 @@ class TelegramNotificationService(
             marketSlug = marketSlug,
             side = side,
             outcome = outcome,
-            price = price,
-            size = size,
+            price = displayPrice,
+            size = quantityDisplay.orEmpty(),
             amount = amount,
             strategyName = strategyName,
             accountName = accountName,
