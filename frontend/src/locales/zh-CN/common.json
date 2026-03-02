@@ -1504,7 +1504,9 @@
       "strategyName": "策略名称",
       "account": "账户",
       "market": "关联市场",
+      "marketAndTime": "市场/时间",
       "timeWindow": "时间区间",
+      "config": "配置",
       "priceRange": "价格区间",
       "amountMode": "投入方式",
       "ratio": "比例",
@@ -1517,6 +1519,7 @@
       "disable": "停用",
       "delete": "删除",
       "viewTriggers": "订单",
+      "viewPnlCurve": "收益曲线",
       "deleteConfirm": "确定删除该策略？",
       "fetchFailed": "获取列表失败",
       "configGuide": "配置指南"
@@ -1584,6 +1587,20 @@
       "emptySuccess": "暂无成功记录",
       "emptyFail": "暂无失败记录",
       "totalCount": "共 {count} 条"
+    },
+    "pnlCurve": {
+      "title": "收益曲线",
+      "totalPnl": "总收益",
+      "settledCount": "已结算笔数",
+      "winRate": "胜率",
+      "maxDrawdown": "最大回撤",
+      "timeRange": "时间范围",
+      "today": "今日",
+      "last7Days": "近7天",
+      "last30Days": "近30天",
+      "all": "全部",
+      "customRange": "自定义",
+      "empty": "暂无已结算订单，无法展示收益曲线"
     }
   },
   "cryptoTailMonitor": {

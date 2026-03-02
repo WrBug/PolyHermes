@@ -1097,6 +1097,33 @@ export interface CryptoTailStrategyTriggerDto {
   createdAt: number
 }
 
+/** 收益曲线请求 */
+export interface CryptoTailPnlCurveRequest {
+  strategyId: number
+  startDate?: number
+  endDate?: number
+}
+
+/** 收益曲线单点 */
+export interface CryptoTailPnlCurvePoint {
+  timestamp: number
+  cumulativePnl: string
+  pointPnl: string
+  settledCount: number
+}
+
+/** 收益曲线响应 */
+export interface CryptoTailPnlCurveResponse {
+  strategyId: number
+  strategyName: string
+  totalRealizedPnl: string
+  settledCount: number
+  winCount: number
+  winRate: string | null
+  maxDrawdown: string | null
+  curveData: CryptoTailPnlCurvePoint[]
+}
+
 /**
  * 加密价差策略市场选项
  */

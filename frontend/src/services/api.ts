@@ -494,6 +494,8 @@ export const apiService = {
       endDate?: number
     }) =>
       apiClient.post<ApiResponse<{ list: import('../types').CryptoTailStrategyTriggerDto[]; total: number }>>('/crypto-tail-strategy/triggers', data),
+    pnlCurve: (data: import('../types').CryptoTailPnlCurveRequest) =>
+      apiClient.post<ApiResponse<import('../types').CryptoTailPnlCurveResponse>>('/crypto-tail-strategy/pnl-curve', data),
     marketOptions: () =>
       apiClient.post<ApiResponse<import('../types').CryptoTailMarketOptionDto[]>>('/crypto-tail-strategy/market-options', {}),
     autoMinSpread: (data: { intervalSeconds: number }) =>

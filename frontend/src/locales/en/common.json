@@ -1504,7 +1504,9 @@
       "strategyName": "Strategy Name",
       "account": "Account",
       "market": "Market",
+      "marketAndTime": "Market / Time",
       "timeWindow": "Time Window",
+      "config": "Config",
       "priceRange": "Price Range",
       "amountMode": "Amount Mode",
       "ratio": "Ratio",
@@ -1517,6 +1519,7 @@
       "disable": "Disable",
       "delete": "Delete",
       "viewTriggers": "Orders",
+      "viewPnlCurve": "PnL Curve",
       "deleteConfirm": "Delete this strategy?",
       "fetchFailed": "Failed to fetch list",
       "configGuide": "Configuration Guide"
@@ -1584,6 +1587,20 @@
       "emptySuccess": "No success records",
       "emptyFail": "No failed records",
       "totalCount": "{count} record(s)"
+    },
+    "pnlCurve": {
+      "title": "PnL Curve",
+      "totalPnl": "Total PnL",
+      "settledCount": "Settled",
+      "winRate": "Win Rate",
+      "maxDrawdown": "Max Drawdown",
+      "timeRange": "Time Range",
+      "today": "Today",
+      "last7Days": "Last 7 Days",
+      "last30Days": "Last 30 Days",
+      "all": "All",
+      "customRange": "Custom",
+      "empty": "No settled orders yet, cannot show PnL curve"
     }
   },
   "cryptoTailMonitor": {

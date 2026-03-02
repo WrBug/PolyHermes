@@ -40,4 +40,16 @@ interface CryptoTailStrategyTriggerRepository : JpaRepository<CryptoTailStrategy
     /** 策略已结算中赢的笔数（outcome_index = winner_outcome_index） */
     @Query("SELECT COUNT(t) FROM CryptoTailStrategyTrigger t WHERE t.strategyId = :strategyId AND t.resolved = true AND t.outcomeIndex = t.winnerOutcomeIndex")
     fun countWinsByStrategyId(@Param("strategyId") strategyId: Long): Long
+
+    /** 收益曲线：已结算记录，按结算时间（无则创建时间）在区间内升序 */
+    @Query(
+        "SELECT t FROM CryptoTailStrategyTrigger t WHERE t.strategyId = :strategyId AND t.resolved = true " +
+            "AND COALESCE(t.settledAt, t.createdAt) >= :start AND COALESCE(t.settledAt, t.createdAt) <= :end " +
+            "ORDER BY COALESCE(t.settledAt, t.createdAt) ASC"
+    )
+    fun findResolvedByStrategyIdAndTimeRangeOrderBySettledAsc(
+        @Param("strategyId") strategyId: Long,
+        @Param("start") start: Long,
+        @Param("end") end: Long
+    ): List<CryptoTailStrategyTrigger>
 }

@@ -1504,7 +1504,9 @@
       "strategyName": "策略名稱",
       "account": "賬戶",
       "market": "關聯市場",
+      "marketAndTime": "市場/時間",
       "timeWindow": "時間區間",
+      "config": "配置",
       "priceRange": "價格區間",
       "amountMode": "投入方式",
       "ratio": "比例",
@@ -1517,6 +1519,7 @@
       "disable": "停用",
       "delete": "刪除",
       "viewTriggers": "訂單",
+      "viewPnlCurve": "收益曲線",
       "deleteConfirm": "確定刪除該策略？",
       "fetchFailed": "獲取列表失敗",
       "configGuide": "配置指南"
@@ -1584,6 +1587,20 @@
       "emptySuccess": "暫無成功記錄",
       "emptyFail": "暫無失敗記錄",
       "totalCount": "共 {count} 條"
+    },
+    "pnlCurve": {
+      "title": "收益曲線",
+      "totalPnl": "總收益",
+      "settledCount": "已結算筆數",
+      "winRate": "勝率",
+      "maxDrawdown": "最大回撤",
+      "timeRange": "時間範圍",
+      "today": "今日",
+      "last7Days": "近7天",
+      "last30Days": "近30天",
+      "all": "全部",
+      "customRange": "自定義",
+      "empty": "暫無已結算訂單，無法展示收益曲線"
     }
   },
   "cryptoTailMonitor": {

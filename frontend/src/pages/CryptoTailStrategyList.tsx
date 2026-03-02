@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Card,
@@ -25,14 +25,15 @@ import {
 } from 'antd'
 import type { Dayjs } from 'dayjs'
 import dayjs from 'dayjs'
-import { PlusOutlined, EditOutlined, UnorderedListOutlined, InfoCircleOutlined, WarningOutlined, CalendarOutlined, FileTextOutlined, DeleteOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, UnorderedListOutlined, LineChartOutlined, InfoCircleOutlined, WarningOutlined, CalendarOutlined, FileTextOutlined, DeleteOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useMediaQuery } from 'react-responsive'
 import { apiService } from '../services/api'
 import { useAccountStore } from '../store/accountStore'
-import type { CryptoTailStrategyDto, CryptoTailStrategyTriggerDto, CryptoTailMarketOptionDto } from '../types'
+import type { CryptoTailStrategyDto, CryptoTailStrategyTriggerDto, CryptoTailMarketOptionDto, CryptoTailPnlCurveResponse } from '../types'
 import { formatUSDC, formatNumber } from '../utils'
 import { getVersionInfo } from '../utils/version'
+import CryptoTailPnlCurveModal from './CryptoTailPnlCurveModal'
 
 const CryptoTailStrategyList: React.FC = () => {
   const { t, i18n } = useTranslation()
@@ -57,6 +58,14 @@ const CryptoTailStrategyList: React.FC = () => {
   const [triggersTotal, setTriggersTotal] = useState(0)
   const [triggersLoading, setTriggersLoading] = useState(false)
   const [form] = Form.useForm()
+
+  const [pnlCurveModalOpen, setPnlCurveModalOpen] = useState(false)
+  const [pnlCurveStrategyId, setPnlCurveStrategyId] = useState<number | null>(null)
+  const [pnlCurveStrategyName, setPnlCurveStrategyName] = useState('')
+  const [pnlCurvePreset, setPnlCurvePreset] = useState<'today' | '7d' | '30d' | 'all'>('all')
+  const [pnlCurveCustomRange, setPnlCurveCustomRange] = useState<[Dayjs | null, Dayjs | null]>([null, null])
+  const [pnlCurveData, setPnlCurveData] = useState<CryptoTailPnlCurveResponse | null>(null)
+  const [pnlCurveLoading, setPnlCurveLoading] = useState(false)
 
   /** 币安 API 健康状态：仅保留「不可用」的项，用于强提醒 */
   const [binanceUnhealthy, setBinanceUnhealthy] = useState<Array<{ name: string; message: string }>>([])
@@ -327,6 +336,61 @@ const CryptoTailStrategyList: React.FC = () => {
     await loadTriggerRecords(strategyId, 'success', { page: 1, pageSize: 20, dateRange: [null, null] })
   }
 
+  const getPnlCurveTimeRange = (): { startDate?: number; endDate?: number } => {
+    if (pnlCurvePreset === 'all') return {}
+    const now = dayjs()
+    if (pnlCurvePreset === 'today') {
+      return { startDate: now.startOf('day').valueOf(), endDate: now.valueOf() }
+    }
+    if (pnlCurvePreset === '7d') {
+      return { startDate: now.subtract(7, 'day').startOf('day').valueOf(), endDate: now.valueOf() }
+    }
+    if (pnlCurvePreset === '30d') {
+      return { startDate: now.subtract(30, 'day').startOf('day').valueOf(), endDate: now.valueOf() }
+    }
+    if (pnlCurveCustomRange[0] != null && pnlCurveCustomRange[1] != null) {
+      return {
+        startDate: pnlCurveCustomRange[0].startOf('day').valueOf(),
+        endDate: pnlCurveCustomRange[1].endOf('day').valueOf()
+      }
+    }
+    return {}
+  }
+
+  const loadPnlCurve = async () => {
+    if (pnlCurveStrategyId == null) return
+    setPnlCurveLoading(true)
+    try {
+      const { startDate, endDate } = getPnlCurveTimeRange()
+      const res = await apiService.cryptoTailStrategy.pnlCurve({
+        strategyId: pnlCurveStrategyId,
+        startDate,
+        endDate
+      })
+      if (res.data.code === 0 && res.data.data) {
+        setPnlCurveData(res.data.data)
+      }
+    } catch (e) {
+      console.error('Failed to load PnL curve:', e)
+    } finally {
+      setPnlCurveLoading(false)
+    }
+  }
+
+  const openPnlCurve = (record: CryptoTailStrategyDto) => {
+    setPnlCurveStrategyId(record.id)
+    setPnlCurveStrategyName(record.name ?? record.marketTitle ?? record.marketSlugPrefix ?? '')
+    setPnlCurvePreset('all')
+    setPnlCurveCustomRange([null, null])
+    setPnlCurveModalOpen(true)
+  }
+
+  useEffect(() => {
+    if (pnlCurveModalOpen && pnlCurveStrategyId != null) {
+      loadPnlCurve()
+    }
+  }, [pnlCurveModalOpen, pnlCurveStrategyId, pnlCurvePreset, pnlCurveCustomRange])
+
   const onTriggerTabChange = (key: string) => {
     const next = key === 'success' ? 'success' : 'fail'
     setTriggerTab(next)
@@ -388,7 +452,7 @@ const CryptoTailStrategyList: React.FC = () => {
       title: t('common.status'),
       dataIndex: 'enabled',
       key: 'enabled',
-      width: 80,
+      width: 72,
       render: (enabled: boolean, record: CryptoTailStrategyDto) => (
         <Switch
           checked={enabled}
@@ -401,7 +465,8 @@ const CryptoTailStrategyList: React.FC = () => {
       title: t('cryptoTailStrategy.list.strategyName'),
       dataIndex: 'name',
       key: 'name',
-      width: isMobile ? 100 : 160,
+      width: isMobile ? 100 : 140,
+      ellipsis: true,
       render: (name: string | undefined, r: CryptoTailStrategyDto) => (
         <Typography.Text strong style={{ wordBreak: 'break-word', whiteSpace: 'normal' }}>
           {name || (r.marketTitle ?? r.marketSlugPrefix) || '-'}
@@ -412,7 +477,8 @@ const CryptoTailStrategyList: React.FC = () => {
       title: t('cryptoTailStrategy.list.account'),
       dataIndex: 'accountId',
       key: 'accountId',
-      width: isMobile ? 90 : 120,
+      width: isMobile ? 90 : 100,
+      ellipsis: true,
       render: (_: unknown, r: CryptoTailStrategyDto) => (
         <Typography.Text type="secondary" style={{ wordBreak: 'break-word', whiteSpace: 'normal' }}>
           {getAccountLabel(r.accountId)}
@@ -420,99 +486,149 @@ const CryptoTailStrategyList: React.FC = () => {
       )
     },
     {
-      title: t('cryptoTailStrategy.list.market'),
-      key: 'market',
-      width: isMobile ? 120 : 200,
+      title: t('cryptoTailStrategy.list.marketAndTime'),
+      key: 'marketAndTime',
+      width: isMobile ? 120 : 180,
       render: (_: unknown, r: CryptoTailStrategyDto) => (
-        <Typography.Text style={{ wordBreak: 'break-word', whiteSpace: 'normal' }}>
-          {marketOptions.find((m) => m.slug === r.marketSlugPrefix)?.title ?? r.marketTitle ?? r.marketSlugPrefix ?? '-'}
-        </Typography.Text>
+        <div>
+          <Typography.Text style={{ wordBreak: 'break-word', whiteSpace: 'normal', display: 'block' }}>
+            {marketOptions.find((m) => m.slug === r.marketSlugPrefix)?.title ?? r.marketTitle ?? r.marketSlugPrefix ?? '-'}
+          </Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 12, wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
+            {formatTimeWindow(r.windowStartSeconds, r.windowEndSeconds, false)}
+          </Typography.Text>
+        </div>
       )
     },
     {
-      title: t('cryptoTailStrategy.list.timeWindow'),
-      key: 'timeWindow',
-      width: isMobile ? 100 : 120,
+      title: t('cryptoTailStrategy.list.config'),
+      key: 'config',
+      width: isMobile ? 100 : 140,
       render: (_: unknown, r: CryptoTailStrategyDto) => (
-        <Typography.Text type="secondary" style={{ wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
-          {formatTimeWindow(r.windowStartSeconds, r.windowEndSeconds)}
-        </Typography.Text>
-      )
-    },
-    {
-      title: t('cryptoTailStrategy.list.priceRange'),
-      key: 'priceRange',
-      width: isMobile ? 90 : 120,
-      render: (_: unknown, r: CryptoTailStrategyDto) => (
-        <Typography.Text type="secondary" style={{ wordBreak: 'break-word', whiteSpace: 'normal' }}>
-          {formatPriceRange(r.minPrice, r.maxPrice)}
-        </Typography.Text>
-      )
-    },
-    {
-      title: t('cryptoTailStrategy.list.amountMode'),
-      key: 'amountMode',
-      width: isMobile ? 90 : 120,
-      render: (_: unknown, r: CryptoTailStrategyDto) => (
-        <Typography.Text type="secondary" style={{ wordBreak: 'break-word', whiteSpace: 'normal' }}>
-          {(r.amountMode?.toUpperCase() ?? '') === 'RATIO'
-            ? `${t('cryptoTailStrategy.list.ratio')} ${formatNumber(r.amountValue, 2) || '0'}%`
-            : `${t('cryptoTailStrategy.list.fixed')} ${formatUSDC(r.amountValue)} USDC`}
-        </Typography.Text>
+        <div>
+          <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
+            {formatPriceRange(r.minPrice, r.maxPrice)}
+          </Typography.Text>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {(r.amountMode?.toUpperCase() ?? '') === 'RATIO'
+              ? `${t('cryptoTailStrategy.list.ratio')} ${formatNumber(r.amountValue, 2) || '0'}%`
+              : `${t('cryptoTailStrategy.list.fixed')} ${formatUSDC(r.amountValue)}`}
+          </Typography.Text>
+        </div>
       )
     },
     {
       title: t('cryptoTailStrategy.list.totalRealizedPnl'),
-      key: 'totalRealizedPnl',
+      key: 'pnl',
       width: isMobile ? 90 : 120,
       render: (_: unknown, r: CryptoTailStrategyDto) => {
-        const text = r.totalRealizedPnl != null ? `${formatUSDC(r.totalRealizedPnl)} USDC` : '-'
+        const text = r.totalRealizedPnl != null ? formatUSDC(r.totalRealizedPnl) : '-'
         const color = pnlColor(r.totalRealizedPnl)
-        return color ? (
-          <Typography.Text style={{ color, fontWeight: 500 }}>{text}</Typography.Text>
-        ) : (
-          <Typography.Text type="secondary">{text}</Typography.Text>
+        return (
+          <div>
+            {color ? (
+              <Typography.Text style={{ color, fontWeight: 500 }}>{text}</Typography.Text>
+            ) : (
+              <Typography.Text type="secondary">{text}</Typography.Text>
+            )}
+            <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
+              {r.winRate != null ? `${(Number(r.winRate) * 100).toFixed(1)}%` : '-'}
+            </Typography.Text>
+          </div>
         )
       }
     },
     {
-      title: t('cryptoTailStrategy.list.winRate'),
-      key: 'winRate',
-      width: isMobile ? 70 : 90,
-      render: (_: unknown, r: CryptoTailStrategyDto) =>
-        r.winRate != null ? (
-          <Tag color="blue">{(Number(r.winRate) * 100).toFixed(1)}%</Tag>
-        ) : (
-          <Typography.Text type="secondary">-</Typography.Text>
-        )
-    },
-    {
       title: t('cryptoTailStrategy.list.actions'),
       key: 'actions',
-      width: isMobile ? 120 : 200,
+      width: isMobile ? 120 : 140,
       fixed: 'right' as const,
       render: (_: unknown, record: CryptoTailStrategyDto) => (
-        <Space size="small" wrap>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEditModal(record)}>
-            {t('cryptoTailStrategy.list.edit')}
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<UnorderedListOutlined />}
-            onClick={() => openTriggers(record.id)}
-          >
-            {t('cryptoTailStrategy.list.viewTriggers')}
-          </Button>
+        <Space size={4}>
+          <Tooltip title={t('cryptoTailStrategy.list.edit')}>
+            <div
+              onClick={() => openEditModal(record)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '32px',
+                height: '32px',
+                cursor: 'pointer',
+                borderRadius: '6px',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#f0f0f0' }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
+            >
+              <EditOutlined style={{ fontSize: '16px', color: '#1890ff' }} />
+            </div>
+          </Tooltip>
+
+          <Tooltip title={t('cryptoTailStrategy.list.viewTriggers')}>
+            <div
+              onClick={() => openTriggers(record.id)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '32px',
+                height: '32px',
+                cursor: 'pointer',
+                borderRadius: '6px',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#f0f0f0' }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
+            >
+              <UnorderedListOutlined style={{ fontSize: '16px', color: '#1890ff' }} />
+            </div>
+          </Tooltip>
+
+          <Tooltip title={t('cryptoTailStrategy.list.viewPnlCurve')}>
+            <div
+              onClick={() => openPnlCurve(record)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '32px',
+                height: '32px',
+                cursor: 'pointer',
+                borderRadius: '6px',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#f0f0f0' }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
+            >
+              <LineChartOutlined style={{ fontSize: '16px', color: '#1890ff' }} />
+            </div>
+          </Tooltip>
+
           <Popconfirm
             title={t('cryptoTailStrategy.list.deleteConfirm')}
             onConfirm={() => handleDelete(record.id)}
             okText={t('common.confirm')}
             cancelText={t('common.cancel')}
           >
-            <Button type="link" size="small" danger>
-              {t('cryptoTailStrategy.list.delete')}
-            </Button>
+            <Tooltip title={t('cryptoTailStrategy.list.delete')}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  cursor: 'pointer',
+                  borderRadius: '6px',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#fff1f0' }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
+              >
+                <DeleteOutlined style={{ fontSize: '16px', color: '#ff4d4f' }} />
+              </div>
+            </Tooltip>
           </Popconfirm>
         </Space>
       )
@@ -688,6 +804,12 @@ const CryptoTailStrategyList: React.FC = () => {
                           <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('cryptoTailStrategy.list.viewTriggers')}</span>
                         </div>
                       </Tooltip>
+                      <Tooltip title={t('cryptoTailStrategy.list.viewPnlCurve')}>
+                        <div onClick={() => openPnlCurve(item)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}>
+                          <LineChartOutlined style={{ fontSize: '18px', color: '#1890ff' }} />
+                          <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('cryptoTailStrategy.list.viewPnlCurve')}</span>
+                        </div>
+                      </Tooltip>
                       <Popconfirm title={t('cryptoTailStrategy.list.deleteConfirm')} onConfirm={() => handleDelete(item.id)} okText={t('common.confirm')} cancelText={t('common.cancel')}>
                         <Tooltip title={t('cryptoTailStrategy.list.delete')}>
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}>
@@ -707,7 +829,7 @@ const CryptoTailStrategyList: React.FC = () => {
               columns={columns}
               dataSource={list}
               pagination={{ pageSize: 20 }}
-              scroll={{ x: 900 }}
+              scroll={{ x: 720 }}
             />
           )}
         </Spin>
@@ -735,6 +857,17 @@ const CryptoTailStrategyList: React.FC = () => {
       >
         <p>{t('cryptoTailStrategy.redeemRequiredModal.description')}</p>
       </Modal>
+
+      <CryptoTailPnlCurveModal
+        open={pnlCurveModalOpen}
+        onClose={() => setPnlCurveModalOpen(false)}
+        data={pnlCurveData}
+        loading={pnlCurveLoading}
+        strategyName={pnlCurveStrategyName}
+        preset={pnlCurvePreset}
+        onPresetChange={setPnlCurvePreset}
+        onRefresh={loadPnlCurve}
+      />
 
       <Modal
         title={editingId ? t('cryptoTailStrategy.form.update') : t('cryptoTailStrategy.form.create')}

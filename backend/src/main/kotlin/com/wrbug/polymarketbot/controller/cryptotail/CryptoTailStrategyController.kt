@@ -15,6 +15,8 @@ import com.wrbug.polymarketbot.dto.CryptoTailMonitorInitRequest
 import com.wrbug.polymarketbot.dto.CryptoTailMonitorInitResponse
 import com.wrbug.polymarketbot.dto.CryptoTailManualOrderRequest
 import com.wrbug.polymarketbot.dto.CryptoTailManualOrderResponse
+import com.wrbug.polymarketbot.dto.CryptoTailPnlCurveRequest
+import com.wrbug.polymarketbot.dto.CryptoTailPnlCurveResponse
 import com.wrbug.polymarketbot.enums.ErrorCode
 import com.wrbug.polymarketbot.service.binance.BinanceKlineAutoSpreadService
 import com.wrbug.polymarketbot.service.cryptotail.CryptoTailStrategyService
@@ -127,6 +129,26 @@ class CryptoTailStrategyController(
         } catch (e: Exception) {
             logger.error("删除加密价差策略异常: ${e.message}", e)
             ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_CRYPTO_TAIL_STRATEGY_DELETE_FAILED, e.message, messageSource))
+        }
+    }
+
+    @PostMapping("/pnl-curve")
+    fun getPnlCurve(@RequestBody request: CryptoTailPnlCurveRequest): ResponseEntity<ApiResponse<CryptoTailPnlCurveResponse>> {
+        return try {
+            if (request.strategyId <= 0) {
+                return ResponseEntity.ok(ApiResponse.error(ErrorCode.CRYPTO_TAIL_STRATEGY_NOT_FOUND, messageSource = messageSource))
+            }
+            val result = cryptoTailStrategyService.getPnlCurve(request)
+            result.fold(
+                onSuccess = { ResponseEntity.ok(ApiResponse.success(it)) },
+                onFailure = { e ->
+                    logger.error("查询收益曲线失败: ${e.message}", e)
+                    ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_CRYPTO_TAIL_STRATEGY_TRIGGERS_FETCH_FAILED, e.message, messageSource))
+                }
+            )
+        } catch (e: Exception) {
+            logger.error("查询收益曲线异常: ${e.message}", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_CRYPTO_TAIL_STRATEGY_TRIGGERS_FETCH_FAILED, e.message, messageSource))
         }
     }
 
