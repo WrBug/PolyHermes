@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { Card, Table, Button, Space, Tag, Popconfirm, message, Typography, Modal, Form, Input, Switch, Tooltip, Row, Col, Tabs } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined, SendOutlined, CopyOutlined, ReloadOutlined, CheckOutlined, RobotOutlined, FormOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SendOutlined, ReloadOutlined, CheckOutlined, RobotOutlined, FormOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { apiService } from '../services/api'
 import type { NotificationConfig, NotificationConfigRequest, NotificationConfigUpdateRequest, NotificationTemplate, TemplateTypeInfo, TemplateVariablesResponse, TemplateVariable } from '../types'
@@ -355,8 +355,35 @@ const NotificationSettingsPage: React.FC = () => {
   }
 
   const handleCopyVariable = useCallback((variable: string) => {
-    navigator.clipboard.writeText(`{{${variable}}}`)
-    message.success(t('notificationSettings.templates.copied'))
+    const text = `{{${variable}}}`
+
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(() => {
+        message.success(t('notificationSettings.templates.copied'))
+      }).catch(() => {
+        fallbackCopy(text)
+      })
+    } else {
+      fallbackCopy(text)
+    }
+
+    function fallbackCopy(text: string) {
+      const textArea = document.createElement('textarea')
+      textArea.value = text
+      textArea.style.position = 'fixed'
+      textArea.style.left = '-9999px'
+      textArea.style.top = '-9999px'
+      document.body.appendChild(textArea)
+      textArea.focus()
+      textArea.select()
+      try {
+        document.execCommand('copy')
+        message.success(t('notificationSettings.templates.copied'))
+      } catch {
+        message.error(t('common.copyFailed'))
+      }
+      document.body.removeChild(textArea)
+    }
   }, [t])
 
   const [variableHoverKey, setVariableHoverKey] = useState<string | null>(null)
@@ -365,20 +392,31 @@ const NotificationSettingsPage: React.FC = () => {
     const isHover = variableHoverKey === variable.key
     const label = t(`notificationSettings.templates.variableLabels.${variable.key}`)
     const description = t(`notificationSettings.templates.variableDescriptions.${variable.key}`)
+    const variableElement = (
+      <span
+        role="button"
+        tabIndex={0}
+        style={{ ...variableTagStyle, ...(isHover && !isMobile ? variableTagHoverStyle : {}) }}
+        onClick={() => handleCopyVariable(variable.key)}
+        onMouseEnter={() => !isMobile && setVariableHoverKey(variable.key)}
+        onMouseLeave={() => !isMobile && setVariableHoverKey(null)}
+        onKeyDown={(e) => e.key === 'Enter' && handleCopyVariable(variable.key)}
+      >
+        <span style={{ fontFamily: 'monospace' }}>{label}</span>
+      </span>
+    )
+
+    if (isMobile) {
+      return (
+        <span key={variable.key} style={{ display: 'inline-block' }}>
+          {variableElement}
+        </span>
+      )
+    }
+
     return (
       <Tooltip key={variable.key} title={description || `{{${variable.key}}}`} placement="top">
-        <span
-          role="button"
-          tabIndex={0}
-          style={{ ...variableTagStyle, ...(isHover ? variableTagHoverStyle : {}) }}
-          onClick={() => handleCopyVariable(variable.key)}
-          onMouseEnter={() => setVariableHoverKey(variable.key)}
-          onMouseLeave={() => setVariableHoverKey(null)}
-          onKeyDown={(e) => e.key === 'Enter' && handleCopyVariable(variable.key)}
-        >
-          <CopyOutlined style={{ marginRight: 4, fontSize: 11, opacity: 0.6 }} />
-          <span style={{ fontFamily: 'monospace' }}>{label}</span>
-        </span>
+        {variableElement}
       </Tooltip>
     )
   }
@@ -617,7 +655,7 @@ const NotificationSettingsPage: React.FC = () => {
             <TextArea
               value={templateContent}
               onChange={handleTemplateContentChange}
-              rows={isMobile ? 10 : 16}
+              rows={isMobile ? 15 : 16}
               style={{ fontFamily: 'monospace', fontSize: 13, borderRadius: 8, resize: 'none' }}
               placeholder={t('notificationSettings.templates.contentPlaceholder')}
             />

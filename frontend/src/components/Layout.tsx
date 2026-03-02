@@ -208,6 +208,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           label: t('menu.systemOverview') || '通用设置'
         },
         {
+          key: '/system-settings/notification',
+          icon: <NotificationOutlined />,
+          label: t('menu.notifications') || '消息推送设置'
+        },
+        {
           key: '/system-settings/rpc-nodes',
           icon: <ApiOutlined />,
           label: t('menu.rpcNodes') || 'RPC节点管理'
@@ -216,11 +221,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           key: '/system-settings/api-health',
           icon: <CheckCircleOutlined />,
           label: t('menu.apiHealth') || 'API健康'
-        },
-        {
-          key: '/system-settings/notification',
-          icon: <NotificationOutlined />,
-          label: t('menu.notifications') || '消息推送设置'
         }
       ]
     },
