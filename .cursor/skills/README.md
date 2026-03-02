@@ -14,6 +14,10 @@
 │           └── package.json
 ├── backend/                     # 后端相关 skill
 └── common/                      # 通用 skill
+    └── create-release/          # 创建 GitHub Release
+        ├── SKILL.md
+        └── scripts/
+            └── create-release.sh
 ```
 
 - **SKILL.md**：YAML frontmatter（`name`、`description` 必填，`name` 须与父文件夹名一致、小写连字符）+ 给 Agent 的详细指令。
@@ -27,7 +31,8 @@
 
 ## 示例
 
-- `frontend/check-i18n-keys/SKILL.md` + `frontend/check-i18n-keys/scripts/` — 检查前端多语言 key。
+- `frontend/check-i18n-keys/SKILL.md` + `frontend/check-i18n-keys/scripts/` — 检查前端多语言 key
+- `common/create-release/SKILL.md` + `common/create-release/scripts/` — 创建 GitHub Release
 
 ## 运行 check-i18n-keys
 
@@ -36,4 +41,18 @@ cd .cursor/skills/frontend/check-i18n-keys/scripts
 npm install
 npm run check-i18n
 ```
+
+## 运行 create-release
+
+```bash
+cd .cursor/skills/common/create-release/scripts
+./create-release.sh -t v1.0.0 -T "Release v1.0.0" -d "发布说明"
+```
+
+参数说明：
+- `-t` 版本号（必需，格式 v1.0.0）
+- `-T` Release 标题
+- `-d` Release 描述
+- `-p` 标记为 Pre-release（自动加 -beta 后缀）
+- `-y` 无交互模式
 
