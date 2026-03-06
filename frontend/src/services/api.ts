@@ -515,6 +515,26 @@ export const apiService = {
   },
 
   /**
+   * 体育尾盘策略 API
+   */
+  sportsTailStrategy: {
+    list: (data: { accountId?: number; sport?: string } = {}) =>
+      apiClient.post<ApiResponse<import('../types').SportsTailStrategyListResponse>>('/sports-tail-strategy/list', data),
+    create: (data: import('../types').SportsTailStrategyCreateRequest) =>
+      apiClient.post<ApiResponse<{ id: number }>>('/sports-tail-strategy/create', data),
+    delete: (data: { id: number }) =>
+      apiClient.post<ApiResponse<void>>('/sports-tail-strategy/delete', data),
+    triggers: (data: import('../types').SportsTailTriggerListRequest) =>
+      apiClient.post<ApiResponse<import('../types').SportsTailTriggerListResponse>>('/sports-tail-strategy/triggers', data),
+    sportsList: () =>
+      apiClient.post<ApiResponse<{ list: import('../types').SportsCategoryDto[] }>>('/sports-tail-strategy/sports-list', {}),
+    marketSearch: (data: import('../types').SportsMarketSearchRequest) =>
+      apiClient.post<ApiResponse<{ list: import('../types').SportsMarketDto[] }>>('/sports-tail-strategy/market-search', data),
+    marketDetail: (data: { conditionId: string }) =>
+      apiClient.post<ApiResponse<import('../types').SportsMarketDto>>('/sports-tail-strategy/market-detail', data)
+  },
+
+  /**
    * 订单管理 API
    */
   orders: {

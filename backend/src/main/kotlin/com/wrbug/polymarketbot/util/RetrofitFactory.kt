@@ -8,6 +8,7 @@ import com.wrbug.polymarketbot.api.GitHubApi
 import com.wrbug.polymarketbot.api.PolymarketClobApi
 import com.wrbug.polymarketbot.api.PolymarketDataApi
 import com.wrbug.polymarketbot.api.PolymarketGammaApi
+import com.wrbug.polymarketbot.api.PolymarketGammaSportsApi
 import com.wrbug.polymarketbot.constants.PolymarketConstants
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -359,6 +360,25 @@ class RetrofitFactory(
      */
     fun createGitHubApi(): GitHubApi {
         return githubApi
+    }
+
+    // 缓存 Gamma Sports API 客户端（单例）
+    private val gammaSportsApi: PolymarketGammaSportsApi by lazy {
+        Retrofit.Builder()
+            .baseUrl(PolymarketConstants.GAMMA_BASE_URL)
+            .client(sharedOkHttpClient)
+            .addConverterFactory(GsonConverterFactory.create(gson))
+            .build()
+            .create(PolymarketGammaSportsApi::class.java)
+    }
+
+    /**
+     * 创建 Polymarket Gamma Sports API 客户端
+     * Gamma Sports API 是公开 API，不需要认证
+     * @return PolymarketGammaSportsApi 客户端（单例）
+     */
+    fun createGammaSportsApi(): PolymarketGammaSportsApi {
+        return gammaSportsApi
     }
     
     /**

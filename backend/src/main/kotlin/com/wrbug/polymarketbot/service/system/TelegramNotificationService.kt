@@ -33,11 +33,13 @@ class TelegramNotificationService(
 
     private val logger = LoggerFactory.getLogger(TelegramNotificationService::class.java)
 
-    private val okHttpClient = createClient()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(5, TimeUnit.SECONDS)
-        .writeTimeout(5, TimeUnit.SECONDS)
-        .build()
+    private val okHttpClient by lazy {
+        createClient()
+            .connectTimeout(5, TimeUnit.SECONDS)
+            .readTimeout(5, TimeUnit.SECONDS)
+            .writeTimeout(5, TimeUnit.SECONDS)
+            .build()
+    }
 
     private val apiBaseUrl = "https://api.telegram.org/bot"
 

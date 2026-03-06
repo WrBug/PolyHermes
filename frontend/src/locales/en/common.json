@@ -317,6 +317,7 @@
     "cryptoSpreadStrategy": "Crypto Spread Strategy",
     "cryptoTailStrategy": "Strategy Config",
     "cryptoTailMonitor": "Real-time Monitor",
+    "sportsTailStrategy": "Sports Tail Strategy",
     "positions": "Position Management",
     "backtest": "Backtest",
     "statistics": "Statistics",
@@ -1689,6 +1690,79 @@
       "all": "All",
       "customRange": "Custom",
       "empty": "No settled orders yet, cannot show PnL curve"
+    }
+  },
+  "sportsTailStrategy": {
+    "list": {
+      "title": "Sports Tail Strategy",
+      "addStrategy": "Add Strategy",
+      "filter": {
+        "account": "Account",
+        "category": "Category",
+        "allCategory": "All"
+      },
+      "triggerPrice": "Trigger Price",
+      "amount": "Amount",
+      "takeProfitStopLoss": "Take Profit / Stop Loss",
+      "filledPrice": "Filled Price",
+      "realtimePrice": "Realtime Price",
+      "shares": "Shares",
+      "pnl": "PnL",
+      "pending": "Pending",
+      "viewRecords": "View Records",
+      "delete": "Delete",
+      "deleteConfirm": "Delete this strategy?",
+      "fetchFailed": "Failed to fetch list"
+    },
+    "form": {
+      "title": "Add Sports Tail Strategy",
+      "account": "Account",
+      "selectAccount": "Select Account",
+      "selectMarket": "Select Market",
+      "triggerCondition": "Trigger Condition",
+      "triggerPriceHelp": "Buy when either side reaches trigger price",
+      "amount": "Amount",
+      "fixedAmount": "Fixed Amount",
+      "ratio": "Balance Ratio",
+      "autoSell": "Enable Auto Sell",
+      "takeProfitPrice": "Take Profit Price",
+      "takeProfitHelp": "Sell when price rises to this value",
+      "stopLossPrice": "Stop Loss Price",
+      "stopLossHelp": "Sell when price falls to this value",
+      "estimatedReturn": "Estimated Return",
+      "buyPrice": "Buy Price",
+      "buyAmount": "Buy Amount",
+      "estimatedShares": "Estimated Shares",
+      "estimatedPnl": "Estimated PnL",
+      "createSuccess": "Strategy created",
+      "createFailed": "Failed to create strategy"
+    },
+    "marketSearch": {
+      "sport": "Sport",
+      "marketType": "Market Type",
+      "endTime": "End Time",
+      "minLiquidity": "Min Liquidity",
+      "keyword": "Keyword",
+      "search": "Search",
+      "liquidity": "Liquidity",
+      "remaining": "Remaining",
+      "all": "All",
+      "today": "Today",
+      "next24h": "Next 24 Hours",
+      "next7days": "Next 7 Days"
+    },
+    "records": {
+      "title": "Trigger Records",
+      "time": "Time",
+      "market": "Market",
+      "direction": "Direction",
+      "buyPrice": "Buy Price",
+      "amount": "Amount",
+      "sellPrice": "Sell Price",
+      "pnl": "PnL",
+      "pending": "Pending",
+      "takeProfit": "Take Profit",
+      "stopLoss": "Stop Loss"
     }
   },
   "cryptoTailMonitor": {

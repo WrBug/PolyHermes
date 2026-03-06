@@ -1261,6 +1261,128 @@ export interface ManualOrderDetails {
   totalAmount: string
 }
 
+// ==================== 体育尾盘策略相关类型 ====================
+
+/** 体育尾盘策略 DTO */
+export interface SportsTailStrategyDto {
+  id: number
+  accountId: number
+  accountName: string
+  conditionId: string
+  marketTitle: string
+  eventSlug: string | null
+  triggerPrice: string
+  amountMode: 'FIXED' | 'RATIO'
+  amountValue: string
+  takeProfitPrice: string | null
+  stopLossPrice: string | null
+  filled: boolean
+  filledPrice: string | null
+  filledOutcomeIndex: number | null
+  filledOutcomeName: string | null
+  filledAmount: string | null
+  filledShares: string | null
+  filledAt: number | null
+  sold: boolean
+  sellPrice: string | null
+  sellType: string | null
+  sellAmount: string | null
+  realizedPnl: string | null
+  soldAt: number | null
+  realtimeYesPrice: string | null
+  realtimeNoPrice: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+/** 体育尾盘策略创建请求 */
+export interface SportsTailStrategyCreateRequest {
+  accountId: number
+  conditionId: string
+  marketTitle: string
+  eventSlug?: string
+  triggerPrice: string
+  amountMode: 'FIXED' | 'RATIO'
+  amountValue: string
+  takeProfitPrice?: string
+  stopLossPrice?: string
+}
+
+/** 体育尾盘策略列表响应 */
+export interface SportsTailStrategyListResponse {
+  list: SportsTailStrategyDto[]
+}
+
+/** 体育尾盘策略触发记录 DTO */
+export interface SportsTailTriggerDto {
+  id: number
+  strategyId: number
+  marketTitle: string
+  conditionId: string
+  buyPrice: string
+  outcomeIndex: number
+  outcomeName: string | null
+  buyAmount: string
+  buyShares: string | null
+  buyStatus: string
+  sellPrice: string | null
+  sellType: string | null
+  sellAmount: string | null
+  sellStatus: string | null
+  realizedPnl: string | null
+  triggeredAt: number
+  soldAt: number | null
+}
+
+/** 体育尾盘策略触发记录列表请求 */
+export interface SportsTailTriggerListRequest {
+  accountId?: number
+  status?: string
+  startTime?: number
+  endTime?: number
+  page?: number
+  pageSize?: number
+}
+
+/** 体育尾盘策略触发记录列表响应 */
+export interface SportsTailTriggerListResponse {
+  total: number
+  list: SportsTailTriggerDto[]
+}
+
+/** 体育类别 DTO */
+export interface SportsCategoryDto {
+  sport: string
+  image: string
+  tagId: number
+  name: string
+}
+
+/** 体育市场 DTO */
+export interface SportsMarketDto {
+  conditionId: string
+  question: string
+  outcomes: string[]
+  outcomePrices: string[]
+  endDate: string
+  liquidity: string
+  bestBid: number | null
+  bestAsk: number | null
+  yesTokenId: string
+  noTokenId: string
+  eventSlug?: string | null
+}
+
+/** 体育市场搜索请求 */
+export interface SportsMarketSearchRequest {
+  sport?: string
+  endDateMin?: string
+  endDateMax?: string
+  minLiquidity?: string
+  keyword?: string
+  limit?: number
+}
+
 // ==================== 消息模板相关类型 ====================
 
 /**

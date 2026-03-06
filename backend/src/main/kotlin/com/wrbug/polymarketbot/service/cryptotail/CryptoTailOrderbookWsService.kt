@@ -56,7 +56,7 @@ class CryptoTailOrderbookWsService(
 
     private var webSocket: WebSocket? = null
     private val wsUrl = PolymarketConstants.RTDS_WS_URL + "/ws/market"
-    private val client = createClient().build()
+    private val client by lazy { createClient().build() }
 
     /** 订阅成功后设置的倒计时 Job，在周期结束时自动刷新订阅 */
     private var periodEndCountdownJob: Job? = null

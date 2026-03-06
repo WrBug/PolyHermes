@@ -317,6 +317,7 @@
     "cryptoSpreadStrategy": "加密價差策略",
     "cryptoTailStrategy": "策略配置",
     "cryptoTailMonitor": "即時監控",
+    "sportsTailStrategy": "體育尾盤策略",
     "positions": "倉位管理",
     "backtest": "回測",
     "statistics": "統計信息",
@@ -1689,6 +1690,79 @@
       "all": "全部",
       "customRange": "自定義",
       "empty": "暫無已結算訂單，無法展示收益曲線"
+    }
+  },
+  "sportsTailStrategy": {
+    "list": {
+      "title": "體育尾盤策略",
+      "addStrategy": "新增策略",
+      "filter": {
+        "account": "賬戶",
+        "category": "類別",
+        "allCategory": "全部"
+      },
+      "triggerPrice": "觸發價",
+      "amount": "金額",
+      "takeProfitStopLoss": "止盈/止損",
+      "filledPrice": "成交價",
+      "realtimePrice": "實時價格",
+      "shares": "份",
+      "pnl": "盈虧",
+      "pending": "待結算",
+      "viewRecords": "查看記錄",
+      "delete": "刪除",
+      "deleteConfirm": "確定刪除該策略嗎？",
+      "fetchFailed": "獲取列表失敗"
+    },
+    "form": {
+      "title": "新增體育尾盤策略",
+      "account": "賬戶",
+      "selectAccount": "選擇賬戶",
+      "selectMarket": "選擇市場",
+      "triggerCondition": "觸發條件",
+      "triggerPriceHelp": "當任意方向價格達到觸發價時買入",
+      "amount": "下注金額",
+      "fixedAmount": "固定金額",
+      "ratio": "餘額比例",
+      "autoSell": "啟用自動賣出",
+      "takeProfitPrice": "止盈價格",
+      "takeProfitHelp": "價格上漲到此值時自動賣出",
+      "stopLossPrice": "止損價格",
+      "stopLossHelp": "價格下跌到此值時自動賣出",
+      "estimatedReturn": "預估收益",
+      "buyPrice": "買入價格",
+      "buyAmount": "買入金額",
+      "estimatedShares": "預計份額",
+      "estimatedPnl": "預計收益",
+      "createSuccess": "策略創建成功",
+      "createFailed": "策略創建失敗"
+    },
+    "marketSearch": {
+      "sport": "體育類別",
+      "marketType": "市場類型",
+      "endTime": "結束時間",
+      "minLiquidity": "最小流動性",
+      "keyword": "搜索關鍵詞",
+      "search": "搜索",
+      "liquidity": "流動性",
+      "remaining": "剩餘",
+      "all": "全部",
+      "today": "今天",
+      "next24h": "未來24小時",
+      "next7days": "未來7天"
+    },
+    "records": {
+      "title": "觸發記錄",
+      "time": "時間",
+      "market": "市場",
+      "direction": "方向",
+      "buyPrice": "買入價",
+      "amount": "金額",
+      "sellPrice": "賣出價",
+      "pnl": "盈虧",
+      "pending": "待結算",
+      "takeProfit": "已止盈",
+      "stopLoss": "已止損"
     }
   },
   "cryptoTailMonitor": {

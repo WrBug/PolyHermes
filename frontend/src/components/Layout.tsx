@@ -23,7 +23,8 @@ import {
   NotificationOutlined,
   LineChartOutlined,
   RocketOutlined,
-  DashboardOutlined
+  DashboardOutlined,
+  TrophyOutlined
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 import type { ReactNode } from 'react'
@@ -77,7 +78,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     if (path.startsWith('/leaders') || path.startsWith('/templates') || path.startsWith('/copy-trading') || path.startsWith('/backtest')) {
       keys.push('/copy-trading-management')
     }
-    if (path.startsWith('/crypto-tail-strategy') || path.startsWith('/crypto-tail-monitor')) {
+    if (path.startsWith('/crypto-tail-strategy') || path.startsWith('/crypto-tail-monitor') || path.startsWith('/sports-tail-strategy')) {
       keys.push('/crypto-tail-management')
     }
     if (path.startsWith('/system-settings')) {
@@ -95,7 +96,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     if (path.startsWith('/leaders') || path.startsWith('/templates') || path.startsWith('/copy-trading') || path.startsWith('/backtest')) {
       keys.push('/copy-trading-management')
     }
-    if (path.startsWith('/crypto-tail-strategy') || path.startsWith('/crypto-tail-monitor')) {
+    if (path.startsWith('/crypto-tail-strategy') || path.startsWith('/crypto-tail-monitor') || path.startsWith('/sports-tail-strategy')) {
       keys.push('/crypto-tail-management')
     }
     if (path.startsWith('/system-settings')) {
@@ -179,6 +180,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           key: '/crypto-tail-monitor',
           icon: <DashboardOutlined />,
           label: t('menu.cryptoTailMonitor')
+        },
+        {
+          key: '/sports-tail-strategy',
+          icon: <TrophyOutlined />,
+          label: t('menu.sportsTailStrategy')
         }
       ]
     },

@@ -264,8 +264,27 @@ enum class ErrorCode(
     SERVER_CRYPTO_TAIL_STRATEGY_UPDATE_FAILED(5621, "更新加密价差策略失败", "error.server.crypto_tail_strategy_update_failed"),
     SERVER_CRYPTO_TAIL_STRATEGY_DELETE_FAILED(5622, "删除加密价差策略失败", "error.server.crypto_tail_strategy_delete_failed"),
     SERVER_CRYPTO_TAIL_STRATEGY_LIST_FETCH_FAILED(5623, "查询加密价差策略列表失败", "error.server.crypto_tail_strategy_list_fetch_failed"),
-    SERVER_CRYPTO_TAIL_STRATEGY_TRIGGERS_FETCH_FAILED(5624, "查询触发记录失败", "error.server.crypto_tail_strategy_triggers_fetch_failed");
-    
+    SERVER_CRYPTO_TAIL_STRATEGY_TRIGGERS_FETCH_FAILED(5624, "查询触发记录失败", "error.server.crypto_tail_strategy_triggers_fetch_failed"),
+
+    // 体育尾盘策略 (4730-4749)
+    SPORTS_TAIL_STRATEGY_NOT_FOUND(4730, "体育尾盘策略不存在", "error.sports_tail_strategy_not_found"),
+    SPORTS_TAIL_STRATEGY_ALREADY_FILLED(4731, "策略已成交", "error.sports_tail_strategy_already_filled"),
+    SPORTS_TAIL_STRATEGY_ALREADY_SOLD(4732, "策略已卖出", "error.sports_tail_strategy_already_sold"),
+    SPORTS_TAIL_STRATEGY_AMOUNT_MODE_INVALID(4733, "金额模式仅支持 FIXED 或 RATIO", "error.sports_tail_strategy_amount_mode_invalid"),
+    SPORTS_TAIL_STRATEGY_PRICE_INVALID(4734, "触发价格无效", "error.sports_tail_strategy_price_invalid"),
+    SPORTS_TAIL_STRATEGY_CONDITION_ID_EMPTY(4735, "市场ID不能为空", "error.sports_tail_strategy_condition_id_empty"),
+
+    // 体育尾盘策略服务 (5630-5649)
+    SERVER_SPORTS_TAIL_STRATEGY_CREATE_FAILED(5630, "创建体育尾盘策略失败", "error.server.sports_tail_strategy_create_failed"),
+    SERVER_SPORTS_TAIL_STRATEGY_DELETE_FAILED(5631, "删除体育尾盘策略失败", "error.server.sports_tail_strategy_delete_failed"),
+    SERVER_SPORTS_TAIL_STRATEGY_LIST_FETCH_FAILED(5632, "查询体育尾盘策略列表失败", "error.server.sports_tail_strategy_list_fetch_failed"),
+    SERVER_SPORTS_TAIL_STRATEGY_TRIGGERS_FETCH_FAILED(5633, "查询触发记录失败", "error.server.sports_tail_strategy_triggers_fetch_failed"),
+    SERVER_SPORTS_TAIL_STRATEGY_SPORTS_FETCH_FAILED(5634, "查询体育类别失败", "error.server.sports_tail_strategy_sports_fetch_failed"),
+    SERVER_SPORTS_TAIL_STRATEGY_MARKET_SEARCH_FAILED(5635, "搜索市场失败", "error.server.sports_tail_strategy_market_search_failed"),
+    SERVER_SPORTS_TAIL_STRATEGY_MARKET_DETAIL_FAILED(5636, "查询市场详情失败", "error.server.sports_tail_strategy_market_detail_failed"),
+    SERVER_SPORTS_TAIL_STRATEGY_BUY_FAILED(5637, "买入执行失败", "error.server.sports_tail_strategy_buy_failed"),
+    SERVER_SPORTS_TAIL_STRATEGY_SELL_FAILED(5638, "卖出执行失败", "error.server.sports_tail_strategy_sell_failed");
+
     companion object {
         /**
          * 根据错误码查找枚举
