@@ -191,5 +191,8 @@ data class AccountTemplatesResponse(
 
     val minOrderSize: String? = "1.0",
     val minOrderDepth: String? = "1.0"
+
+    val minOrderSize: String? = "1.0",
+    val minOrderDepth: String? = "1.0"
 )
 
