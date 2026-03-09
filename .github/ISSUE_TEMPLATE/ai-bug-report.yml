@@ -1,142 +1,152 @@
-name: 🤖 Bug Report for AI Fix
+---
+name: 🤖 Bug Report for AI Fix / AI Bug 报告
 description: Bug 报告模板（提交后请手动添加 'fix via ai' 标签触发自动修复）
-title: '[Bug] '
+title: '[Bug] / '
 assignees: []
 body:
   - type: markdown
     attributes:
       value: |
-        ## Bug 报告 🐛
+        ## Bug Report Template 🐛
 
         本模板用于报告 PolyHermes 项目的 bug。
 
-        ⚠️ **重要提示**：
-        - 提交 issue 后，如需 AI 自动修复，请手动添加 `fix via ai` 标签
-        - AI 修复会在专用分支 `fix_issues_by_ai` 上进行
-        - 所有 AI 修复需要人工审核后才能合并
-        - 涉及安全漏洞、数据库迁移、重大变更等问题不建议使用 AI 自动修复
+        ⚠️ **Important / 重要提示**：
+        - After submission, if you need AI auto-fix, please manually add the `fix via ai` label
+          / 提交后，如需 AI 自动修复，请手动添加 `fix via ai` 标签
+        - AI fixes will be on the `fix_issues_by_ai` branch / AI 修复将在 `fix_issues_by_ai` 分支上进行
+        - All AI fixes require human review before merging / 所有 AI 修复需要人工审核后才能合并
+        - Security vulnerabilities, database migrations, major changes are not recommended for AI auto-fix
+          / 涉及安全漏洞、数据库迁移、重大变更等问题不建议使用 AI 自动修复
+
+        ---
+        
+        本模板用于报告 PolyHermes 项目的 bug。
+
+        This template is for reporting bugs in the PolyHermes project.
 
   - type: textarea
     id: description
     attributes:
-      label: 📝 Bug 描述
-      description: 清晰简洁地描述这个 bug
-      placeholder: 描述你遇到的问题...
+      label: 📝 Bug Description / Bug 描述
+      description: Clearly and concisely describe the bug / 清晰简洁地描述这个 bug
+      placeholder: Describe the bug you encountered / 描述你遇到的问题...
     validations:
       required: true
 
   - type: dropdown
     id: type
     attributes:
-      label: 🎯 问题类型
-      description: 选择问题类型
+      label: 🎯 Bug Type / 问题类型
+      description: Select the type of bug / 选择问题类型
       options:
-        - 前端 bug (UI/UX/交互问题)
-        - 后端 bug (API/逻辑/数据处理)
-        - 数据库问题
-        - 性能问题
-        - 配置/部署问题
-        - 文档问题
-        - 其他
+        - Frontend bug (UI/UX/interaction) / 前端 bug (UI/UX/交互问题)
+        - Backend bug (API/logic/data) / 后端 bug (API/逻辑/数据处理)
+        - Database issue / 数据库问题
+        - Performance issue / 性能问题
+        - Configuration/Deployment / 配置/部署问题
+        - Documentation / 文档问题
+        - Other / 其他
     validations:
       required: true
 
   - type: dropdown
     id: scope
     attributes:
-      label: 📍 影响范围
-      description: 选择问题影响范围
+      label: 📍 Affected Scope / 影响范围
+      description: Select the scope of impact / 选择问题影响范围
       options:
-        - 仅影响特定页面/功能
-        - 影响整个系统
-        - 影响特定用户角色
-        - 仅在特定环境下重现
+        - Specific page/function only / 仅影响特定页面/功能
+        - Entire system / 影响整个系统
+        - Specific user role / 影响特定用户角色
+        - Only in specific environment / 仅在特定环境下重现
     validations:
       required: true
 
   - type: textarea
     id: steps
     attributes:
-      label: 🔍 复现步骤
-      description: 提供清晰、详细的步骤来重现这个 bug
+      label: 🔍 Steps to Reproduce / 复现步骤
+      description: Provide clear, detailed steps to reproduce the bug / 提供清晰、详细的步骤来重现这个 bug
       placeholder: |
-        1. 访问页面：`...`
-        2. 点击按钮：`...`
-        3. 输入数据：`...`
-        4. 提交表单：`...`
-        5. 观察到错误：`...`
+        1. Visit page: `...` / 访问页面：`...`
+        2. Click button: `...` / 点击按钮：`...`
+        3. Input data: `...` / 输入数据：`...`
+        4. Submit form: `...` / 提交表单：`...`
+        5. Observe error: `...` / 观察到错误：`...`
     validations:
       required: true
 
   - type: dropdown
     id: frequency
     attributes:
-      label: 复现频率
+      label: Reproduction Frequency / 复现频率
       options:
-        - 总是能复现 (100%)
-        - 经常能复现 (50%+)
-        - 偶尔能复现 (<50%)
-        - 很难复现
+        - Always reproducible (100%) / 总是能复现 (100%)
+        - Frequently reproducible (50%+) / 经常能复现 (50%+)
+        - Occasionally reproducible (<50%) / 偶尔能复现 (<50%)
+        - Hard to reproduce / 很难复现
     validations:
       required: true
 
   - type: textarea
     id: expected
     attributes:
-      label: 💻 预期行为
-      description: 描述你期望发生什么
-      placeholder: 应该发生什么...
+      label: 💻 Expected Behavior / 预期行为
+      description: Describe what you expected to happen / 描述你期望发生什么
+      placeholder: What should happen / 应该发生什么...
     validations:
       required: true
 
   - type: textarea
     id: actual
     attributes:
-      label: ❌ 实际行为
-      description: 描述实际发生了什么
-      placeholder: 实际发生了什么...
+      label: ❌ Actual Behavior / 实际行为
+      description: Describe what actually happened / 描述实际发生了什么
+      placeholder: What actually happened / 实际发生了什么...
     validations:
       required: true
 
   - type: textarea
     id: screenshots
     attributes:
-      label: 📸 截图/录屏
-      description: 如果适用，添加截图或录屏来说明问题（可以拖拽文件到这里）
-      placeholder: 添加截图或录屏...
+      label: 📸 Screenshots / Recordings / 截图/录屏
+      description: If applicable, add screenshots or recordings to illustrate the problem (drag and drop files here)
+        / 如果适用，添加截图或录屏来说明问题（可以拖拽文件到这里）
+      placeholder: Add screenshots or recordings / 添加截图或录屏...
 
   - type: textarea
     id: environment
     attributes:
-      label: 🌐 环境
-      description: 提供相关环境信息
+      label: 🌐 Environment / 环境
+      description: Provide relevant environment information / 提供相关环境信息
       value: |
-        **浏览器（前端问题）：**
-        - 浏览器：______
-        - 浏览器版本：______
-        - 操作系统：______
+        **Browser (for frontend issues) / 浏览器（前端问题）：**
+        - Browser: ______ / 浏览器：______
+        - Browser version: ______ / 浏览器版本：______
+        - Operating System: ______ / 操作系统：______
 
-        **后端环境（后端问题）：**
-        - Node.js 版本：______
-        - 数据库版本：______
-        - Docker 版本：______
-        - 其他相关依赖版本：______
+        **Backend Environment (for backend issues) / 后端环境（后端问题）：**
+        - Node.js version: ______ / Node.js 版本：______
+        - Database version: ______ / 数据库版本：______
+        - Docker version (if used): ______ / Docker 版本（如果使用）：______
+        - Other relevant dependencies: ______ / 其他相关依赖版本：______
     validations:
       required: false
 
   - type: textarea
     id: related-files
     attributes:
-      label: 📁 相关文件/代码
-      description: 提供可能涉及的文件路径或相关代码片段
+      label: 📁 Related Files / Code / 相关文件/代码
+      description: Provide relevant file paths or code snippets / 提供可能涉及的文件路径或相关代码片段
       placeholder: |
-        可能涉及的文件：
+        Possibly related files / 可能涉及的文件：
         - frontend/src/components/...
         - backend/src/main/kotlin/...
 
-        错误日志：
+        Error logs / 错误日志：
         ```
-        粘贴错误日志
+        Paste error logs here / 粘贴错误日志
         ```
     validations:
       required: false
@@ -144,38 +154,48 @@ body:
   - type: textarea
     id: suggestions
     attributes:
-      label: 🎯 修复建议（可选）
-      description: 如果你有修复思路，可以在这里简单描述
-      placeholder: 建议在 XXX 文件的 YYY 方法中，添加 ZZZ 检查...
+      label: 🎯 Fix Suggestions (Optional) / 修复建议（可选）
+      description: If you have fix ideas, describe them briefly / 如果你有修复思路，可以在这里简单描述
+      placeholder: |
+        Suggest adding ZZZ check in the YYY method of file XXX
+        / 建议在 XXX 文件的 YYY 方法中，添加 ZZZ 检查
+        ...
 
   - type: dropdown
     id: priority
     attributes:
-      label: 🚨 优先级
+      label: 🚨 Priority / 优先级
       options:
-        - 🔴 高 - 阻塞核心功能，影响用户体验
-        - 🟡 中 - 功能受限但不阻塞
-        - 🟢 低 - 小问题，不影响使用
+        - 🔴 High - Blocking core functionality, affects user experience / 高 - 阻塞核心功能，影响用户体验
+        - 🟡 Medium - Limited functionality but not blocking / 中 - 功能受限但不阻塞
+        - 🟢 Low - Minor issue, doesn't affect usage / 低 - 小问题，不影响使用
     validations:
       required: true
 
   - type: textarea
     id: additional
     attributes:
-      label: 📝 补充说明
-      description: 任何其他有助于 AI 理解和修复问题的信息
+      label: 📝 Additional Information / 补充说明
+      description: Any other information that helps AI understand and fix the issue / 任何其他有助于 AI 理解和修复问题的信息
       placeholder: |
-        - 这个 bug 是最近引入的吗？
-        - 是否与某个特定的 PR 或 commit 相关？
-        - 是否只在特定数据集或特定用户情况下出现？
+        - Was this bug introduced recently? / 这个 bug 是最近引入的吗？
+        - Is it related to a specific PR or commit? / 是否与某个特定的 PR 或 commit 相关？
+        - Does it only occur with specific datasets or users? / 是否只在特定数据集或特定用户情况下出现？
+        / ...
+        Any other context / 其他任何上下文信息...
 
   - type: checkboxes
     id: ai-fix-approval
     attributes:
-      label: 🤖 AI 自动修复确认
-      description: 如需 AI 自动修复此 issue，请勾选下方选项（提交后记得添加 'fix via ai' 标签）
+      label: 🤖 AI Auto-Fix Confirmation / AI 自动修复确认
+      description: If you need AI to auto-fix this issue, check the options below (remember to add 'fix via ai' label after submission)
+        / 如需 AI 自动修复此 issue，请勾选下方选项（提交后记得添加 'fix via ai' 标签）
       options:
-        - label: 我已了解 AI 自动修复的工作流程，并同意在 AI 创建 PR 后进行人工审核
+        - label: |
+            I understand the AI auto-fix workflow and agree to manually review the AI-created PR
+            / 我已了解 AI 自动修复的工作流程，并同意在 AI 创建 PR 后进行人工审核
           required: false
-        - label: 此问题适合 AI 自动修复（非安全漏洞、非数据库迁移、非重大变更）
+        - label: |
+            This issue is suitable for AI auto-fix (not a security vulnerability, not a database migration, not a major change)
+            / 此问题适合 AI 自动修复（非安全漏洞、非数据库迁移、非重大变更）
           required: false
