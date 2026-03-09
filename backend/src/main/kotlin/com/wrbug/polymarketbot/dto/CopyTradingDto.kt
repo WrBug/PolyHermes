@@ -188,5 +188,8 @@ data class AccountTemplateDto(
 data class AccountTemplatesResponse(
     val list: List<AccountTemplateDto>,
     val total: Long
+
+    val minOrderSize: String? = "1.0",
+    val minOrderDepth: String? = "1.0"
 )
 
