@@ -43,6 +43,9 @@ private const val SPREAD_MAX_PRICE_ADJUSTMENT = "0.02"
 /** 数量小数位数，与 OrderSigningService 的 roundConfig.size 一致 */
 private const val SIZE_DECIMAL_SCALE = 2
 
+/** 单笔下单最小 USDC 金额（平台限制），RATIO 模式计算值低于此值时按此值下单 */
+private val MIN_ORDER_USDC = BigDecimal("1")
+
 /**
  * 周期内预置上下文：账户、解密凭证、费率、签名类型、CLOB 客户端；不含预签订单。
  * 触发时 FIXED/RATIO 均按 outcomeIndex 计算 size 并签名提交。
@@ -151,7 +154,7 @@ class CryptoTailStrategyExecutionService(
         }
         val signatureType = orderSigningService.getSignatureTypeForWalletType(account.walletType)
 
-        if (strategy.amountMode.uppercase() != "RATIO" && strategy.amountValue < BigDecimal("1")) return null
+        if (strategy.amountMode.uppercase() != "RATIO" && strategy.amountValue < MIN_ORDER_USDC) return null
 
         val ctx = PeriodContext(
             strategy = strategy,
@@ -334,29 +337,36 @@ class CryptoTailStrategyExecutionService(
         val ctx = getOrInvalidatePeriodContext(strategy, periodStartUnix)
 
         if (ctx != null) {
-            val amountUsdc = when (strategy.amountMode.uppercase()) {
+            var availableBalanceForRatio = BigDecimal.ZERO
+            var amountUsdc = when (strategy.amountMode.uppercase()) {
                 "RATIO" -> {
                     val balanceResult = accountService.getAccountBalance(ctx.account.id)
                     val availableBalance =
                         balanceResult.getOrNull()?.availableBalance?.toSafeBigDecimal() ?: BigDecimal.ZERO
+                    availableBalanceForRatio = availableBalance
                     availableBalance.multiply(strategy.amountValue).divide(BigDecimal("100"), 18, RoundingMode.DOWN)
                 }
 
                 else -> strategy.amountValue
             }
-            if (amountUsdc < BigDecimal("1")) {
-                saveTriggerRecord(
-                    strategy,
-                    periodStartUnix,
-                    marketTitle,
-                    outcomeIndex,
-                    triggerPrice,
-                    amountUsdc,
-                    null,
-                    "fail",
-                    "投入金额不足"
-                )
-                return
+            if (amountUsdc < MIN_ORDER_USDC) {
+                val amountMode = strategy.amountMode.uppercase()
+                if (amountMode == "RATIO" && availableBalanceForRatio >= MIN_ORDER_USDC) {
+                    amountUsdc = MIN_ORDER_USDC
+                } else {
+                    saveTriggerRecord(
+                        strategy,
+                        periodStartUnix,
+                        marketTitle,
+                        outcomeIndex,
+                        triggerPrice,
+                        amountUsdc,
+                        null,
+                        "fail",
+                        "投入金额不足"
+                    )
+                    return
+                }
             }
 
             val tokenId = tokenIds.getOrNull(outcomeIndex) ?: run {
@@ -514,23 +524,28 @@ class CryptoTailStrategyExecutionService(
 
         val balanceResult = accountService.getAccountBalance(account.id)
         val availableBalance = balanceResult.getOrNull()?.availableBalance?.toSafeBigDecimal() ?: BigDecimal.ZERO
-        val amountUsdc = when (strategy.amountMode.uppercase()) {
+        var amountUsdc = when (strategy.amountMode.uppercase()) {
             "RATIO" -> availableBalance.multiply(strategy.amountValue).divide(BigDecimal("100"), 18, RoundingMode.DOWN)
             else -> strategy.amountValue
         }
-        if (amountUsdc < BigDecimal("1")) {
-            saveTriggerRecord(
-                strategy,
-                periodStartUnix,
-                marketTitle,
-                outcomeIndex,
-                triggerPrice,
-                amountUsdc,
-                null,
-                "fail",
-                "投入金额不足"
-            )
-            return
+        if (amountUsdc < MIN_ORDER_USDC) {
+            val amountMode = strategy.amountMode.uppercase()
+            if (amountMode == "RATIO" && availableBalance >= MIN_ORDER_USDC) {
+                amountUsdc = MIN_ORDER_USDC
+            } else {
+                saveTriggerRecord(
+                    strategy,
+                    periodStartUnix,
+                    marketTitle,
+                    outcomeIndex,
+                    triggerPrice,
+                    amountUsdc,
+                    null,
+                    "fail",
+                    "投入金额不足"
+                )
+                return
+            }
         }
 
         val tokenId = tokenIds.getOrNull(outcomeIndex) ?: run {
