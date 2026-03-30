@@ -408,10 +408,25 @@ class BacktestExecutionService(
                                 val cost = actualSellQuantity.multiply(position.avgPrice)
                                 val profitLoss = netAmount.subtract(cost)
 
-                                // 更新余额和持仓
+                                // Bug #39 Fix: correctly reduce position quantity after sell
                                 currentBalance += netAmount
-                                if (position.quantity <= BigDecimal.ZERO) {
+                                val remainingQuantity = position.quantity - actualSellQuantity
+                                val remainingLeaderBuyQuantity = if (position.leaderBuyQuantity != null && position.leaderBuyQuantity > BigDecimal.ZERO) {
+                                    val totalQty = position.quantity
+                                    val leaderReduction = actualSellQuantity.divide(
+                                        totalQty, 8, java.math.RoundingMode.DOWN
+                                    )
+                                    (position.leaderBuyQuantity - leaderReduction).coerceAtLeast(BigDecimal.ZERO)
+                                } else {
+                                    position.leaderBuyQuantity
+                                }
+                                if (remainingQuantity <= BigDecimal.ZERO) {
                                     positions.remove(positionKey)
+                                } else {
+                                    positions[positionKey] = position.copy(
+                                        quantity = remainingQuantity,
+                                        leaderBuyQuantity = remainingLeaderBuyQuantity
+                                    )
                                 }
 
                                 // 记录交易到当前页列表
@@ -632,7 +647,8 @@ class BacktestExecutionService(
             val settlementPrice = avgPrice
 
             val settlementValue = quantity.multiply(settlementPrice)
-            val profitLoss = settlementValue.negate()
+            // Bug #39 Fix: profitLoss for closed settlement at avgPrice should be ~0
+            val profitLoss = settlementValue.subtract(quantity.multiply(avgPrice))
 
             balance += settlementValue
 
@@ -702,7 +718,8 @@ class BacktestExecutionService(
             if (balance > peakBalance) {
                 peakBalance = balance
             }
-            val drawdown = peakBalance - runningBalance
+            // Bug #39 Fix: use current balance, not runningBalance from previous iteration
+            val drawdown = peakBalance - balance
             if (drawdown > maxDrawdown) {
                 maxDrawdown = drawdown
             }

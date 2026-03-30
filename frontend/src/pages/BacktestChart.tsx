@@ -10,6 +10,8 @@ interface BacktestChartProps {
   }[]
 }
 
+// Bug #39 Note: This chart currently displays cash balance (balanceAfter), not total equity.
+// A true equity curve (cash + position value) would require an equityAfter field in the trade records.
 const BacktestChart: React.FC<BacktestChartProps> = ({ trades }) => {
   const { t } = useTranslation()
   const chartRef = useRef<HTMLDivElement>(null)
