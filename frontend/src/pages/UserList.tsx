@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Card, Table, Button, Space, Tag, Popconfirm, message, Typography, Modal, Form, Input } from 'antd'
-import { PlusOutlined, ReloadOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons'
+import { Card, Table, Button, Space, Tag, Popconfirm, message, Typography, Modal, Form, Input, List, Empty, Tooltip, Spin } from 'antd'
+import { PlusOutlined, ReloadOutlined, DeleteOutlined, EditOutlined, UserOutlined, KeyOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { apiService } from '../services/api'
 import { useMediaQuery } from 'react-responsive'
@@ -219,46 +219,164 @@ const UserList: React.FC = () => {
 
   return (
     <div>
-      <Card>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <Title level={4} style={{ margin: 0 }}>{t('userList.title') || '用户管理'}</Title>
-          <Space>
-            <Button
-              icon={<EditOutlined />}
-              onClick={() => setUpdateOwnPasswordModalVisible(true)}
-            >
-              {t('userList.updateMyPassword') || '修改我的密码'}
-            </Button>
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={fetchUsers}
-              loading={loading}
-            >
-              {t('common.refresh') || '刷新'}
-            </Button>
-            {isDefaultUser && (
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+        <Title level={isMobile ? 4 : 3} style={{ margin: 0, fontSize: isMobile ? '18px' : undefined }}>{t('userList.title') || '用户管理'}</Title>
+        <Space size={8} wrap>
+          <Button
+            icon={<KeyOutlined />}
+            onClick={() => setUpdateOwnPasswordModalVisible(true)}
+            size={isMobile ? 'middle' : 'large'}
+            style={{ borderRadius: '8px', height: isMobile ? '40px' : '48px' }}
+          >
+            {isMobile ? (t('userList.updateMyPassword') || '改密') : (t('userList.updateMyPassword') || '修改我的密码')}
+          </Button>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={fetchUsers}
+            loading={loading}
+            size={isMobile ? 'middle' : 'large'}
+            style={{ borderRadius: '8px', height: isMobile ? '40px' : '48px' }}
+          >
+            {t('common.refresh') || '刷新'}
+          </Button>
+          {isDefaultUser && (
+            <Tooltip title={t('userList.addUser') || '新增用户'}>
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
                 onClick={() => setCreateModalVisible(true)}
-              >
-                {t('userList.addUser') || '新增用户'}
-              </Button>
+                size={isMobile ? 'middle' : 'large'}
+                style={{ borderRadius: '8px', height: isMobile ? '40px' : '48px', fontSize: isMobile ? '14px' : '16px' }}
+              />
+            </Tooltip>
+          )}
+        </Space>
+      </div>
+
+      <Card style={{ borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', border: '1px solid #e8e8e8' }} bodyStyle={{ padding: isMobile ? '12px' : '24px' }}>
+        {isMobile ? (
+          // 移动端卡片布局
+          <div>
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '40px' }}>
+                <Spin size="large" />
+              </div>
+            ) : users.length === 0 ? (
+              <Empty description={t('userList.noData') || '暂无用户数据'} />
+            ) : (
+              <List
+                dataSource={users}
+                renderItem={(user) => (
+                  <Card
+                    key={user.id}
+                    style={{
+                      marginBottom: '10px',
+                      borderRadius: '10px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                      border: '1px solid #e8e8e8',
+                      overflow: 'hidden'
+                    }}
+                    bodyStyle={{ padding: '0' }}
+                  >
+                    {/* 头部区域 - 用户名 */}
+                    <div style={{
+                      padding: '10px 12px',
+                      background: 'var(--ant-color-primary, #1677ff)',
+                      color: '#fff'
+                    }}>
+                      <div style={{ fontSize: '15px', fontWeight: '600', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <UserOutlined style={{ fontSize: '14px' }} />
+                        <span>{user.username}</span>
+                      </div>
+                      <div style={{ fontSize: '12px', opacity: '0.9' }}>
+                        ID: {user.id}
+                      </div>
+                    </div>
+
+                    {/* 角色信息区域 */}
+                    <div style={{
+                      padding: '8px 12px',
+                      backgroundColor: '#fafafa',
+                      borderBottom: '1px solid #f0f0f0',
+                      minHeight: '42px',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                        <div>
+                          <div style={{ fontSize: '10px', color: '#8c8c8c' }}>
+                            {t('userList.role') || '角色'}
+                          </div>
+                          <Tag color={user.isDefault ? 'red' : 'blue'} style={{ margin: 0 }}>
+                            {user.isDefault ? (t('userList.defaultAccount') || '默认账户') : (t('userList.normalUser') || '普通用户')}
+                          </Tag>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '10px', color: '#8c8c8c' }}>
+                            {t('common.createdAt') || '创建时间'}
+                          </div>
+                          <div style={{ fontSize: '12px', fontWeight: '500', color: '#666' }}>
+                            {new Date(user.createdAt).toLocaleDateString(i18n.language || 'zh-CN')}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 操作区域（仅管理员可见） */}
+                    {isDefaultUser && !user.isDefault && (
+                      <div style={{
+                        padding: '8px 12px',
+                        display: 'flex',
+                        justifyContent: 'space-around',
+                        alignItems: 'center'
+                      }}>
+                        <Tooltip title={t('userList.updatePassword') || '修改密码'}>
+                          <div
+                            onClick={() => {
+                              setSelectedUser(user)
+                              setUpdatePasswordModalVisible(true)
+                            }}
+                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}
+                          >
+                            <KeyOutlined style={{ fontSize: '18px', color: '#1890ff' }} />
+                            <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('userList.updatePassword') || '改密'}</span>
+                          </div>
+                        </Tooltip>
+
+                        <Popconfirm
+                          title={t('userList.deleteConfirm') || '确定要删除这个用户吗？'}
+                          onConfirm={() => handleDelete(user)}
+                          okText={t('common.confirm') || '确定'}
+                          cancelText={t('common.cancel') || '取消'}
+                        >
+                          <Tooltip title={t('common.delete') || '删除'}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}>
+                              <DeleteOutlined style={{ fontSize: '18px', color: '#ff4d4f' }} />
+                              <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('common.delete') || '删除'}</span>
+                            </div>
+                          </Tooltip>
+                        </Popconfirm>
+                      </div>
+                    )}
+                  </Card>
+                )}
+              />
             )}
-          </Space>
-        </div>
-        <Table
-          columns={columns}
-          dataSource={users}
-          rowKey="id"
-          loading={loading}
-          pagination={{
-            pageSize: isMobile ? 10 : 20,
-            showSizeChanger: !isMobile,
-            showTotal: (total) => t('userList.total', { total }) || `共 ${total} 条`
-          }}
-          scroll={isMobile ? { x: 600 } : undefined}
-        />
+          </div>
+        ) : (
+          <Table
+            columns={columns}
+            dataSource={users}
+            rowKey="id"
+            loading={loading}
+            pagination={{
+              pageSize: isMobile ? 10 : 20,
+              showSizeChanger: !isMobile,
+              showTotal: (total) => t('userList.total', { total }) || `共 ${total} 条`
+            }}
+            scroll={isMobile ? { x: 600 } : undefined}
+          />
+        )}
       </Card>
 
       {/* 创建用户弹窗 */}

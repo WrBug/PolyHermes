@@ -147,7 +147,8 @@ class CryptoTailMonitorService(
 
             val account = accountRepository.findById(strategy.accountId).orElse(null)
             val nowSeconds = System.currentTimeMillis() / 1000
-            val periodStartUnix = (nowSeconds / strategy.intervalSeconds) * strategy.intervalSeconds
+            val periodStartUnix = request.periodStartUnix
+                ?: ((nowSeconds / strategy.intervalSeconds) * strategy.intervalSeconds)
 
             // 获取市场信息
             val slug = "${strategy.marketSlugPrefix}-$periodStartUnix"
@@ -207,7 +208,9 @@ class CryptoTailMonitorService(
                 tokenIdUp = tokenIds.getOrNull(0),
                 tokenIdDown = tokenIds.getOrNull(1),
                 currentTimestamp = System.currentTimeMillis(),
-                enabled = strategy.enabled
+                enabled = strategy.enabled,
+                amountMode = strategy.amountMode,
+                amountValue = strategy.amountValue.toPlainString()
             )
 
             Result.success(response)

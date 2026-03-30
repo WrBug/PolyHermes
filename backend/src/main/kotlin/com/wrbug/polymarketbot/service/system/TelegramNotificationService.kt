@@ -26,6 +26,7 @@ import java.util.concurrent.TimeUnit
 @Service
 class TelegramNotificationService(
     private val notificationConfigService: NotificationConfigService,
+    private val notificationTemplateService: NotificationTemplateService,
     private val objectMapper: ObjectMapper,
     private val messageSource: MessageSource
 ) {
@@ -85,7 +86,9 @@ class TelegramNotificationService(
         marketId: String? = null,
         marketSlug: String? = null,
         side: String,
-        price: String? = null,  // 订单价格（可选，如果提供则直接使用）
+        price: String? = null,  // 订单限价（可选）
+        avgFilledPrice: String? = null,  // 平均成交价（可选，有成交时优先展示）
+        filled: String? = null,  // 已成交数量（可选，与 avgFilledPrice 一起时用于金额计算）
         size: String? = null,  // 订单数量（可选，如果提供则直接使用）
         outcome: String? = null,  // 市场方向（可选，如果提供则直接使用）
         accountName: String? = null,
@@ -98,7 +101,8 @@ class TelegramNotificationService(
         locale: java.util.Locale? = null,
         leaderName: String? = null,  // Leader 名称（备注）
         configName: String? = null,  // 跟单配置名
-        orderTime: Long? = null  // 订单创建时间（毫秒时间戳），用于通知中的时间显示
+        orderTime: Long? = null,  // 订单创建时间（毫秒时间戳），用于通知中的时间显示
+        availableBalance: String? = null  // 可用余额（可选）
     ) {
         // 1. 如果提供了 orderId，检查是否已发送过通知（去重）
         if (orderId != null) {
@@ -128,14 +132,21 @@ class TelegramNotificationService(
             java.util.Locale("zh", "CN")  // 默认简体中文
         }
         
-        // 优先使用传入的价格和数量，如果没有提供则尝试从订单详情获取
-        var actualPrice: String? = price
+        // 优先使用平均成交价（实际成交价），其次传入的限价，若未提供则从订单详情获取
+        var actualPrice: String? = avgFilledPrice?.takeIf { it.isNotBlank() } ?: price
         var actualSize: String? = size
         var actualSide: String = side
         var actualOutcome: String? = outcome
+
+        // 有平均成交价时，已成交数量优先用 filled，用于金额计算
+        val sizeForAmount: String? = if (avgFilledPrice != null && avgFilledPrice.isNotBlank() && filled != null && filled.isNotBlank()) {
+            filled
+        } else {
+            null
+        }
         
-        // 如果价格或数量未提供，尝试从订单详情获取
-        if ((actualPrice == null || actualSize == null) && orderId != null && clobApi != null && apiKey != null && apiSecret != null && apiPassphrase != null && walletAddressForApi != null) {
+        // 如果价格、数量或市场方向未提供，尝试从订单详情获取
+        if ((actualPrice == null || actualSize == null || actualOutcome == null) && orderId != null && clobApi != null && apiKey != null && apiSecret != null && apiPassphrase != null && walletAddressForApi != null) {
             try {
                 val orderResponse = clobApi.getOrder(orderId)
                 if (orderResponse.isSuccessful) {
@@ -147,7 +158,8 @@ class TelegramNotificationService(
                         if (actualSize == null) {
                             actualSize = order.originalSize  // 使用 originalSize 作为订单数量
                         }
-                        actualSide = order.side  // 使用订单详情中的 side
+                        // 注意：不覆盖 side，因为传入的 side（BUY/SELL）是正确的
+                        // actualSide = order.side  // 不要使用订单详情中的 side，因为它可能不准确
                         if (actualOutcome == null) {
                             actualOutcome = order.outcome  // 使用订单详情中的 outcome（市场方向）
                         }
@@ -165,19 +177,28 @@ class TelegramNotificationService(
         
         // 如果仍然没有获取到实际值，使用默认值（这种情况不应该发生，但为了兼容性保留）
         val finalPrice = actualPrice ?: "0"
-        val finalSize = actualSize ?: "0"
+        // 有实际成交价时展示数量用 size_matched（filled），否则用订单数量（original_size）
+        val finalSize = if (avgFilledPrice != null && avgFilledPrice.isNotBlank() && filled != null && filled.isNotBlank()) {
+            filled
+        } else {
+            actualSize ?: "0"
+        }
+        // 金额计算：有实际成交价和已成交数量时用二者乘积，否则用展示价格×订单数量
+        val sizeForCalc = sizeForAmount?.takeIf { it.isNotBlank() } ?: finalSize
         
         // 计算订单金额 = price × size（USDC）
         val amount = try {
             val priceDecimal = finalPrice.toSafeBigDecimal()
-            val sizeDecimal = finalSize.toSafeBigDecimal()
+            val sizeDecimal = sizeForCalc.toSafeBigDecimal()
             priceDecimal.multiply(sizeDecimal).toString()
         } catch (e: Exception) {
             logger.warn("计算订单金额失败: ${e.message}", e)
             null
         }
 
-        val message = buildOrderSuccessMessage(
+        val unknownAccount = messageSource.getMessage("notification.order.unknown_account", null, "未知账户", currentLocale).orEmpty().ifEmpty { "未知账户" }
+        val calculateFailed = messageSource.getMessage("notification.order.calculate_failed", null, "计算失败", currentLocale).orEmpty().ifEmpty { "计算失败" }
+        val vars = buildOrderSuccessVariables(
             orderId = orderId,
             marketTitle = marketTitle,
             marketId = marketId,
@@ -192,8 +213,12 @@ class TelegramNotificationService(
             locale = currentLocale,
             leaderName = leaderName,
             configName = configName,
-            orderTime = orderTime
+            orderTime = orderTime,
+            availableBalance = availableBalance,
+            unknownAccount = unknownAccount,
+            calculateFailed = calculateFailed
         )
+        val message = notificationTemplateService.renderTemplate("ORDER_SUCCESS", vars)
         sendMessage(message)
     }
 
@@ -232,7 +257,9 @@ class TelegramNotificationService(
             null
         }
 
-        val message = buildOrderFailureMessage(
+        val unknownAccount = messageSource.getMessage("notification.order.unknown_account", null, "未知账户", currentLocale).orEmpty().ifEmpty { "未知账户" }
+        val calculateFailed = messageSource.getMessage("notification.order.calculate_failed", null, "计算失败", currentLocale).orEmpty().ifEmpty { "计算失败" }
+        val vars = buildOrderFailureVariables(
             marketTitle = marketTitle,
             marketId = marketId,
             marketSlug = marketSlug,
@@ -244,9 +271,63 @@ class TelegramNotificationService(
             errorMessage = errorMessage,
             accountName = accountName,
             walletAddress = walletAddress,
-            locale = currentLocale
+            locale = currentLocale,
+            unknownAccount = unknownAccount,
+            calculateFailed = calculateFailed
         )
+        val message = notificationTemplateService.renderTemplate("ORDER_FAILED", vars)
         sendMessage(message)
+    }
+
+    /**
+     * 构建订单失败通知的变量 Map
+     */
+    private fun buildOrderFailureVariables(
+        marketTitle: String,
+        marketId: String?,
+        marketSlug: String?,
+        side: String,
+        outcome: String?,
+        price: String,
+        size: String,
+        amount: String?,
+        errorMessage: String,
+        accountName: String?,
+        walletAddress: String?,
+        locale: java.util.Locale,
+        unknownAccount: String,
+        calculateFailed: String
+    ): Map<String, String> {
+        val sideDisplay = when (side.uppercase()) {
+            "BUY" -> messageSource.getMessage("notification.order.side.buy", null, "买入", locale).orEmpty().ifEmpty { "买入" }
+            "SELL" -> messageSource.getMessage("notification.order.side.sell", null, "卖出", locale).orEmpty().ifEmpty { "卖出" }
+            else -> side
+        }
+        val accountInfo = buildAccountInfo(accountName, walletAddress, unknownAccount)
+        val marketLink = when {
+            !marketSlug.isNullOrBlank() -> "https://polymarket.com/event/$marketSlug"
+            !marketId.isNullOrBlank() && marketId.startsWith("0x") -> "https://polymarket.com/condition/$marketId"
+            else -> ""
+        }
+        val amountDisplay = amount?.let { am ->
+            try {
+                val amountDecimal = am.toSafeBigDecimal()
+                (if (amountDecimal.scale() > 4) amountDecimal.setScale(4, java.math.RoundingMode.DOWN).stripTrailingZeros() else amountDecimal.stripTrailingZeros()).toPlainString()
+            } catch (e: Exception) { am }
+        } ?: calculateFailed
+        val shortError = if (errorMessage.length > 500) errorMessage.substring(0, 500) + "..." else errorMessage
+        return mapOf(
+            "market_title" to marketTitle.replace("<", "&lt;").replace(">", "&gt;"),
+            "market_link" to marketLink,
+            "side" to sideDisplay,
+            "outcome" to (outcome?.replace("<", "&lt;")?.replace(">", "&gt;") ?: ""),
+            "price" to formatPrice(price),
+            "quantity" to formatQuantity(size),
+            "amount" to amountDisplay,
+            "account_name" to accountInfo,
+            "error_message" to shortError.replace("<", "&lt;").replace(">", "&gt;"),
+            "time" to DateUtils.formatDateTime()
+        )
     }
 
     /**
@@ -285,7 +366,9 @@ class TelegramNotificationService(
             null
         }
 
-        val message = buildOrderFilteredMessage(
+        val unknownAccount = messageSource.getMessage("notification.order.unknown_account", null, "未知账户", currentLocale).orEmpty().ifEmpty { "未知账户" }
+        val calculateFailed = messageSource.getMessage("notification.order.calculate_failed", null, "计算失败", currentLocale).orEmpty().ifEmpty { "计算失败" }
+        val vars = buildOrderFilteredVariables(
             marketTitle = marketTitle,
             marketId = marketId,
             marketSlug = marketSlug,
@@ -298,13 +381,75 @@ class TelegramNotificationService(
             filterType = filterType,
             accountName = accountName,
             walletAddress = walletAddress,
-            locale = currentLocale
+            locale = currentLocale,
+            unknownAccount = unknownAccount,
+            calculateFailed = calculateFailed
         )
+        val message = notificationTemplateService.renderTemplate("ORDER_FILTERED", vars)
         sendMessage(message)
+    }
+
+    private fun buildOrderFilteredVariables(
+        marketTitle: String,
+        marketId: String?,
+        marketSlug: String?,
+        side: String,
+        outcome: String?,
+        price: String,
+        size: String,
+        amount: String?,
+        filterReason: String,
+        filterType: String,
+        accountName: String?,
+        walletAddress: String?,
+        locale: java.util.Locale,
+        unknownAccount: String,
+        calculateFailed: String
+    ): Map<String, String> {
+        val sideDisplay = when (side.uppercase()) {
+            "BUY" -> messageSource.getMessage("notification.order.side.buy", null, "买入", locale).orEmpty().ifEmpty { "买入" }
+            "SELL" -> messageSource.getMessage("notification.order.side.sell", null, "卖出", locale).orEmpty().ifEmpty { "卖出" }
+            else -> side
+        }
+        val filterTypeDisplay = when (filterType.uppercase()) {
+            "ORDER_DEPTH" -> messageSource.getMessage("notification.filter.type.order_depth", null, "订单深度不足", locale).orEmpty().ifEmpty { "订单深度不足" }
+            "SPREAD" -> messageSource.getMessage("notification.filter.type.spread", null, "价差过大", locale).orEmpty().ifEmpty { "价差过大" }
+            "ORDERBOOK_DEPTH" -> messageSource.getMessage("notification.filter.type.orderbook_depth", null, "订单簿深度不足", locale).orEmpty().ifEmpty { "订单簿深度不足" }
+            "PRICE_VALIDITY" -> messageSource.getMessage("notification.filter.type.price_validity", null, "价格不合理", locale).orEmpty().ifEmpty { "价格不合理" }
+            "MARKET_STATUS" -> messageSource.getMessage("notification.filter.type.market_status", null, "市场状态不可交易", locale).orEmpty().ifEmpty { "市场状态不可交易" }
+            else -> filterType
+        }
+        val accountInfo = buildAccountInfo(accountName, walletAddress, unknownAccount)
+        val marketLink = when {
+            !marketSlug.isNullOrBlank() -> "https://polymarket.com/event/$marketSlug"
+            !marketId.isNullOrBlank() && marketId.startsWith("0x") -> "https://polymarket.com/condition/$marketId"
+            else -> ""
+        }
+        val amountDisplay = amount?.let { am ->
+            try {
+                (am.toSafeBigDecimal().let { if (it.scale() > 4) it.setScale(4, java.math.RoundingMode.DOWN).stripTrailingZeros() else it.stripTrailingZeros() }.toPlainString())
+            } catch (e: Exception) { am }
+        } ?: calculateFailed
+        return mapOf(
+            "market_title" to marketTitle.replace("<", "&lt;").replace(">", "&gt;"),
+            "market_link" to marketLink,
+            "side" to sideDisplay,
+            "outcome" to (outcome?.replace("<", "&lt;")?.replace(">", "&gt;") ?: ""),
+            "price" to formatPrice(price),
+            "quantity" to formatQuantity(size),
+            "amount" to amountDisplay,
+            "account_name" to accountInfo,
+            "filter_type" to filterTypeDisplay,
+            "filter_reason" to filterReason.replace("<", "&lt;").replace(">", "&gt;"),
+            "time" to DateUtils.formatDateTime()
+        )
     }
 
     /**
      * 发送加密价差策略下单成功通知（与跟单一致：在收到 WS 订单推送时匹配价差策略订单后调用）
+     * @param price 订单限价
+     * @param avgFilledPrice 平均成交价（可选，有成交时优先展示）
+     * @param filled 已成交数量（可选，与 avgFilledPrice 一起时用于金额计算）
      */
     suspend fun sendCryptoTailOrderSuccessNotification(
         orderId: String?,
@@ -315,6 +460,8 @@ class TelegramNotificationService(
         outcome: String? = null,
         price: String,
         size: String,
+        avgFilledPrice: String? = null,
+        filled: String? = null,
         strategyName: String? = null,
         accountName: String? = null,
         walletAddress: String? = null,
@@ -339,31 +486,93 @@ class TelegramNotificationService(
             logger.warn("获取语言设置失败，使用默认语言: ${e.message}", e)
             java.util.Locale("zh", "CN")
         }
+        val displayPrice = avgFilledPrice?.takeIf { it.isNotBlank() } ?: price
+        val hasAvgFilled = avgFilledPrice != null && avgFilledPrice.isNotBlank() && filled != null && filled.isNotBlank()
+        val sizeForAmount = if (hasAvgFilled) filled else size
+        val quantityDisplay = if (hasAvgFilled) filled else size  // 有实际成交价时展示数量用 size_matched
         val amount = try {
-            val priceDecimal = price.toSafeBigDecimal()
-            val sizeDecimal = size.toSafeBigDecimal()
+            val priceDecimal = displayPrice.toSafeBigDecimal()
+            val sizeDecimal = sizeForAmount.toSafeBigDecimal()
             priceDecimal.multiply(sizeDecimal).toString()
         } catch (e: Exception) {
             logger.warn("计算订单金额失败: ${e.message}", e)
             null
         }
-        val message = buildCryptoTailOrderSuccessMessage(
+        val unknown = messageSource.getMessage("common.unknown", null, "未知", currentLocale).orEmpty().ifEmpty { "未知" }
+        val unknownAccount = messageSource.getMessage("notification.order.unknown_account", null, "未知账户", currentLocale).orEmpty().ifEmpty { "未知账户" }
+        val calculateFailed = messageSource.getMessage("notification.order.calculate_failed", null, "计算失败", currentLocale).orEmpty().ifEmpty { "计算失败" }
+        val vars = buildCryptoTailOrderSuccessVariables(
             orderId = orderId,
             marketTitle = marketTitle,
             marketId = marketId,
             marketSlug = marketSlug,
             side = side,
             outcome = outcome,
-            price = price,
-            size = size,
+            price = displayPrice,
+            size = quantityDisplay.orEmpty(),
             amount = amount,
             strategyName = strategyName,
             accountName = accountName,
             walletAddress = walletAddress,
-            locale = currentLocale,
-            orderTime = orderTime
+            orderTime = orderTime,
+            unknown = unknown,
+            unknownAccount = unknownAccount,
+            calculateFailed = calculateFailed,
+            locale = currentLocale
         )
+        val message = notificationTemplateService.renderTemplate("CRYPTO_TAIL_SUCCESS", vars)
         sendMessage(message)
+    }
+
+    private fun buildCryptoTailOrderSuccessVariables(
+        orderId: String?,
+        marketTitle: String,
+        marketId: String?,
+        marketSlug: String?,
+        side: String,
+        outcome: String?,
+        price: String,
+        size: String,
+        amount: String?,
+        strategyName: String?,
+        accountName: String?,
+        walletAddress: String?,
+        orderTime: Long?,
+        unknown: String,
+        unknownAccount: String,
+        calculateFailed: String,
+        locale: java.util.Locale
+    ): Map<String, String> {
+        val sideDisplay = when (side.uppercase()) {
+            "BUY" -> messageSource.getMessage("notification.order.side.buy", null, "买入", locale).orEmpty().ifEmpty { "买入" }
+            "SELL" -> messageSource.getMessage("notification.order.side.sell", null, "卖出", locale).orEmpty().ifEmpty { "卖出" }
+            else -> side
+        }
+        val accountInfo = buildAccountInfo(accountName, walletAddress, unknownAccount)
+        val time = if (orderTime != null) DateUtils.formatDateTime(orderTime) else DateUtils.formatDateTime()
+        val marketLink = when {
+            !marketSlug.isNullOrBlank() -> "https://polymarket.com/event/$marketSlug"
+            !marketId.isNullOrBlank() && marketId.startsWith("0x") -> "https://polymarket.com/condition/$marketId"
+            else -> ""
+        }
+        val amountDisplay = amount?.let { am ->
+            try {
+                (am.toSafeBigDecimal().let { if (it.scale() > 4) it.setScale(4, java.math.RoundingMode.DOWN).stripTrailingZeros() else it.stripTrailingZeros() }.toPlainString())
+            } catch (e: Exception) { am }
+        } ?: calculateFailed
+        return mapOf(
+            "order_id" to (orderId ?: unknown),
+            "market_title" to marketTitle.replace("<", "&lt;").replace(">", "&gt;"),
+            "market_link" to marketLink,
+            "side" to sideDisplay,
+            "outcome" to (outcome?.replace("<", "&lt;")?.replace(">", "&gt;") ?: ""),
+            "price" to formatPrice(price),
+            "quantity" to formatQuantity(size),
+            "amount" to amountDisplay,
+            "account_name" to accountInfo,
+            "strategy_name" to (strategyName?.takeIf { it.isNotBlank() } ?: unknown),
+            "time" to time
+        )
     }
 
     /**
@@ -749,6 +958,76 @@ class TelegramNotificationService(
     }
 
     /**
+     * 构建订单成功通知的变量 Map（供模板渲染）
+     */
+    private fun buildOrderSuccessVariables(
+        orderId: String?,
+        marketTitle: String,
+        marketId: String?,
+        marketSlug: String?,
+        side: String,
+        outcome: String?,
+        price: String,
+        size: String,
+        amount: String?,
+        accountName: String?,
+        walletAddress: String?,
+        locale: java.util.Locale,
+        leaderName: String?,
+        configName: String?,
+        orderTime: Long?,
+        availableBalance: String?,
+        unknownAccount: String,
+        calculateFailed: String
+    ): Map<String, String> {
+        val sideDisplay = when (side.uppercase()) {
+            "BUY" -> messageSource.getMessage("notification.order.side.buy", null, "买入", locale).orEmpty().ifEmpty { "买入" }
+            "SELL" -> messageSource.getMessage("notification.order.side.sell", null, "卖出", locale).orEmpty().ifEmpty { "卖出" }
+            else -> side
+        }
+        val unknown = messageSource.getMessage("common.unknown", null, "未知", locale).orEmpty().ifEmpty { "未知" }
+        val accountInfo = buildAccountInfo(accountName, walletAddress, unknownAccount)
+        val time = if (orderTime != null) DateUtils.formatDateTime(orderTime) else DateUtils.formatDateTime()
+        val marketLink = when {
+            !marketSlug.isNullOrBlank() -> "https://polymarket.com/event/$marketSlug"
+            !marketId.isNullOrBlank() && marketId.startsWith("0x") -> "https://polymarket.com/condition/$marketId"
+            else -> ""
+        }
+        val amountDisplay = when {
+            amount != null -> try {
+                val amountDecimal = amount.toSafeBigDecimal()
+                val formatted = if (amountDecimal.scale() > 4) amountDecimal.setScale(4, java.math.RoundingMode.DOWN).stripTrailingZeros() else amountDecimal.stripTrailingZeros()
+                formatted.toPlainString()
+            } catch (e: Exception) { amount ?: calculateFailed }
+            else -> calculateFailed
+        }
+        val availableBalanceDisplay = if (!availableBalance.isNullOrBlank()) {
+            try {
+                val balanceDecimal = availableBalance.toSafeBigDecimal()
+                val formatted = if (balanceDecimal.scale() > 4) balanceDecimal.setScale(4, java.math.RoundingMode.DOWN).stripTrailingZeros() else balanceDecimal.stripTrailingZeros()
+                formatted.toPlainString()
+            } catch (e: Exception) { availableBalance ?: "" }
+        } else { "" }
+        val escapedMarketTitle = marketTitle.replace("<", "&lt;").replace(">", "&gt;")
+        val escapedOutcome = outcome?.replace("<", "&lt;")?.replace(">", "&gt;") ?: ""
+        return mapOf(
+            "order_id" to (orderId ?: unknown),
+            "market_title" to escapedMarketTitle,
+            "market_link" to marketLink,
+            "side" to sideDisplay,
+            "outcome" to escapedOutcome,
+            "price" to formatPrice(price),
+            "quantity" to formatQuantity(size),
+            "amount" to amountDisplay,
+            "account_name" to accountInfo,
+            "available_balance" to availableBalanceDisplay,
+            "leader_name" to (leaderName ?: ""),
+            "config_name" to (configName ?: ""),
+            "time" to time
+        )
+    }
+
+    /**
      * 构建订单成功消息
      */
     private fun buildOrderSuccessMessage(
@@ -766,7 +1045,8 @@ class TelegramNotificationService(
         locale: java.util.Locale,
         leaderName: String? = null,  // Leader 名称（备注）
         configName: String? = null,  // 跟单配置名
-        orderTime: Long? = null  // 订单创建时间（毫秒时间戳）
+        orderTime: Long? = null,  // 订单创建时间（毫秒时间戳）
+        availableBalance: String? = null  // 可用余额
     ): String {
         
         // 获取多语言文本
@@ -781,6 +1061,7 @@ class TelegramNotificationService(
         val amountLabel = messageSource.getMessage("notification.order.amount", null, "金额", locale)
         val accountLabel = messageSource.getMessage("notification.order.account", null, "账户", locale)
         val timeLabel = messageSource.getMessage("notification.order.time", null, "时间", locale)
+        val availableBalanceLabel = messageSource.getMessage("notification.order.available_balance", null, "可用余额", locale)
         val unknown = messageSource.getMessage("common.unknown", null, "未知", locale)
         val unknownAccount: String = messageSource.getMessage("notification.order.unknown_account", null, "未知账户", locale) ?: "未知账户"
         val calculateFailed = messageSource.getMessage("notification.order.calculate_failed", null, "计算失败", locale)
@@ -879,6 +1160,23 @@ class TelegramNotificationService(
         val priceDisplay = formatPrice(price)
         val sizeDisplay = formatQuantity(size)
 
+        // 格式化可用余额
+        val availableBalanceDisplay = if (!availableBalance.isNullOrBlank()) {
+            try {
+                val balanceDecimal = availableBalance.toSafeBigDecimal()
+                val formatted = if (balanceDecimal.scale() > 4) {
+                    balanceDecimal.setScale(4, java.math.RoundingMode.DOWN).stripTrailingZeros()
+                } else {
+                    balanceDecimal.stripTrailingZeros()
+                }
+                "\n• $availableBalanceLabel: <code>${formatted.toPlainString()}</code> USDC"
+            } catch (e: Exception) {
+                "\n• $availableBalanceLabel: <code>$availableBalance</code> USDC"
+            }
+        } else {
+            ""
+        }
+
         return """$icon <b>$orderCreatedSuccess</b>
 
 📊 <b>$orderInfo：</b>
@@ -888,7 +1186,7 @@ class TelegramNotificationService(
 • $priceLabel: <code>$priceDisplay</code>
 • $quantityLabel: <code>$sizeDisplay</code> shares
 • $amountLabel: <code>$amountDisplay</code> USDC
-• $accountLabel: $escapedAccountInfo$escapedCopyTradingInfo
+• $accountLabel: $escapedAccountInfo$escapedCopyTradingInfo$availableBalanceDisplay
 
 ⏰ $timeLabel: <code>$time</code>"""
     }
@@ -1095,6 +1393,7 @@ class TelegramNotificationService(
     /**
      * 发送仓位赎回通知
      * @param locale 语言设置（可选，如果提供则使用，否则使用 LocaleContextHolder 获取）
+     * @param availableBalance 可用余额（可选）
      */
     suspend fun sendRedeemNotification(
         accountName: String?,
@@ -1102,7 +1401,8 @@ class TelegramNotificationService(
         transactionHash: String,
         totalRedeemedValue: String,
         positions: List<com.wrbug.polymarketbot.dto.RedeemedPositionInfo>,
-        locale: java.util.Locale? = null
+        locale: java.util.Locale? = null,
+        availableBalance: String? = null
     ) {
         // 获取语言设置（优先使用传入的 locale，否则从 LocaleContextHolder 获取）
         val currentLocale = locale ?: try {
@@ -1112,15 +1412,45 @@ class TelegramNotificationService(
             java.util.Locale("zh", "CN")  // 默认简体中文
         }
         
-        val message = buildRedeemMessage(
+        val unknownAccount = messageSource.getMessage("notification.order.unknown_account", null, "未知账户", currentLocale) ?: "未知账户"
+        val vars = buildRedeemSuccessVariables(
             accountName = accountName,
             walletAddress = walletAddress,
             transactionHash = transactionHash,
             totalRedeemedValue = totalRedeemedValue,
-            positions = positions,
-            locale = currentLocale
+            availableBalance = availableBalance,
+            unknownAccount = unknownAccount
         )
+        val message = notificationTemplateService.renderTemplate("REDEEM_SUCCESS", vars)
         sendMessage(message)
+    }
+
+    private fun buildRedeemSuccessVariables(
+        accountName: String?,
+        walletAddress: String?,
+        transactionHash: String,
+        totalRedeemedValue: String,
+        availableBalance: String?,
+        unknownAccount: String
+    ): Map<String, String> {
+        val accountInfo = buildAccountInfo(accountName, walletAddress, unknownAccount)
+        val totalValueDisplay = try {
+            val d = totalRedeemedValue.toSafeBigDecimal()
+            (if (d.scale() > 4) d.setScale(4, java.math.RoundingMode.DOWN).stripTrailingZeros() else d.stripTrailingZeros()).toPlainString()
+        } catch (e: Exception) { totalRedeemedValue }
+        val availableBalanceDisplay = availableBalance?.let { ab ->
+            try {
+                val d = ab.toSafeBigDecimal()
+                (if (d.scale() > 4) d.setScale(4, java.math.RoundingMode.DOWN).stripTrailingZeros() else d.stripTrailingZeros()).toPlainString()
+            } catch (e: Exception) { ab }
+        } ?: ""
+        return mapOf(
+            "account_name" to accountInfo,
+            "transaction_hash" to transactionHash.replace("<", "&lt;").replace(">", "&gt;"),
+            "total_value" to totalValueDisplay,
+            "available_balance" to availableBalanceDisplay,
+            "time" to DateUtils.formatDateTime()
+        )
     }
     
     /**
@@ -1132,7 +1462,8 @@ class TelegramNotificationService(
         transactionHash: String,
         totalRedeemedValue: String,
         positions: List<com.wrbug.polymarketbot.dto.RedeemedPositionInfo>,
-        locale: java.util.Locale
+        locale: java.util.Locale,
+        availableBalance: String? = null
     ): String {
         // 获取多语言文本
         val redeemSuccess = messageSource.getMessage("notification.redeem.success", null, "仓位赎回成功", locale)
@@ -1145,6 +1476,7 @@ class TelegramNotificationService(
         val quantityLabel = messageSource.getMessage("notification.order.quantity", null, "数量", locale)
         val valueLabel = messageSource.getMessage("notification.order.amount", null, "金额", locale)
         val timeLabel = messageSource.getMessage("notification.order.time", null, "时间", locale)
+        val availableBalanceLabel = messageSource.getMessage("notification.redeem.available_balance", null, "可用余额", locale)
         val unknownAccount: String = messageSource.getMessage("notification.order.unknown_account", null, "未知账户", locale) ?: "未知账户"
         
         // 构建账户信息（格式：账户名(钱包地址)）
@@ -1186,19 +1518,152 @@ class TelegramNotificationService(
             "  • ${position.marketId.substring(0, 8)}... (${position.side}): $quantityDisplay shares = $valueDisplay USDC"
         }
         
+        // 格式化可用余额
+        val availableBalanceDisplay = if (!availableBalance.isNullOrBlank()) {
+            try {
+                val balanceDecimal = availableBalance.toSafeBigDecimal()
+                val formatted = if (balanceDecimal.scale() > 4) {
+                    balanceDecimal.setScale(4, java.math.RoundingMode.DOWN).stripTrailingZeros()
+                } else {
+                    balanceDecimal.stripTrailingZeros()
+                }
+                "\n• $availableBalanceLabel: <code>${formatted.toPlainString()}</code> USDC"
+            } catch (e: Exception) {
+                "\n• $availableBalanceLabel: <code>$availableBalance</code> USDC"
+            }
+        } else {
+            ""
+        }
+        
         return """💸 <b>$redeemSuccess</b>
 
 📊 <b>$redeemInfo：</b>
 • $accountLabel: $escapedAccountInfo
 • $transactionHashLabel: <code>$escapedTxHash</code>
-• $totalValueLabel: <code>$totalValueDisplay</code> USDC
+• $totalValueLabel: <code>$totalValueDisplay</code> USDC$availableBalanceDisplay
 
 📦 <b>$positionsLabel：</b>
 $positionsText
 
 ⏰ $timeLabel: <code>$time</code>"""
     }
-    
+
+    /**
+     * 发送仓位已结算（无收益）通知
+     * 用于输的仓位，赎回价值为 0 的情况
+     */
+    suspend fun sendRedeemNoReturnNotification(
+        accountName: String?,
+        walletAddress: String?,
+        transactionHash: String,
+        positions: List<com.wrbug.polymarketbot.dto.RedeemedPositionInfo>,
+        locale: java.util.Locale? = null,
+        availableBalance: String? = null
+    ) {
+        val currentLocale = locale ?: try {
+            LocaleContextHolder.getLocale()
+        } catch (e: Exception) {
+            logger.warn("获取语言设置失败，使用默认语言: ${e.message}", e)
+            java.util.Locale("zh", "CN")
+        }
+
+        val unknownAccount = messageSource.getMessage("notification.order.unknown_account", null, "未知账户", currentLocale) ?: "未知账户"
+        val vars = buildRedeemNoReturnVariables(
+            accountName = accountName,
+            walletAddress = walletAddress,
+            transactionHash = transactionHash,
+            availableBalance = availableBalance,
+            unknownAccount = unknownAccount
+        )
+        val message = notificationTemplateService.renderTemplate("REDEEM_NO_RETURN", vars)
+        sendMessage(message)
+    }
+
+    private fun buildRedeemNoReturnVariables(
+        accountName: String?,
+        walletAddress: String?,
+        transactionHash: String,
+        availableBalance: String?,
+        unknownAccount: String
+    ): Map<String, String> {
+        val accountInfo = buildAccountInfo(accountName, walletAddress, unknownAccount)
+        val availableBalanceDisplay = availableBalance?.let { ab ->
+            try {
+                val d = ab.toSafeBigDecimal()
+                (if (d.scale() > 4) d.setScale(4, java.math.RoundingMode.DOWN).stripTrailingZeros() else d.stripTrailingZeros()).toPlainString()
+            } catch (e: Exception) { ab }
+        } ?: ""
+        return mapOf(
+            "account_name" to accountInfo,
+            "transaction_hash" to transactionHash.replace("<", "&lt;").replace(">", "&gt;"),
+            "available_balance" to availableBalanceDisplay,
+            "time" to DateUtils.formatDateTime()
+        )
+    }
+
+    /**
+     * 构建仓位已结算（无收益）消息
+     */
+    private fun buildRedeemNoReturnMessage(
+        accountName: String?,
+        walletAddress: String?,
+        transactionHash: String,
+        positions: List<com.wrbug.polymarketbot.dto.RedeemedPositionInfo>,
+        locale: java.util.Locale,
+        availableBalance: String? = null
+    ): String {
+        val noReturnTitle = messageSource.getMessage("notification.redeem.no_return.title", null, "仓位已结算（无收益）", locale)
+        val noReturnInfo = messageSource.getMessage("notification.redeem.no_return.info", null, "结算信息", locale)
+        val noReturnMessage = messageSource.getMessage("notification.redeem.no_return.message", null, "市场已结算，您的预测未命中，赎回价值为 0。", locale)
+        val accountLabel = messageSource.getMessage("notification.order.account", null, "账户", locale)
+        val transactionHashLabel = messageSource.getMessage("notification.redeem.transaction_hash", null, "交易哈希", locale)
+        val positionsLabel = messageSource.getMessage("notification.redeem.no_return.positions", null, "结算仓位", locale)
+        val timeLabel = messageSource.getMessage("notification.order.time", null, "时间", locale)
+        val availableBalanceLabel = messageSource.getMessage("notification.redeem.available_balance", null, "可用余额", locale)
+        val unknownAccount: String = messageSource.getMessage("notification.order.unknown_account", null, "未知账户", locale) ?: "未知账户"
+
+        val accountInfo = buildAccountInfo(accountName, walletAddress, unknownAccount)
+        val time = DateUtils.formatDateTime()
+
+        val escapedAccountInfo = accountInfo.replace("<", "&lt;").replace(">", "&gt;")
+        val escapedTxHash = transactionHash.replace("<", "&lt;").replace(">", "&gt;")
+
+        val positionsText = positions.joinToString("\n") { position ->
+            val quantityDisplay = formatQuantity(position.quantity)
+            "  • ${position.marketId.substring(0, 8)}... (${position.side}): $quantityDisplay shares"
+        }
+
+        // 格式化可用余额
+        val availableBalanceDisplay = if (!availableBalance.isNullOrBlank()) {
+            try {
+                val balanceDecimal = availableBalance.toSafeBigDecimal()
+                val formatted = if (balanceDecimal.scale() > 4) {
+                    balanceDecimal.setScale(4, java.math.RoundingMode.DOWN).stripTrailingZeros()
+                } else {
+                    balanceDecimal.stripTrailingZeros()
+                }
+                "\n• $availableBalanceLabel: <code>${formatted.toPlainString()}</code> USDC"
+            } catch (e: Exception) {
+                "\n• $availableBalanceLabel: <code>$availableBalance</code> USDC"
+            }
+        } else {
+            ""
+        }
+
+        return """📋 <b>$noReturnTitle</b>
+
+📊 <b>$noReturnInfo：</b>
+<i>$noReturnMessage</i>
+
+• $accountLabel: $escapedAccountInfo
+• $transactionHashLabel: <code>$escapedTxHash</code>$availableBalanceDisplay
+
+📦 <b>$positionsLabel：</b>
+$positionsText
+
+⏰ $timeLabel: <code>$time</code>"""
+    }
+
     /**
      * 脱敏显示地址（只显示前6位和后4位）
      */

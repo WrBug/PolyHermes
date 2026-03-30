@@ -580,12 +580,13 @@ export interface OrderMessage {
 
 /**
  * 订单详情（通过 API 获取）
+ * price 为订单限价，avgFilledPrice 为平均成交价（有成交时优先用于展示）
  */
 export interface OrderDetail {
   id: string  // 订单 ID
   market: string  // 市场 ID (condition ID)
   side: string  // BUY/SELL
-  price: string  // 价格
+  price: string  // 订单限价
   size: string  // 订单大小
   filled: string  // 已成交数量
   status: string  // 订单状态
@@ -593,6 +594,7 @@ export interface OrderDetail {
   marketName?: string  // 市场名称
   marketSlug?: string  // 市场 slug
   marketIcon?: string  // 市场图标
+  avgFilledPrice?: string  // 平均成交价（有成交时优先展示）
 }
 
 /**
@@ -1097,6 +1099,33 @@ export interface CryptoTailStrategyTriggerDto {
   createdAt: number
 }
 
+/** 收益曲线请求 */
+export interface CryptoTailPnlCurveRequest {
+  strategyId: number
+  startDate?: number
+  endDate?: number
+}
+
+/** 收益曲线单点 */
+export interface CryptoTailPnlCurvePoint {
+  timestamp: number
+  cumulativePnl: string
+  pointPnl: string
+  settledCount: number
+}
+
+/** 收益曲线响应 */
+export interface CryptoTailPnlCurveResponse {
+  strategyId: number
+  strategyName: string
+  totalRealizedPnl: string
+  settledCount: number
+  winCount: number
+  winRate: string | null
+  maxDrawdown: string | null
+  curveData: CryptoTailPnlCurvePoint[]
+}
+
 /**
  * 加密价差策略市场选项
  */
@@ -1156,6 +1185,10 @@ export interface CryptoTailMonitorInitResponse {
   currentTimestamp: number
   /** 是否启用 */
   enabled: boolean
+  /** 投入金额模式: FIXED or RATIO */
+  amountMode?: string
+  /** 投入金额数值 */
+  amountValue?: string
 }
 
 /**
@@ -1202,4 +1235,77 @@ export interface CryptoTailMonitorPushData {
   triggerDirection?: string
   /** 周期是否已结束 */
   periodEnded: boolean
+}
+
+export interface CryptoTailManualOrderResponse {
+  /** 是否成功 */
+  success: boolean
+  /** 订单ID */
+  orderId?: string
+  /** 提示消息 */
+  message: string
+  /** 下单详情 */
+  orderDetails?: ManualOrderDetails
+}
+
+export interface ManualOrderDetails {
+  /** 策略ID */
+  strategyId: number
+  /** 方向 */
+  direction: string
+  /** 下单价格 */
+  price: string
+  /** 下单数量 */
+  size: string
+  /** 总金额 */
+  totalAmount: string
+}
+
+// ==================== 消息模板相关类型 ====================
+
+/**
+ * 消息模板
+ */
+export interface NotificationTemplate {
+  id?: number
+  templateType: string  // 模板类型
+  templateContent: string  // 模板内容
+  isDefault: boolean  // 是否使用默认模板
+  createdAt?: number
+  updatedAt?: number
+}
+
+/**
+ * 模板类型信息
+ */
+export interface TemplateTypeInfo {
+  type: string  // 模板类型
+  name: string  // 类型名称
+  description: string  // 类型描述
+}
+
+/**
+ * 模板变量
+ */
+export interface TemplateVariable {
+  key: string  // 变量名
+  category: string  // 分类
+  sortOrder: number  // 排序顺序
+}
+
+/**
+ * 模板变量分类
+ */
+export interface TemplateVariableCategory {
+  key: string  // 分类 key
+  sortOrder: number  // 排序顺序
+}
+
+/**
+ * 模板变量列表响应
+ */
+export interface TemplateVariablesResponse {
+  templateType: string  // 模板类型
+  categories: TemplateVariableCategory[]  // 分类列表
+  variables: TemplateVariable[]  // 变量列表
 }

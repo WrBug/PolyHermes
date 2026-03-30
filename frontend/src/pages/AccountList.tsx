@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Card, Table, Button, Space, Tag, Popconfirm, message, Typography, Spin, Modal, Descriptions, Divider, Form, Input, Alert } from 'antd'
-import { PlusOutlined, ReloadOutlined, EditOutlined, CopyOutlined } from '@ant-design/icons'
+import { Card, Table, Button, Space, Tag, Popconfirm, message, Typography, Spin, Modal, Descriptions, Divider, Form, Input, Alert, Tooltip, List, Empty } from 'antd'
+import { PlusOutlined, ReloadOutlined, EditOutlined, CopyOutlined, EyeOutlined, DeleteOutlined, WalletOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useAccountStore } from '../store/accountStore'
 import type { Account } from '../types'
@@ -331,171 +331,79 @@ const AccountList: React.FC = () => {
     {
       title: t('accountList.action'),
       key: 'action',
+      width: 140,
       render: (_: any, record: Account) => (
-        <Space size="small">
-          <Button
-            type="link"
-            size="small"
-            onClick={() => handleShowDetail(record)}
-          >
-            {t('accountList.detail')}
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleShowEdit(record)}
-          >
-            {t('accountList.edit')}
-          </Button>
-          <Popconfirm
-            title={t('accountList.deleteConfirm')}
-            description={
-              record.apiKeyConfigured
-                ? t('accountList.deleteConfirmDesc')
-                : t('accountList.deleteConfirmDescSimple')
-            }
-            onConfirm={() => handleDelete(record)}
-            okText={t('accountList.deleteConfirmOk')}
-            cancelText={t('common.cancel')}
-            okButtonProps={{ danger: true }}
-          >
-            <Button type="link" size="small" danger>
-              {t('accountList.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      )
-    }
-  ]
-
-  const mobileColumns = [
-    {
-      title: t('accountList.accountName'),
-      key: 'info',
-      render: (_: any, record: Account) => {
-        return (
-          <div style={{ padding: '8px 0' }}>
-            <div style={{
-              fontWeight: 'bold',
-              marginBottom: '8px',
-              fontSize: '16px'
-            }}>
-              {record.accountName || `${t('accountList.accountName')} ${record.id}`}
-            </div>
-            <div style={{
-              fontSize: '11px',
-              color: '#666',
-              marginBottom: '8px',
-              wordBreak: 'break-all',
-              fontFamily: 'monospace',
-              lineHeight: '1.4'
-            }}>
-              <div style={{ marginBottom: '4px' }}>
-                <strong>{t('accountList.walletAddress')}:</strong> {record.walletAddress ? `${record.walletAddress.slice(0, 6)}...${record.walletAddress.slice(-4)}` : '-'}
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<CopyOutlined />}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleCopy(record.walletAddress)
-                  }}
-                  style={{ marginLeft: '4px', padding: '0 4px' }}
-                />
-              </div>
-              <div style={{ marginBottom: '4px' }}>
-                <strong>{t('accountList.proxyAddress')}:</strong> {record.proxyAddress ? `${record.proxyAddress.slice(0, 6)}...${record.proxyAddress.slice(-4)}` : '-'}
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<CopyOutlined />}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleCopy(record.proxyAddress)
-                  }}
-                  style={{ marginLeft: '4px', padding: '0 4px' }}
-                />
-              </div>
-              {record.walletType && (
-                <div style={{ marginBottom: '4px' }}>
-                  <strong>{t('accountList.walletType')}:</strong>{' '}
-                  <Tag color={record.walletType.toLowerCase() === 'magic' ? 'purple' : 'blue'} style={{ marginLeft: '4px' }}>
-                    {record.walletType.toLowerCase() === 'magic' ? 'Magic' : 'Safe'}
-                  </Tag>
-                </div>
-              )}
-            </div>
-            <div style={{
-              fontSize: '14px',
-              fontWeight: '500',
-              color: '#1890ff'
-            }}>
-              {t('accountList.totalBalance')}: {balanceLoading[record.id] ? (
-                <Spin size="small" style={{ marginLeft: '4px' }} />
-              ) : balanceMap[record.id]?.total && balanceMap[record.id].total !== '-' ? (
-                `${formatUSDC(balanceMap[record.id].total)} USDC`
-              ) : (
-                '-'
-              )}
-            </div>
-            {balanceMap[record.id] && balanceMap[record.id].available !== '-' && (
-              <div style={{
-                fontSize: '12px',
-                color: '#666',
-                marginTop: '4px'
-              }}>
-                {t('accountList.available')}: {formatUSDC(balanceMap[record.id].available)} USDC | {t('accountList.position')}: {formatUSDC(balanceMap[record.id].position)} USDC
-              </div>
-            )}
-          </div>
-        )
-      }
-    },
-    {
-      title: t('accountList.action'),
-      key: 'action',
-      width: 100,
-      render: (_: any, record: Account) => (
-        <Space direction="vertical" size="small" style={{ width: '100%' }}>
-          <Button
-            type="primary"
-            size="small"
-            block
-            onClick={() => handleShowDetail(record)}
-            style={{ minHeight: '32px' }}
-          >
-            {t('accountList.viewDetail')}
-          </Button>
-          <Button
-            size="small"
-            block
-            icon={<EditOutlined />}
-            onClick={() => handleShowEdit(record)}
-            style={{ minHeight: '32px' }}
-          >
-            {t('accountList.edit')}
-          </Button>
-          <Popconfirm
-            title={t('accountList.deleteConfirm')}
-            description={
-              record.apiKeyConfigured
-                ? t('accountList.deleteConfirmDesc')
-                : t('accountList.deleteConfirmDescSimple')
-            }
-            onConfirm={() => handleDelete(record)}
-            okText={t('accountList.deleteConfirmOk')}
-            cancelText={t('common.cancel')}
-            okButtonProps={{ danger: true }}
-          >
-            <Button
-              size="small"
-              block
-              danger
-              style={{ minHeight: '32px' }}
+        <Space size={4}>
+          <Tooltip title={t('accountList.detail')}>
+            <div
+              onClick={() => handleShowDetail(record)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '32px',
+                height: '32px',
+                cursor: 'pointer',
+                borderRadius: '6px',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f0f0'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
             >
-              {t('accountList.delete')}
-            </Button>
+              <EyeOutlined style={{ fontSize: '16px', color: '#1890ff' }} />
+            </div>
+          </Tooltip>
+
+          <Tooltip title={t('accountList.edit')}>
+            <div
+              onClick={() => handleShowEdit(record)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '32px',
+                height: '32px',
+                cursor: 'pointer',
+                borderRadius: '6px',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f0f0'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              <EditOutlined style={{ fontSize: '16px', color: '#1890ff' }} />
+            </div>
+          </Tooltip>
+
+          <Popconfirm
+            title={t('accountList.deleteConfirm')}
+            description={
+              record.apiKeyConfigured
+                ? t('accountList.deleteConfirmDesc')
+                : t('accountList.deleteConfirmDescSimple')
+            }
+            onConfirm={() => handleDelete(record)}
+            okText={t('accountList.deleteConfirmOk')}
+            cancelText={t('common.cancel')}
+            okButtonProps={{ danger: true }}
+          >
+            <Tooltip title={t('accountList.delete')}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  cursor: 'pointer',
+                  borderRadius: '6px',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fff1f0'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              >
+                <DeleteOutlined style={{ fontSize: '16px', color: '#ff4d4f' }} />
+              </div>
+            </Tooltip>
           </Popconfirm>
         </Space>
       )
@@ -519,16 +427,15 @@ const AccountList: React.FC = () => {
         <Title level={isMobile ? 3 : 2} style={{ margin: 0, fontSize: isMobile ? '18px' : undefined }}>
           {t('accountList.title')}
         </Title>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => setAccountImportModalVisible(true)}
-          size={isMobile ? 'middle' : 'large'}
-          block={isMobile}
-          style={isMobile ? { minHeight: '44px' } : undefined}
-        >
-          {t('accountList.importAccount')}
-        </Button>
+        <Tooltip title={t('accountList.importAccount')}>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setAccountImportModalVisible(true)}
+            size={isMobile ? 'middle' : 'large'}
+            style={{ borderRadius: '8px', height: isMobile ? '40px' : '48px', fontSize: isMobile ? '14px' : '16px' }}
+          />
+        </Tooltip>
       </div>
 
       <Card style={{
@@ -536,21 +443,156 @@ const AccountList: React.FC = () => {
         borderRadius: isMobile ? '0' : undefined
       }}>
         {isMobile ? (
-          <Table
-            dataSource={accounts}
-            columns={mobileColumns}
-            rowKey="id"
-            loading={loading}
-            pagination={{
-              pageSize: 10,
-              showSizeChanger: false,
-              simple: true,
-              size: 'small'
-            }}
-            scroll={{ x: 'max-content' }}
-            size="small"
-            style={{ fontSize: '14px' }}
-          />
+          loading ? (
+            <div style={{ textAlign: 'center', padding: '40px' }}>
+              <Spin size="large" />
+            </div>
+          ) : accounts.length === 0 ? (
+            <Empty description={t('accountList.noData')} />
+          ) : (
+            <List
+              dataSource={accounts}
+              renderItem={(account) => {
+                const balance = balanceMap[account.id]
+
+                return (
+                  <Card
+                    key={account.id}
+                    style={{
+                      marginBottom: '10px',
+                      borderRadius: '10px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                      border: '1px solid #e8e8e8',
+                      overflow: 'hidden'
+                    }}
+                    bodyStyle={{ padding: '0' }}
+                  >
+                    {/* 头部区域 */}
+                    <div style={{
+                      padding: '10px 12px',
+                      background: 'var(--ant-color-primary, #1677ff)',
+                      color: '#fff'
+                    }}>
+                      <div style={{ fontSize: '15px', fontWeight: '600', marginBottom: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <WalletOutlined style={{ fontSize: '14px' }} />
+                        <span>{account.accountName || `${t('accountList.accountName')} ${account.id}`}</span>
+                      </div>
+                      <div style={{ fontSize: '10px', opacity: '0.85', fontFamily: 'monospace', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span>{account.walletAddress ? `${account.walletAddress.slice(0, 6)}...${account.walletAddress.slice(-4)}` : '-'}</span>
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<CopyOutlined style={{ fontSize: '12px', color: 'rgba(255,255,255,0.85)' }} />}
+                          onClick={() => handleCopy(account.walletAddress)}
+                          style={{ padding: '0 4px', height: 'auto' }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* 资产区域 */}
+                    <div style={{
+                      padding: '8px 12px',
+                      backgroundColor: '#fafafa',
+                      borderBottom: '1px solid #f0f0f0',
+                      minHeight: '42px',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                        <div>
+                          <div style={{ fontSize: '10px', color: '#8c8c8c' }}>
+                            {t('accountList.totalBalance')}
+                          </div>
+                          <div style={{ fontSize: '14px', fontWeight: '600', color: '#52c41a' }}>
+                            {balance?.total && balance.total !== '-' ? `${formatUSDC(balance.total)} USDC` : '- USDC'}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '10px', color: '#8c8c8c' }}>
+                            {t('accountList.walletType')}
+                          </div>
+                          <div style={{ fontSize: '12px' }}>
+                            {account.walletType ? (
+                              <Tag color={account.walletType.toLowerCase() === 'magic' ? 'purple' : 'blue'} style={{ margin: 0 }}>
+                                {account.walletType.toLowerCase() === 'magic' ? 'Magic' : 'Safe'}
+                              </Tag>
+                            ) : '-'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 地址信息区域 */}
+                    <div style={{
+                      padding: '8px 12px',
+                      fontSize: '11px',
+                      color: '#8c8c8c',
+                      borderBottom: '1px solid #f0f0f0'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span>{t('accountList.proxyAddress')}: {account.proxyAddress ? `${account.proxyAddress.slice(0, 6)}...${account.proxyAddress.slice(-4)}` : '-'}</span>
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<CopyOutlined style={{ fontSize: '12px' }} />}
+                          onClick={() => handleCopy(account.proxyAddress)}
+                          style={{ padding: '0 4px', height: 'auto' }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* 图标操作栏 */}
+                    <div style={{
+                      padding: '8px 12px',
+                      display: 'flex',
+                      justifyContent: 'space-around',
+                      alignItems: 'center'
+                    }}>
+                      <Tooltip title={t('accountList.detail')}>
+                        <div
+                          onClick={() => handleShowDetail(account)}
+                          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}
+                        >
+                          <EyeOutlined style={{ fontSize: '18px', color: '#1890ff' }} />
+                          <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('accountList.detail')}</span>
+                        </div>
+                      </Tooltip>
+
+                      <Tooltip title={t('accountList.edit')}>
+                        <div
+                          onClick={() => handleShowEdit(account)}
+                          style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}
+                        >
+                          <EditOutlined style={{ fontSize: '18px', color: '#52c41a' }} />
+                          <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('accountList.edit')}</span>
+                        </div>
+                      </Tooltip>
+
+                      <Popconfirm
+                        title={t('accountList.deleteConfirm')}
+                        description={
+                          account.apiKeyConfigured
+                            ? t('accountList.deleteConfirmDesc')
+                            : t('accountList.deleteConfirmDescSimple')
+                        }
+                        onConfirm={() => handleDelete(account)}
+                        okText={t('accountList.deleteConfirmOk')}
+                        cancelText={t('common.cancel')}
+                        okButtonProps={{ danger: true }}
+                      >
+                        <Tooltip title={t('accountList.delete')}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer', padding: '4px 8px' }}>
+                            <DeleteOutlined style={{ fontSize: '18px', color: '#ff4d4f' }} />
+                            <span style={{ fontSize: '10px', color: '#8c8c8c', marginTop: '2px' }}>{t('accountList.delete')}</span>
+                          </div>
+                        </Tooltip>
+                      </Popconfirm>
+                    </div>
+                  </Card>
+                )
+              }}
+            />
+          )
         ) : (
           <Table
             dataSource={accounts}

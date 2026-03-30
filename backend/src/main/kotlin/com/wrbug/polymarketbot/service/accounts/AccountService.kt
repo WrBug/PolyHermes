@@ -10,7 +10,10 @@ import com.wrbug.polymarketbot.util.toSafeBigDecimal
 import com.wrbug.polymarketbot.util.eq
 import com.wrbug.polymarketbot.util.gt
 import com.wrbug.polymarketbot.util.JsonUtils
+import com.wrbug.polymarketbot.util.fromJson
 import com.wrbug.polymarketbot.util.getEventSlug
+import com.google.gson.JsonObject
+import com.google.gson.JsonPrimitive
 import com.wrbug.polymarketbot.service.common.PolymarketClobService
 import com.wrbug.polymarketbot.service.common.BlockchainService
 import com.wrbug.polymarketbot.service.common.MarketService
@@ -1331,13 +1334,22 @@ class AccountService(
 
                             // 使用当前时间作为订单创建时间
                             val orderTime = System.currentTimeMillis()
+                            
+                            // 查询可用余额
+                            val availableBalance = try {
+                                blockchainService.getUsdcBalance(account.walletAddress, account.proxyAddress).getOrNull()
+                            } catch (e: Exception) {
+                                logger.warn("查询可用余额失败: accountId=${account.id}, ${e.message}")
+                                null
+                            }
 
                             telegramNotificationService?.sendOrderSuccessNotification(
                                 orderId = orderId,
                                 marketTitle = marketTitle,
                                 marketId = request.marketId,
                                 marketSlug = marketSlug,
-                                side = request.side,
+                                side = "SELL",  // 手动卖出订单，方向固定为 SELL
+                                outcome = request.side,  // request.side 是市场方向（YES/NO）
                                 price = sellPrice,  // 直接传递卖出价格
                                 size = sellQuantity.toPlainString(),  // 直接传递卖出数量
                                 accountName = account.accountName,
@@ -1348,7 +1360,8 @@ class AccountService(
                                 apiPassphrase = try { cryptoUtils.decrypt(account.apiPassphrase!!) } catch (e: Exception) { null },
                                 walletAddressForApi = account.walletAddress,
                                 locale = locale,
-                                orderTime = orderTime  // 使用订单创建时间
+                                orderTime = orderTime,  // 使用订单创建时间
+                                availableBalance = availableBalance
                             )
                         } catch (e: Exception) {
                             logger.warn("发送订单成功通知失败: ${e.message}", e)
@@ -1368,7 +1381,7 @@ class AccountService(
                         )
                     )
                 } else {
-                    val errorMsg = response.errorMsg ?: "未知错误"
+                    val errorMsg = response.getErrorMessage()
                     val fullErrorMsg = "创建订单失败: accountId=${account.id}, marketId=${request.marketId}, side=${request.side}, orderType=${request.orderType}, price=${if (request.orderType == "LIMIT") sellPrice else "MARKET"}, quantity=${sellQuantity.toPlainString()}, errorMsg=$errorMsg"
                     logger.error(fullErrorMsg)
                     
@@ -1413,6 +1426,14 @@ class AccountService(
                 } catch (e: Exception) {
                     null
                 }
+                
+                // 尝试从 errorBody 解析 error 字段（使用 Gson）
+                val apiError = try {
+                    (errorBody?.fromJson<JsonObject>()?.get("error") as? JsonPrimitive)?.asString
+                } catch (e: Exception) {
+                    null
+                }
+                
                 val fullErrorMsg = "创建订单失败: accountId=${account.id}, marketId=${request.marketId}, side=${request.side}, orderType=${request.orderType}, price=${if (request.orderType == "LIMIT") sellPrice else "MARKET"}, quantity=${sellQuantity.toPlainString()}, code=${orderResponse.code()}, message=${orderResponse.message()}${if (errorBody != null) ", errorBody=$errorBody" else ""}"
                 logger.error(fullErrorMsg)
                 
@@ -1431,8 +1452,10 @@ class AccountService(
                             java.util.Locale("zh", "CN")  // 默认简体中文
                         }
 
-                        // 只传递后端返回的 msg，不传递完整堆栈
-                        val errorMsg = orderResponse.body()?.errorMsg ?: "创建订单失败"
+                        // 优先使用解析的 API error，其次使用响应体的 errorMsg，最后使用默认消息
+                        val errorMsg = apiError 
+                            ?: orderResponse.body()?.getErrorMessage() 
+                            ?: "创建订单失败 (HTTP ${orderResponse.code()})"
 
                         telegramNotificationService?.sendOrderFailureNotification(
                             marketTitle = marketTitle,
@@ -1442,7 +1465,7 @@ class AccountService(
                             outcome = null,  // 失败时可能没有 outcome
                             price = if (request.orderType == "LIMIT") sellPrice.toString() else "MARKET",
                             size = sellQuantity.toString(),
-                            errorMessage = errorMsg,  // 只传递后端返回的 msg
+                            errorMessage = errorMsg,  // 只传递后端返回的错误信息
                             accountName = account.accountName,
                             walletAddress = account.walletAddress,
                             locale = locale
@@ -1800,16 +1823,42 @@ class AccountService(
                     for (transaction in accountTransactions) {
                         val account = accounts[transaction.accountId]
                         if (account != null) {
-                            telegramNotificationService?.sendRedeemNotification(
-                                accountName = account.accountName,
-                                walletAddress = account.walletAddress,
-                                transactionHash = transaction.transactionHash,
-                                totalRedeemedValue = transaction.positions.fold(BigDecimal.ZERO) { sum, info ->
-                                    sum.add(info.value.toSafeBigDecimal())
-                                }.toPlainString(),
-                                positions = transaction.positions,
-                                locale = locale
-                            )
+                            // 查询可用余额
+                            val availableBalance = try {
+                                blockchainService.getUsdcBalance(account.walletAddress, account.proxyAddress).getOrNull()
+                            } catch (e: Exception) {
+                                logger.warn("查询可用余额失败: accountId=${account.id}, ${e.message}")
+                                null
+                            }
+                            
+                            // 计算该账户的赎回总价值
+                            val accountTotalValue = transaction.positions.fold(BigDecimal.ZERO) { sum, info ->
+                                sum.add(info.value.toSafeBigDecimal())
+                            }
+                            
+                            // 根据赎回价值选择不同的通知类型
+                            if (accountTotalValue.gt(BigDecimal.ZERO)) {
+                                // 有收益：发送赎回成功通知
+                                telegramNotificationService?.sendRedeemNotification(
+                                    accountName = account.accountName,
+                                    walletAddress = account.walletAddress,
+                                    transactionHash = transaction.transactionHash,
+                                    totalRedeemedValue = accountTotalValue.toPlainString(),
+                                    positions = transaction.positions,
+                                    locale = locale,
+                                    availableBalance = availableBalance
+                                )
+                            } else {
+                                // 无收益（输的仓位）：发送已结算无收益通知
+                                telegramNotificationService?.sendRedeemNoReturnNotification(
+                                    accountName = account.accountName,
+                                    walletAddress = account.walletAddress,
+                                    transactionHash = transaction.transactionHash,
+                                    positions = transaction.positions,
+                                    locale = locale,
+                                    availableBalance = availableBalance
+                                )
+                            }
                         }
                     }
                 } catch (e: Exception) {

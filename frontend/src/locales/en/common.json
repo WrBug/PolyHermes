@@ -42,7 +42,8 @@
     "pageOf": "Page",
     "ascending": "Ascending",
     "descending": "Descending",
-    "day": "day"
+    "day": "day",
+    "orders": "orders"
   },
   "account": {
     "title": "Account Management",
@@ -176,7 +177,8 @@
     "updateFailed": "Failed to update account",
     "getDetailFailedForEdit": "Failed to get account detail",
     "loading": "Loading...",
-    "fetchFailed": "Failed to get account list"
+    "fetchFailed": "Failed to get account list",
+    "noData": "No account data"
   },
   "accountImport": {
     "title": "Import Account",
@@ -660,7 +662,8 @@
     "deleteSuccess": "User deleted successfully",
     "deleteFailed": "Failed to delete user",
     "deleteConfirm": "Are you sure you want to delete this user?",
-    "total": "Total {{total}} items"
+    "total": "Total {{total}} items",
+    "noData": "No user data"
   },
   "statistics": {
     "title": "Statistics",
@@ -1121,7 +1124,9 @@
     "updateStatusFailed": "Failed to update copy trading status",
     "deleteSuccess": "Copy trading deleted successfully",
     "deleteFailed": "Failed to delete copy trading",
-    "deleteConfirm": "Are you sure you want to delete this copy trading relationship?"
+    "deleteConfirm": "Are you sure you want to delete this copy trading relationship?",
+    "profitRate": "Profit Rate",
+    "noData": "No copy trading configuration"
   },
   "notificationSettings": {
     "title": "Notification Settings",
@@ -1162,7 +1167,95 @@
     "getChatIdsFailed": "Failed to get Chat IDs",
     "getChatIdsNoToken": "Please enter Bot Token first",
     "getChatIdsNoMessage": "Chat ID not found, please send a message to the bot first (e.g., /start), then retry",
-    "getChatIdsButton": "Get Chat ID"
+    "getChatIdsButton": "Get Chat ID",
+    "botConfig": "Bot Configuration",
+    "templateConfig": "Template Configuration",
+    "templates": {
+      "title": "Message Template Configuration",
+      "templateType": "Template Type",
+      "templateContent": "Template Content",
+      "isDefault": "Default Template",
+      "isCustom": "Custom Template",
+      "resetToDefault": "Reset to Default",
+      "resetConfirm": "Are you sure you want to reset to default? Your custom content will be lost.",
+      "resetSuccess": "Reset successfully",
+      "resetFailed": "Reset failed",
+      "saveSuccess": "Saved successfully",
+      "saveFailed": "Save failed",
+      "testSuccess": "Test message sent successfully, please check Telegram",
+      "testFailed": "Failed to send test message",
+      "variables": "Available Variables",
+      "clickToCopy": "Click to copy",
+      "copied": "Copied",
+      "commonVariables": "Common Variables",
+      "orderVariables": "Order Variables",
+      "copyTradingVariables": "Copy Trading Variables",
+      "redeemVariables": "Redeem Variables",
+      "errorVariables": "Error Variables",
+      "filterVariables": "Filter Variables",
+      "strategyVariables": "Strategy Variables",
+      "contentPlaceholder": "Enter template content here, use {{variable}} to insert dynamic content",
+      "variableLabels": {
+        "account_name": "Account Name",
+        "wallet_address": "Wallet Address",
+        "time": "Time",
+        "order_id": "Order ID",
+        "market_title": "Market Title",
+        "market_link": "Market Link",
+        "side": "Side",
+        "outcome": "Outcome",
+        "price": "Price",
+        "quantity": "Quantity",
+        "amount": "Amount",
+        "available_balance": "Available Balance",
+        "leader_name": "Leader Name",
+        "config_name": "Copy Trading Config Name",
+        "error_message": "Error Message",
+        "filter_type": "Filter Type",
+        "filter_reason": "Filter Reason",
+        "strategy_name": "Strategy Name",
+        "transaction_hash": "Transaction Hash",
+        "total_value": "Total Redeem Value"
+      },
+      "variableDescriptions": {
+        "account_name": "Account name executing the order",
+        "wallet_address": "Wallet address (masked)",
+        "time": "Notification send time",
+        "order_id": "Unique order identifier",
+        "market_title": "Market/Event name",
+        "market_link": "Polymarket market link",
+        "side": "Order direction (Buy/Sell)",
+        "outcome": "Market outcome (YES/NO, etc.)",
+        "price": "Order price",
+        "quantity": "Order quantity (shares)",
+        "amount": "Order amount (USDC)",
+        "available_balance": "Account available balance (USDC)",
+        "leader_name": "Leader name/alias being copied",
+        "config_name": "Copy trading configuration name",
+        "error_message": "Order failure reason",
+        "filter_type": "Type of order filter",
+        "filter_reason": "Detailed reason for order filtering",
+        "strategy_name": "Crypto spread strategy name",
+        "transaction_hash": "Redeem transaction hash",
+        "total_value": "Total redeem value (USDC)"
+      }
+    },
+    "templateTypes": {
+      "ORDER_SUCCESS": "Order Success",
+      "ORDER_FAILED": "Order Failed",
+      "ORDER_FILTERED": "Order Filtered",
+      "CRYPTO_TAIL_SUCCESS": "Crypto Spread Strategy Success",
+      "REDEEM_SUCCESS": "Position Redeem Success",
+      "REDEEM_NO_RETURN": "Position Settled (No Return)"
+    },
+    "templateTypeDescriptions": {
+      "ORDER_SUCCESS": "Notification sent when order is successfully created",
+      "ORDER_FAILED": "Notification sent when order creation fails",
+      "ORDER_FILTERED": "Notification sent when order is filtered by risk control",
+      "CRYPTO_TAIL_SUCCESS": "Notification sent when crypto spread strategy order succeeds",
+      "REDEEM_SUCCESS": "Notification sent when position is successfully redeemed",
+      "REDEEM_NO_RETURN": "Notification sent when position is settled with no return"
+    }
   },
   "telegramConfig": {
     "title": "Telegram Configuration Guide",
@@ -1351,6 +1444,8 @@
     "title": "Backtest",
     "taskName": "Task Name",
     "leader": "Leader",
+    "balance": "Balance (Init→Final)",
+    "profit": "Profit (Amount/Rate)",
     "initialBalance": "Initial Balance",
     "backtestDays": "Backtest Days",
     "status": "Status",
@@ -1399,6 +1494,7 @@
     "createCopyTradingSuccess": "Copy trading config created successfully",
     "noTasks": "No backtest tasks",
     "noTrades": "No trade records",
+    "noData": "No backtest data",
     "fetchTasksFailed": "Failed to fetch task list",
     "fetchTaskDetailFailed": "Failed to fetch task detail",
     "fetchTradesFailed": "Failed to fetch trade records",
@@ -1496,7 +1592,9 @@
       "strategyName": "Strategy Name",
       "account": "Account",
       "market": "Market",
+      "marketAndTime": "Market / Time",
       "timeWindow": "Time Window",
+      "config": "Config",
       "priceRange": "Price Range",
       "amountMode": "Amount Mode",
       "ratio": "Ratio",
@@ -1509,6 +1607,7 @@
       "disable": "Disable",
       "delete": "Delete",
       "viewTriggers": "Orders",
+      "viewPnlCurve": "PnL Curve",
       "deleteConfirm": "Delete this strategy?",
       "fetchFailed": "Failed to fetch list",
       "configGuide": "Configuration Guide"
@@ -1576,6 +1675,20 @@
       "emptySuccess": "No success records",
       "emptyFail": "No failed records",
       "totalCount": "{count} record(s)"
+    },
+    "pnlCurve": {
+      "title": "PnL Curve",
+      "totalPnl": "Total PnL",
+      "settledCount": "Settled",
+      "winRate": "Win Rate",
+      "maxDrawdown": "Max Drawdown",
+      "timeRange": "Time Range",
+      "today": "Today",
+      "last7Days": "Last 7 Days",
+      "last30Days": "Last 30 Days",
+      "all": "All",
+      "customRange": "Custom",
+      "empty": "No settled orders yet, cannot show PnL curve"
     }
   },
   "cryptoTailMonitor": {
@@ -1644,6 +1757,49 @@
       "switchToLatest": "Switch to Latest Period",
       "periodEnded": "Current period has ended",
       "newPeriodAvailable": "New period has started"
+    },
+    "manualOrder": {
+      "title": "Manual Order",
+      "buttonUp": "Buy Up",
+      "buttonDown": "Buy Down",
+      "confirmTitle": "Manual Order Confirmation",
+      "marketTitle": "Market Title",
+      "direction": "Direction",
+      "directionUp": "Up",
+      "directionDown": "Down",
+      "orderPrice": "Order Price",
+      "orderSize": "Order Size",
+      "totalAmount": "Total Amount",
+      "account": "Account",
+      "cancel": "Cancel",
+      "confirm": "Confirm Order",
+      "orderUnit": "USDC",
+      "sizeUnit": "shares",
+      "statusNotOrdered": "Not Ordered",
+      "statusOrdered": "This period has been ordered",
+      "statusOrderedAuto": "This period has been auto-ordered",
+      "statusOrderedManual": "This period has been manually ordered",
+      "errorInsufficientBalance": "Insufficient account balance, available: {balance} USDC",
+      "errorPriceOutOfRange": "Price must be between 0 and 1",
+      "errorMinSize": "Size cannot be less than 1 share",
+      "errorExceedsBalance": "Total amount exceeds available balance",
+      "errorPriceRequired": "Please enter order price",
+      "errorSizeRequired": "Please enter order size",
+      "success": "Manual order successful",
+      "failed": "Manual order failed: {{reason}}",
+      "errorSigning": "Signing failed: {reason}",
+      "errorNetwork": "Network error, please try again later",
+      "priceNotLoaded": "Price data not loaded",
+      "insufficientBalance": "Insufficient balance, available amount less than 1 USDC",
+      "fetchBalanceFailed": "Failed to fetch account balance",
+      "availableBalance": "Available Balance",
+      "fetchLatestPrice": "Latest Price",
+      "priceUpdated": "Price updated",
+      "maxSize": "Max",
+      "invalidPriceOrBalance": "Invalid price or balance",
+      "insufficientBalanceForMax": "Insufficient balance for max size",
+      "maxSizeUpdated": "Updated to max size",
+      "periodChanged": "Period has changed, popup closed"
     }
   }
 }

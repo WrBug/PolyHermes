@@ -42,7 +42,8 @@
     "copyFailed": "复制失败",
     "ascending": "升序",
     "descending": "降序",
-    "day": "天"
+    "day": "天",
+    "orders": "单"
   },
   "login": {
     "title": "登录",
@@ -176,7 +177,8 @@
     "updateFailed": "更新账户失败",
     "getDetailFailedForEdit": "获取账户详情失败",
     "loading": "加载中...",
-    "fetchFailed": "获取账户列表失败"
+    "fetchFailed": "获取账户列表失败",
+    "noData": "暂无账户数据"
   },
   "accountImport": {
     "title": "导入账户",
@@ -660,7 +662,8 @@
     "deleteSuccess": "删除用户成功",
     "deleteFailed": "删除用户失败",
     "deleteConfirm": "确定要删除这个用户吗？",
-    "total": "共 {{total}} 条"
+    "total": "共 {{total}} 条",
+    "noData": "暂无用户数据"
   },
   "statistics": {
     "title": "统计信息",
@@ -1121,7 +1124,9 @@
     "updateStatusFailed": "更新跟单状态失败",
     "deleteSuccess": "删除跟单成功",
     "deleteFailed": "删除跟单失败",
-    "deleteConfirm": "确定要删除这个跟单关系吗？"
+    "deleteConfirm": "确定要删除这个跟单关系吗？",
+    "profitRate": "收益率",
+    "noData": "暂无跟单配置"
   },
   "notificationSettings": {
     "title": "消息推送设置",
@@ -1162,7 +1167,95 @@
     "getChatIdsFailed": "获取 Chat IDs 失败",
     "getChatIdsNoToken": "请先填写 Bot Token",
     "getChatIdsNoMessage": "未找到 Chat ID，请先向机器人发送一条消息（如 /start），然后重试",
-    "getChatIdsButton": "获取 Chat ID"
+    "getChatIdsButton": "获取 Chat ID",
+    "botConfig": "机器人配置",
+    "templateConfig": "模板配置",
+    "templates": {
+      "title": "消息模板配置",
+      "templateType": "模板类型",
+      "templateContent": "模板内容",
+      "isDefault": "默认模板",
+      "isCustom": "自定义模板",
+      "resetToDefault": "重置为默认",
+      "resetConfirm": "确定要重置为默认模板吗？您的自定义内容将丢失。",
+      "resetSuccess": "重置成功",
+      "resetFailed": "重置失败",
+      "saveSuccess": "保存成功",
+      "saveFailed": "保存失败",
+      "testSuccess": "测试消息发送成功，请检查 Telegram",
+      "testFailed": "测试消息发送失败",
+      "variables": "可用变量",
+      "clickToCopy": "点击复制",
+      "copied": "已复制",
+      "commonVariables": "通用变量",
+      "orderVariables": "订单变量",
+      "copyTradingVariables": "跟单变量",
+      "redeemVariables": "赎回变量",
+      "errorVariables": "错误变量",
+      "filterVariables": "过滤变量",
+      "strategyVariables": "策略变量",
+      "contentPlaceholder": "在此输入模板内容，使用 {{变量名}} 插入动态内容",
+      "variableLabels": {
+        "account_name": "账户名称",
+        "wallet_address": "钱包地址",
+        "time": "时间",
+        "order_id": "订单ID",
+        "market_title": "市场标题",
+        "market_link": "市场链接",
+        "side": "方向",
+        "outcome": "市场方向",
+        "price": "价格",
+        "quantity": "数量",
+        "amount": "金额",
+        "available_balance": "可用余额",
+        "leader_name": "Leader 名称",
+        "config_name": "跟单配置名",
+        "error_message": "错误信息",
+        "filter_type": "过滤类型",
+        "filter_reason": "过滤原因",
+        "strategy_name": "策略名称",
+        "transaction_hash": "交易哈希",
+        "total_value": "赎回总价值"
+      },
+      "variableDescriptions": {
+        "account_name": "执行订单的账户名称",
+        "wallet_address": "钱包地址（已脱敏）",
+        "time": "通知发送时间",
+        "order_id": "订单唯一标识",
+        "market_title": "市场/事件名称",
+        "market_link": "Polymarket 市场链接",
+        "side": "订单方向（买入/卖出）",
+        "outcome": "市场方向（YES/NO 等）",
+        "price": "订单价格",
+        "quantity": "订单数量（shares）",
+        "amount": "订单金额（USDC）",
+        "available_balance": "账户可用余额（USDC）",
+        "leader_name": "跟单的 Leader 名称/备注",
+        "config_name": "跟单配置名称",
+        "error_message": "订单失败原因",
+        "filter_type": "订单被过滤的类型",
+        "filter_reason": "订单被过滤的详细原因",
+        "strategy_name": "加密价差策略名称",
+        "transaction_hash": "赎回交易的哈希值",
+        "total_value": "赎回的总价值（USDC）"
+      }
+    },
+    "templateTypes": {
+      "ORDER_SUCCESS": "订单成功通知",
+      "ORDER_FAILED": "订单失败通知",
+      "ORDER_FILTERED": "订单过滤通知",
+      "CRYPTO_TAIL_SUCCESS": "加密价差策略成功通知",
+      "REDEEM_SUCCESS": "仓位赎回成功通知",
+      "REDEEM_NO_RETURN": "仓位结算（无收益）通知"
+    },
+    "templateTypeDescriptions": {
+      "ORDER_SUCCESS": "订单创建成功时发送的通知",
+      "ORDER_FAILED": "订单创建失败时发送的通知",
+      "ORDER_FILTERED": "订单被风控过滤时发送的通知",
+      "CRYPTO_TAIL_SUCCESS": "加密价差策略下单成功时发送的通知",
+      "REDEEM_SUCCESS": "仓位赎回成功时发送的通知",
+      "REDEEM_NO_RETURN": "仓位结算但无收益时发送的通知"
+    }
   },
   "telegramConfig": {
     "title": "Telegram 配置说明",
@@ -1351,6 +1444,8 @@
     "title": "回测",
     "taskName": "任务名称",
     "leader": "Leader",
+    "balance": "资金 (初始→最终)",
+    "profit": "收益 (金额/比例)",
     "initialBalance": "初始资金",
     "backtestDays": "回测天数",
     "status": "状态",
@@ -1399,6 +1494,7 @@
     "createCopyTradingSuccess": "跟单配置创建成功",
     "noTasks": "暂无回测任务",
     "noTrades": "暂无交易记录",
+    "noData": "暂无回测数据",
     "fetchTasksFailed": "获取任务列表失败",
     "fetchTaskDetailFailed": "获取任务详情失败",
     "fetchTradesFailed": "获取交易记录失败",
@@ -1496,7 +1592,9 @@
       "strategyName": "策略名称",
       "account": "账户",
       "market": "关联市场",
+      "marketAndTime": "市场/时间",
       "timeWindow": "时间区间",
+      "config": "配置",
       "priceRange": "价格区间",
       "amountMode": "投入方式",
       "ratio": "比例",
@@ -1509,6 +1607,7 @@
       "disable": "停用",
       "delete": "删除",
       "viewTriggers": "订单",
+      "viewPnlCurve": "收益曲线",
       "deleteConfirm": "确定删除该策略？",
       "fetchFailed": "获取列表失败",
       "configGuide": "配置指南"
@@ -1576,6 +1675,20 @@
       "emptySuccess": "暂无成功记录",
       "emptyFail": "暂无失败记录",
       "totalCount": "共 {count} 条"
+    },
+    "pnlCurve": {
+      "title": "收益曲线",
+      "totalPnl": "总收益",
+      "settledCount": "已结算笔数",
+      "winRate": "胜率",
+      "maxDrawdown": "最大回撤",
+      "timeRange": "时间范围",
+      "today": "今日",
+      "last7Days": "近7天",
+      "last30Days": "近30天",
+      "all": "全部",
+      "customRange": "自定义",
+      "empty": "暂无已结算订单，无法展示收益曲线"
     }
   },
   "cryptoTailMonitor": {
@@ -1644,6 +1757,49 @@
       "switchToLatest": "切换到最新周期",
       "periodEnded": "当前周期已结束",
       "newPeriodAvailable": "新周期已开始"
+    },
+    "manualOrder": {
+      "title": "手动下单",
+      "buttonUp": "买入 Up",
+      "buttonDown": "买入 Down",
+      "confirmTitle": "手动下单确认",
+      "marketTitle": "市场标题",
+      "direction": "方向",
+      "directionUp": "Up",
+      "directionDown": "Down",
+      "orderPrice": "下单价格",
+      "orderSize": "下单数量",
+      "totalAmount": "总金额",
+      "account": "账户",
+      "cancel": "取消",
+      "confirm": "确认下单",
+      "orderUnit": "USDC",
+      "sizeUnit": "张",
+      "statusNotOrdered": "未下单",
+      "statusOrdered": "本周期已下单",
+      "statusOrderedAuto": "本周期已自动下单",
+      "statusOrderedManual": "本周期已手动下单",
+      "errorInsufficientBalance": "账户余额不足，可用余额：{{balance}} USDC",
+      "errorPriceOutOfRange": "价格必须在 0~1 之间",
+      "errorMinSize": "数量不能少于 1 张",
+      "errorExceedsBalance": "总金额超过可用余额",
+      "errorPriceRequired": "请输入下单价格",
+      "errorSizeRequired": "请输入下单数量",
+      "success": "手动下单成功",
+      "failed": "手动下单失败：{{reason}}",
+      "errorSigning": "签名失败：{{reason}}",
+      "errorNetwork": "网络错误，请稍后重试",
+      "priceNotLoaded": "价格数据未加载",
+      "insufficientBalance": "余额不足，可用金额少于 1 USDC",
+      "fetchBalanceFailed": "获取账户余额失败",
+      "availableBalance": "可用余额",
+      "fetchLatestPrice": "获取最新价",
+      "priceUpdated": "价格已更新",
+      "maxSize": "最大",
+      "invalidPriceOrBalance": "价格或余额无效",
+      "insufficientBalanceForMax": "余额不足以购买最大数量",
+      "maxSizeUpdated": "已更新为最大数量",
+      "periodChanged": "周期已切换，弹窗已关闭"
     }
   }
 }

@@ -5,7 +5,9 @@ package com.wrbug.polymarketbot.dto
  */
 data class CryptoTailMonitorInitRequest(
     /** 策略ID */
-    val strategyId: Long = 0L
+    val strategyId: Long = 0L,
+    /** 指定周期开始时间 (Unix 秒)，不传则用服务器当前周期 */
+    val periodStartUnix: Long? = null
 )
 
 /**
@@ -55,7 +57,11 @@ data class CryptoTailMonitorInitResponse(
     /** 当前时间 (毫秒时间戳) */
     val currentTimestamp: Long = System.currentTimeMillis(),
     /** 是否启用 */
-    val enabled: Boolean = true
+    val enabled: Boolean = true,
+    /** 投入金额模式: FIXED or RATIO */
+    val amountMode: String? = null,
+    /** 投入金额数值 */
+    val amountValue: String? = null
 )
 
 /**

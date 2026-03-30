@@ -3,6 +3,9 @@ package com.wrbug.polymarketbot.service.cryptotail
 import com.wrbug.polymarketbot.api.GammaEventBySlugResponse
 import com.wrbug.polymarketbot.api.NewOrderRequest
 import com.wrbug.polymarketbot.api.PolymarketClobApi
+import com.wrbug.polymarketbot.dto.CryptoTailManualOrderRequest
+import com.wrbug.polymarketbot.dto.CryptoTailManualOrderResponse
+import com.wrbug.polymarketbot.dto.ManualOrderDetails
 import com.wrbug.polymarketbot.entity.Account
 import com.wrbug.polymarketbot.entity.CryptoTailStrategy
 import com.wrbug.polymarketbot.entity.CryptoTailStrategyTrigger
@@ -421,7 +424,8 @@ class CryptoTailStrategyExecutionService(
                 outcomeIndex,
                 triggerPrice,
                 amountUsdc,
-                orderRequest
+                orderRequest,
+                triggerType = "AUTO"
             )
             return
         }
@@ -437,7 +441,8 @@ class CryptoTailStrategyExecutionService(
         outcomeIndex: Int,
         triggerPrice: BigDecimal,
         amountUsdc: BigDecimal,
-        orderRequest: NewOrderRequest
+        orderRequest: NewOrderRequest,
+        triggerType: String = "AUTO"
     ) {
         var failReason: String? = null
         try {
@@ -454,9 +459,10 @@ class CryptoTailStrategyExecutionService(
                         amountUsdc,
                         body.orderId,
                         "success",
-                        null
+                        null,
+                        triggerType = triggerType
                     )
-                    logger.info("加密价差策略下单成功: strategyId=${strategy.id}, periodStartUnix=$periodStartUnix, outcomeIndex=$outcomeIndex, orderId=${body.orderId}")
+                    logger.info("加密价差策略下单成功: strategyId=${strategy.id}, periodStartUnix=$periodStartUnix, outcomeIndex=$outcomeIndex, orderId=${body.orderId}, triggerType=$triggerType")
                     return
                 }
                 failReason = body.errorMsg ?: "unknown"
@@ -477,7 +483,8 @@ class CryptoTailStrategyExecutionService(
             amountUsdc,
             null,
             "fail",
-            failReason
+            failReason,
+            triggerType = triggerType
         )
         logger.error("加密价差策略下单失败: strategyId=${strategy.id}, periodStartUnix=$periodStartUnix, reason=$failReason")
     }
@@ -665,7 +672,8 @@ class CryptoTailStrategyExecutionService(
         amountUsdc: BigDecimal,
         orderId: String?,
         status: String,
-        failReason: String?
+        failReason: String?,
+        triggerType: String = "AUTO"
     ) {
         val record = CryptoTailStrategyTrigger(
             strategyId = strategy.id!!,
@@ -676,9 +684,171 @@ class CryptoTailStrategyExecutionService(
             amountUsdc = amountUsdc,
             orderId = orderId,
             status = status,
-            failReason = failReason
+            failReason = failReason,
+            triggerType = triggerType
         )
         triggerRepository.save(record)
+    }
+
+    /**
+     * 手动下单：用户主动触发下单，不检查任何条件，仅检查当前周期是否已下单
+     */
+    suspend fun manualOrder(request: CryptoTailManualOrderRequest): Result<CryptoTailManualOrderResponse> {
+        return try {
+            val strategy = strategyRepository.findById(request.strategyId).orElse(null)
+                ?: return Result.failure(IllegalArgumentException("策略不存在"))
+
+            val outcomeIndex = if (request.direction.uppercase() == "UP") 0 else 1
+
+            if (outcomeIndex < 0 || outcomeIndex >= request.tokenIds.size) {
+                return Result.failure(IllegalArgumentException("outcomeIndex 越界"))
+            }
+
+            val price = request.price.toSafeBigDecimal()
+            if (price <= BigDecimal.ZERO || price > BigDecimal.ONE) {
+                return Result.failure(IllegalArgumentException("价格必须在 0~1 之间"))
+            }
+            val priceRounded = price.setScale(4, RoundingMode.UP)
+
+            val size = request.size.toSafeBigDecimal()
+            if (size < BigDecimal.ONE) {
+                return Result.failure(IllegalArgumentException("数量不能少于 1"))
+            }
+
+            val amountUsdc = priceRounded.multi(size).setScale(2, RoundingMode.HALF_UP)
+            if (amountUsdc < BigDecimal.ONE) {
+                return Result.failure(IllegalArgumentException("总金额不能少于 1 USDC"))
+            }
+
+            val mutex = getTriggerMutex(strategy.id!!, request.periodStartUnix)
+            mutex.withLock {
+                if (triggerRepository.findByStrategyIdAndPeriodStartUnix(
+                        strategy.id!!,
+                        request.periodStartUnix
+                    ) != null
+                ) {
+                    return@withLock Result.failure(IllegalArgumentException("当前周期已下单"))
+                }
+
+                var ctx = getOrInvalidatePeriodContext(strategy, request.periodStartUnix)
+                if (ctx == null) {
+                    ctx = ensurePeriodContext(
+                        strategy,
+                        request.periodStartUnix,
+                        request.tokenIds,
+                        request.marketTitle.ifBlank { null }
+                    )
+                }
+                if (ctx != null) {
+                    val tokenId = request.tokenIds.getOrNull(outcomeIndex)
+                        ?: return@withLock Result.failure(IllegalArgumentException("tokenIds 越界"))
+
+                    val priceStr = priceRounded.toPlainString()
+                    val sizeStr = size.toPlainString()
+                    val feeRateBps = ctx.feeRateByTokenId[tokenId] ?: "0"
+
+                    val signedOrder = orderSigningService.createAndSignOrder(
+                        privateKey = ctx.decryptedPrivateKey,
+                        makerAddress = ctx.account.proxyAddress,
+                        tokenId = tokenId,
+                        side = "BUY",
+                        price = priceStr,
+                        size = sizeStr,
+                        signatureType = ctx.signatureType,
+                        nonce = "0",
+                        feeRateBps = feeRateBps,
+                        expiration = "0"
+                    )
+
+                    val orderRequest = NewOrderRequest(
+                        order = signedOrder,
+                        owner = ctx.account.apiKey!!,
+                        orderType = "FAK",
+                        deferExec = false
+                    )
+
+                    val orderResult = submitOrderForManualOrder(
+                        ctx.clobApi,
+                        strategy,
+                        request.periodStartUnix,
+                        request.marketTitle,
+                        outcomeIndex,
+                        priceRounded,
+                        amountUsdc,
+                        orderRequest
+                    )
+
+                    orderResult.fold(
+                        onSuccess = { orderId ->
+                            Result.success(
+                                CryptoTailManualOrderResponse(
+                                    success = true,
+                                    orderId = orderId,
+                                    message = "下单成功",
+                                    orderDetails = ManualOrderDetails(
+                                        strategyId = strategy.id!!,
+                                        direction = request.direction,
+                                        price = priceStr,
+                                        size = sizeStr,
+                                        totalAmount = amountUsdc.toPlainString()
+                                    )
+                                )
+                            )
+                        },
+                        onFailure = { e ->
+                            Result.failure(e)
+                        }
+                    )
+                } else {
+                    Result.failure(IllegalArgumentException("账户未配置或凭证不足"))
+                }
+            }
+        } catch (e: Exception) {
+            logger.error("手动下单异常: strategyId=${request.strategyId}, ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    private suspend fun submitOrderForManualOrder(
+        clobApi: PolymarketClobApi,
+        strategy: CryptoTailStrategy,
+        periodStartUnix: Long,
+        marketTitle: String?,
+        outcomeIndex: Int,
+        price: BigDecimal,
+        amountUsdc: BigDecimal,
+        orderRequest: NewOrderRequest
+    ): Result<String> {
+        return try {
+            val response = clobApi.createOrder(orderRequest)
+            if (response.isSuccessful && response.body() != null) {
+                val body = response.body()!!
+                if (body.success && body.orderId != null) {
+                    saveTriggerRecord(
+                        strategy,
+                        periodStartUnix,
+                        marketTitle,
+                        outcomeIndex,
+                        price,
+                        amountUsdc,
+                        body.orderId,
+                        "success",
+                        null,
+                        triggerType = "MANUAL"
+                    )
+                    logger.info("手动下单成功: strategyId=${strategy.id}, periodStartUnix=$periodStartUnix, outcomeIndex=$outcomeIndex, orderId=${body.orderId}")
+                    Result.success(body.orderId)
+                } else {
+                    Result.failure(Exception(body.errorMsg ?: "unknown"))
+                }
+            } else {
+                val errorBody = response.errorBody()?.string().orEmpty()
+                Result.failure(Exception(errorBody.ifEmpty { "请求失败" }))
+            }
+        } catch (e: Exception) {
+            logger.error("手动下单异常: strategyId=${strategy.id}, periodStartUnix=$periodStartUnix", e)
+            Result.failure(e)
+        }
     }
 
     @PreDestroy

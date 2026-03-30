@@ -6,14 +6,6 @@ on:
       - published  # 当通过 GitHub Releases 页面创建 release 时触发
   workflow_dispatch:
     inputs:
-      build_type:
-        description: '构建类型'
-        required: true
-        type: choice
-        options:
-          - package-only        # 只打包产物
-          - package-and-docker # 打包产物 + Docker 镜像
-        default: 'package-and-docker'
       version:
         description: '版本号（例如: v1.0.0）'
         required: false
@@ -35,22 +27,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.release.tag_name || github.event.inputs.tag_name || github.event.inputs.version || github.ref }}
-      
-      - name: Determine build type
-        id: build_config
-        run: |
-          # 确定构建类型
-          if [ "${{ github.event_name }}" = "release" ]; then
-            # Release 事件：默认只打包产物（不构建 Docker）
-            BUILD_TYPE="package-only"
-            echo "📦 Release 事件：将只打包产物（不构建 Docker）"
-          else
-            # workflow_dispatch 事件：使用用户输入
-            BUILD_TYPE="${{ github.event.inputs.build_type }}"
-            echo "🔧 手动触发：构建类型 = ${BUILD_TYPE}"
-          fi
-          
-          echo "BUILD_TYPE=${BUILD_TYPE}" >> $GITHUB_OUTPUT
       
       - name: Extract version and check if pre-release
         id: extract_version
@@ -98,53 +74,6 @@ jobs:
             echo "📋 这是 Pre-release: $TAG_NAME"
           else
             echo "📦 这是正式版本: $TAG_NAME"
-          fi
-      
-      - name: Send Telegram notification (build started)
-        if: steps.extract_version.outputs.IS_PRERELEASE == 'false' && steps.build_config.outputs.BUILD_TYPE == 'package-and-docker'
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          # 检查必要的环境变量
-          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
-            echo "⚠️  Telegram Bot Token 或 Chat ID 未配置，跳过通知"
-            exit 0
-          fi
-          
-          # 获取构建信息
-          TAG="${{ steps.extract_version.outputs.TAG }}"
-          
-          if [ "${{ github.event_name }}" = "release" ]; then
-            RELEASE_URL="${{ github.event.release.html_url }}"
-            MESSAGE="🔨 <b>Release 构建中</b>"$'\n'$'\n'"🏷️ <b>Tag:</b> <code>${TAG}</code>"$'\n'"🔧 <b>构建类型:</b> Docker 升级"$'\n'"🔗 <a href=\"${RELEASE_URL}\">查看 Release</a>"
-          else
-            WORKFLOW_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-            MESSAGE="🔨 <b>构建中</b>"$'\n'$'\n'"🏷️ <b>Tag:</b> <code>${TAG}</code>"$'\n'"🔧 <b>构建类型:</b> Docker 升级"$'\n'"🔗 <a href=\"${WORKFLOW_URL}\">查看 Workflow</a>"
-          fi
-          
-          # 发送 Telegram 消息（使用 jq 转义 JSON）
-          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            -H "Content-Type: application/json" \
-            -d "$(jq -n \
-              --arg chat_id "$TELEGRAM_CHAT_ID" \
-              --arg text "$MESSAGE" \
-              '{chat_id: $chat_id, text: $text, parse_mode: "HTML", disable_web_page_preview: false}')" > /tmp/telegram_response.json
-          
-          # 检查发送结果
-          if [ $? -eq 0 ]; then
-            RESPONSE=$(cat /tmp/telegram_response.json)
-            if echo "$RESPONSE" | grep -q '"ok":true'; then
-              echo "✅ Telegram 通知发送成功"
-            else
-              echo "❌ Telegram 通知发送失败: $RESPONSE"
-              # 通知失败不应该导致整个 job 失败
-              exit 0
-            fi
-          else
-            echo "❌ 发送 Telegram 消息时发生错误"
-            # 通知失败不应该导致整个 job 失败
-            exit 0
           fi
       
       # ============ 编译前后端产物 ============
@@ -263,22 +192,66 @@ jobs:
             checksums.txt
           retention-days: 30
       
+      # ============ 发送产物上传成功通知 ============
+      - name: Send Telegram notification (package uploaded)
+        if: steps.extract_version.outputs.IS_PRERELEASE == 'false'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          # 检查必要的环境变量
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "⚠️  Telegram Bot Token 或 Chat ID 未配置，跳过通知"
+            exit 0
+          fi
+          
+          # 获取构建信息
+          TAG="${{ steps.extract_version.outputs.TAG }}"
+          
+          if [ "${{ github.event_name }}" = "release" ]; then
+            RELEASE_URL="${{ github.event.release.html_url }}"
+            MESSAGE="✅ <b>PolyHermes Package Built</b>"$'\n'$'\n'"🏷️ <b>Version:</b> <code>${TAG}</code>"$'\n'"🔧 <b>Type:</b> Online Update"$'\n'"🔗 <a href=\"${RELEASE_URL}\">View Release</a>"$'\n'"📍 <b>Update Path:</b> System Management → Overview → Check for Updates"$'\n'$'\n'"🐳 Building Docker image..."
+          else
+            WORKFLOW_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            MESSAGE="✅ <b>PolyHermes Package Built</b>"$'\n'$'\n'"🏷️ <b>Version:</b> <code>${TAG}</code>"$'\n'"🔧 <b>Type:</b> Online Update"$'\n'"🔗 <a href=\"${WORKFLOW_URL}\">View Workflow</a>"$'\n'$'\n'"🐳 Building Docker image..."
+          fi
+          
+          # 发送 Telegram 消息（使用 jq 转义 JSON）
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg chat_id "$TELEGRAM_CHAT_ID" \
+              --arg text "$MESSAGE" \
+              '{chat_id: $chat_id, text: $text, parse_mode: "HTML", disable_web_page_preview: false}')" > /tmp/telegram_response.json
+          
+          # 检查发送结果
+          if [ $? -eq 0 ]; then
+            RESPONSE=$(cat /tmp/telegram_response.json)
+            if echo "$RESPONSE" | grep -q '"ok":true'; then
+              echo "✅ Telegram 通知发送成功"
+            else
+              echo "❌ Telegram 通知发送失败: $RESPONSE"
+              exit 0
+            fi
+          else
+            echo "❌ 发送 Telegram 消息时发生错误"
+            exit 0
+          fi
+      
+      # ============ Docker 构建 ============
       - name: Set up Docker Buildx
-        if: steps.build_config.outputs.BUILD_TYPE == 'package-and-docker'
         uses: docker/setup-buildx-action@v3
         with:
           # 启用多架构构建支持
           platforms: linux/amd64,linux/arm64
       
       - name: Log in to Docker Hub
-        if: steps.build_config.outputs.BUILD_TYPE == 'package-and-docker'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
       
       - name: Prepare Docker build context
-        if: steps.build_config.outputs.BUILD_TYPE == 'package-and-docker'
         run: |
           echo "📦 准备 Docker 构建上下文..."
           # 确保构建产物存在且可访问
@@ -295,7 +268,7 @@ jobs:
           ls -lh backend/build/libs/*.jar
       
       - name: Build and push Docker image
-        if: steps.build_config.outputs.BUILD_TYPE == 'package-and-docker'
+        id: docker_build
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -314,13 +287,8 @@ jobs:
           cache-from: type=registry,ref=wrbug/polyhermes:latest
           cache-to: type=inline
       
-      - name: Skip Docker build notice
-        if: steps.build_config.outputs.BUILD_TYPE == 'package-only'
-        run: |
-          echo "⏭️  跳过 Docker 镜像构建（构建类型：package-only）"
-          echo "✅ 仅打包产物已完成"
-
-      - name: Send Telegram notification
+      # ============ 发送 Docker 构建成功通知 ============
+      - name: Send Telegram notification (Docker build completed)
         if: steps.extract_version.outputs.IS_PRERELEASE == 'false'
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -335,25 +303,14 @@ jobs:
           # 获取构建信息
           VERSION="${{ steps.extract_version.outputs.VERSION }}"
           TAG="${{ steps.extract_version.outputs.TAG }}"
-          BUILD_TYPE="${{ steps.build_config.outputs.BUILD_TYPE }}"
-          
-          # 构建消息内容（仅包含关键信息）
           DEPLOY_DOC_URL="https://github.com/WrBug/PolyHermes/blob/main/docs/zh/DEPLOYMENT.md"
           
           if [ "${{ github.event_name }}" = "release" ]; then
             RELEASE_URL="${{ github.event.release.html_url }}"
-            if [ "$BUILD_TYPE" = "package-and-docker" ]; then
-              MESSAGE="✅ <b>Release 构建成功</b>"$'\n'$'\n'"🏷️ <b>Tag:</b> <code>${TAG}</code>"$'\n'"🔧 <b>构建类型:</b> Docker 升级"$'\n'"🔗 <a href=\"${RELEASE_URL}\">查看 Release</a>"$'\n'"📚 <a href=\"${DEPLOY_DOC_URL}\">Docker 部署文档</a>"
-            else
-              MESSAGE="✅ <b>Release 打包成功</b>"$'\n'$'\n'"🏷️ <b>Tag:</b> <code>${TAG}</code>"$'\n'"🔧 <b>构建类型:</b> 在线升级"$'\n'"🔗 <a href=\"${RELEASE_URL}\">查看 Release</a>"$'\n'"📍 <b>升级路径:</b> 系统管理 → 概览 → 检查更新"
-            fi
+            MESSAGE="🐳 <b>Docker Image Built Successfully</b>"$'\n'$'\n'"🏷️ <b>Version:</b> <code>${TAG}</code>"$'\n'"📦 <b>Image:</b> <code>wrbug/polyhermes:${TAG}</code>"$'\n'"🔗 <a href=\"${RELEASE_URL}\">View Release</a>"$'\n'"📚 <a href=\"${DEPLOY_DOC_URL}\">Docker Deployment Guide</a>"
           else
             WORKFLOW_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-            if [ "$BUILD_TYPE" = "package-and-docker" ]; then
-              MESSAGE="✅ <b>构建成功</b>"$'\n'$'\n'"🏷️ <b>Tag:</b> <code>${TAG}</code>"$'\n'"🔧 <b>构建类型:</b> Docker 升级"$'\n'"🔗 <a href=\"${WORKFLOW_URL}\">查看 Workflow</a>"$'\n'"📚 <a href=\"${DEPLOY_DOC_URL}\">Docker 部署文档</a>"
-            else
-              MESSAGE="✅ <b>打包成功</b>"$'\n'$'\n'"🏷️ <b>Tag:</b> <code>${TAG}</code>"$'\n'"🔧 <b>构建类型:</b> 在线升级"$'\n'"🔗 <a href=\"${WORKFLOW_URL}\">查看 Workflow</a>"$'\n'"📍 <b>升级路径:</b> 系统管理 → 概览 → 检查更新"
-            fi
+            MESSAGE="🐳 <b>Docker Image Built Successfully</b>"$'\n'$'\n'"🏷️ <b>Version:</b> <code>${TAG}</code>"$'\n'"📦 <b>Image:</b> <code>wrbug/polyhermes:${TAG}</code>"$'\n'"🔗 <a href=\"${WORKFLOW_URL}\">View Workflow</a>"$'\n'"📚 <a href=\"${DEPLOY_DOC_URL}\">Docker Deployment Guide</a>"
           fi
           
           # 发送 Telegram 消息（使用 jq 转义 JSON）
@@ -371,11 +328,9 @@ jobs:
               echo "✅ Telegram 通知发送成功"
             else
               echo "❌ Telegram 通知发送失败: $RESPONSE"
-              # 构建成功，通知失败不应该导致整个 job 失败
               exit 0
             fi
           else
             echo "❌ 发送 Telegram 消息时发生错误"
-            # 构建成功，通知失败不应该导致整个 job 失败
             exit 0
           fi

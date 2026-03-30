@@ -401,7 +401,7 @@ class PolymarketClobService(
             Result.failure(e)
         }
     }
-    
+
     /**
      * 获取费率
      * 文档: https://docs.polymarket.com/developers/market-makers/maker-rebates-program#1-fetch-the-fee-rate

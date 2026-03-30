@@ -167,3 +167,45 @@ data class CryptoTailMarketOptionDto(
     val periodStartUnix: Long = 0L,
     val endDate: String? = null
 )
+
+/**
+ * 收益曲线请求
+ * @param strategyId 策略ID
+ * @param startDate 开始时间（毫秒时间戳），null 表示不限制
+ * @param endDate 结束时间（毫秒时间戳），null 表示不限制
+ */
+data class CryptoTailPnlCurveRequest(
+    val strategyId: Long = 0L,
+    val startDate: Long? = null,
+    val endDate: Long? = null
+)
+
+/**
+ * 收益曲线单点数据
+ */
+data class CryptoTailPnlCurvePoint(
+    /** 时间点（毫秒时间戳，结算时间或创建时间） */
+    val timestamp: Long = 0L,
+    /** 累计收益 USDC */
+    val cumulativePnl: String = "0",
+    /** 当笔收益 USDC */
+    val pointPnl: String = "0",
+    /** 截至该点累计已结算笔数 */
+    val settledCount: Long = 0L
+)
+
+/**
+ * 收益曲线响应
+ */
+data class CryptoTailPnlCurveResponse(
+    val strategyId: Long = 0L,
+    val strategyName: String = "",
+    /** 筛选范围内总已实现收益 USDC */
+    val totalRealizedPnl: String = "0",
+    val settledCount: Long = 0L,
+    val winCount: Long = 0L,
+    val winRate: String? = null,
+    /** 最大回撤 USDC（正数表示回撤幅度） */
+    val maxDrawdown: String? = null,
+    val curveData: List<CryptoTailPnlCurvePoint> = emptyList()
+)

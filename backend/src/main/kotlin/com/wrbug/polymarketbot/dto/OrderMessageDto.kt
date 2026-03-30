@@ -51,18 +51,21 @@ data class OrderPushMessage(
 
 /**
  * 订单详情（通过 API 获取）
+ * @param price 订单限价（用户提交的买入/卖出价）
+ * @param avgFilledPrice 实际成交价 = original_size * price / size_matched（有成交时优先用于推送展示）
  */
 data class OrderDetailDto(
     val id: String,                    // 订单 ID
     val market: String,                 // 市场 ID (condition ID)
     val side: String,                   // BUY/SELL
-    val price: String,                  // 价格
+    val price: String,                  // 订单限价
     val size: String,                   // 订单大小
     val filled: String,                 // 已成交数量
     val status: String,                 // 订单状态
     val createdAt: String,             // 创建时间（ISO 8601 格式）
     val marketName: String? = null,     // 市场名称（通过 Data API 获取）
     val marketSlug: String? = null,     // 市场 slug
-    val marketIcon: String? = null       // 市场图标
+    val marketIcon: String? = null,    // 市场图标
+    val avgFilledPrice: String? = null  // 实际成交价 = original_size*price/size_matched（有成交时使用）
 )
 

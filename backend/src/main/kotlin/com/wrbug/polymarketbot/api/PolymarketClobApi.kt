@@ -212,6 +212,7 @@ data class NewOrderResponse(
     val success: Boolean,               // boolean indicating if server-side error
     @SerializedName("errorMsg")
     val errorMsg: String? = null,       // error message in case of unsuccessful placement
+    val error: String? = null,          // error message (alternative field, e.g. "Trading restricted in your region...")
     @SerializedName("orderID")
     val orderId: String? = null,        // id of order（API 返回字段名为 orderID）
     @SerializedName("transactionsHashes")
@@ -222,7 +223,17 @@ data class NewOrderResponse(
     val takingAmount: String? = null,   // taking amount
     @SerializedName("makingAmount")
     val makingAmount: String? = null    // making amount
-)
+) {
+    /**
+     * 获取错误信息的便捷方法
+     * 优先返回 errorMsg，其次返回 error，最后返回默认消息
+     */
+    fun getErrorMessage(): String {
+        return errorMsg?.takeIf { it.isNotBlank() }
+            ?: error?.takeIf { it.isNotBlank() }
+            ?: "创建订单失败"
+    }
+}
 
 /**
  * 旧的订单请求格式（已废弃，保留用于兼容）

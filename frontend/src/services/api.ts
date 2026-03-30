@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosError } from 'axios'
-import type { ApiResponse, NotificationConfig, NotificationConfigRequest, NotificationConfigUpdateRequest } from '../types'
+import type { ApiResponse, NotificationConfig, NotificationConfigRequest, NotificationConfigUpdateRequest, NotificationTemplate, TemplateTypeInfo, TemplateVariablesResponse } from '../types'
 import { getToken, setToken, removeToken } from '../utils'
 import { wsManager } from './websocket'
 import i18n from '../i18n/config'
@@ -494,14 +494,26 @@ export const apiService = {
       endDate?: number
     }) =>
       apiClient.post<ApiResponse<{ list: import('../types').CryptoTailStrategyTriggerDto[]; total: number }>>('/crypto-tail-strategy/triggers', data),
+    pnlCurve: (data: import('../types').CryptoTailPnlCurveRequest) =>
+      apiClient.post<ApiResponse<import('../types').CryptoTailPnlCurveResponse>>('/crypto-tail-strategy/pnl-curve', data),
     marketOptions: () =>
       apiClient.post<ApiResponse<import('../types').CryptoTailMarketOptionDto[]>>('/crypto-tail-strategy/market-options', {}),
     autoMinSpread: (data: { intervalSeconds: number }) =>
       apiClient.post<ApiResponse<import('../types').CryptoTailAutoMinSpreadResponse>>('/crypto-tail-strategy/auto-min-spread', data),
-    monitorInit: (strategyId: number) =>
-      apiClient.post<ApiResponse<import('../types').CryptoTailMonitorInitResponse>>('/crypto-tail-strategy/monitor/init', { strategyId })
+    monitorInit: (data: { strategyId: number; periodStartUnix?: number }) =>
+      apiClient.post<ApiResponse<import('../types').CryptoTailMonitorInitResponse>>('/crypto-tail-strategy/monitor/init', data),
+    manualOrder: (data: {
+      strategyId: number
+      periodStartUnix: number
+      direction: 'UP' | 'DOWN'
+      price: string
+      size: string
+      marketTitle: string
+      tokenIds: string[]
+    }) =>
+      apiClient.post<ApiResponse<import('../types').CryptoTailManualOrderResponse>>('/crypto-tail-strategy/manual-order', data)
   },
-  
+
   /**
    * 订单管理 API
    */
@@ -674,7 +686,51 @@ export const apiService = {
      * 获取 Telegram Chat IDs
      */
     getTelegramChatIds: (data: { botToken: string }) =>
-      apiClient.post<ApiResponse<string[]>>('/system/notifications/telegram/get-chat-ids', data)
+      apiClient.post<ApiResponse<string[]>>('/system/notifications/telegram/get-chat-ids', data),
+
+    // ==================== 模板相关 API ====================
+
+    /**
+     * 获取所有模板类型
+     */
+    getTemplateTypes: () =>
+      apiClient.post<ApiResponse<TemplateTypeInfo[]>>('/system/notifications/templates/types', {}),
+
+    /**
+     * 获取所有模板列表
+     */
+    getTemplates: () =>
+      apiClient.post<ApiResponse<NotificationTemplate[]>>('/system/notifications/templates/list', {}),
+
+    /**
+     * 获取单个模板详情
+     */
+    getTemplateDetail: (data: { templateType: string }) =>
+      apiClient.post<ApiResponse<NotificationTemplate>>('/system/notifications/templates/detail', data),
+
+    /**
+     * 获取模板可用变量
+     */
+    getTemplateVariables: (data: { templateType: string }) =>
+      apiClient.post<ApiResponse<TemplateVariablesResponse>>('/system/notifications/templates/variables', data),
+
+    /**
+     * 更新模板
+     */
+    updateTemplate: (data: { templateType: string; templateContent: string }) =>
+      apiClient.post<ApiResponse<NotificationTemplate>>('/system/notifications/templates/update', data),
+
+    /**
+     * 重置模板为默认
+     */
+    resetTemplate: (data: { templateType: string }) =>
+      apiClient.post<ApiResponse<NotificationTemplate>>('/system/notifications/templates/reset', data),
+
+    /**
+     * 发送模板测试消息
+     */
+    testTemplate: (data: { templateType: string; templateContent?: string }) =>
+      apiClient.post<ApiResponse<boolean>>('/system/notifications/templates/test', data)
   },
   
   /**

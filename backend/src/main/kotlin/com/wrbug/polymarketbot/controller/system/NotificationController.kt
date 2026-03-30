@@ -3,6 +3,7 @@ package com.wrbug.polymarketbot.controller.system
 import com.wrbug.polymarketbot.dto.*
 import com.wrbug.polymarketbot.enums.ErrorCode
 import com.wrbug.polymarketbot.service.system.NotificationConfigService
+import com.wrbug.polymarketbot.service.system.NotificationTemplateService
 import com.wrbug.polymarketbot.service.system.TelegramNotificationService
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.*
 class NotificationController(
     private val notificationConfigService: NotificationConfigService,
     private val telegramNotificationService: TelegramNotificationService,
+    private val notificationTemplateService: NotificationTemplateService,
     private val messageSource: MessageSource
 ) {
     
@@ -335,6 +337,155 @@ class NotificationController(
             ))
         }
     }
+
+    // ==================== 模板相关 API ====================
+
+    /**
+     * 获取所有模板类型
+     */
+    @PostMapping("/templates/types")
+    fun getTemplateTypes(): ResponseEntity<ApiResponse<List<TemplateTypeInfoDto>>> {
+        return try {
+            val types = notificationTemplateService.getTemplateTypes()
+            ResponseEntity.ok(ApiResponse.success(types))
+        } catch (e: Exception) {
+            logger.error("获取模板类型失败: ${e.message}", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, messageSource = messageSource))
+        }
+    }
+
+    /**
+     * 获取所有模板
+     */
+    @PostMapping("/templates/list")
+    fun getTemplates(): ResponseEntity<ApiResponse<List<NotificationTemplateDto>>> {
+        return try {
+            val templates = notificationTemplateService.getAllTemplates()
+            ResponseEntity.ok(ApiResponse.success(templates))
+        } catch (e: Exception) {
+            logger.error("获取模板列表失败: ${e.message}", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, messageSource = messageSource))
+        }
+    }
+
+    /**
+     * 获取单个模板
+     */
+    @PostMapping("/templates/detail")
+    fun getTemplateDetail(@RequestBody request: TemplateDetailRequest): ResponseEntity<ApiResponse<NotificationTemplateDto>> {
+        return try {
+            if (request.templateType.isBlank()) {
+                return ResponseEntity.ok(ApiResponse.paramError("模板类型不能为空"))
+            }
+
+            val template = notificationTemplateService.getTemplate(request.templateType)
+            if (template == null) {
+                ResponseEntity.ok(ApiResponse.error(ErrorCode.NOT_FOUND, messageSource = messageSource))
+            } else {
+                ResponseEntity.ok(ApiResponse.success(template))
+            }
+        } catch (e: Exception) {
+            logger.error("获取模板详情失败: ${e.message}", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, messageSource = messageSource))
+        }
+    }
+
+    /**
+     * 获取模板可用变量
+     */
+    @PostMapping("/templates/variables")
+    fun getTemplateVariables(@RequestBody request: TemplateDetailRequest): ResponseEntity<ApiResponse<TemplateVariablesResponse>> {
+        return try {
+            if (request.templateType.isBlank()) {
+                return ResponseEntity.ok(ApiResponse.paramError("模板类型不能为空"))
+            }
+
+            val variables = notificationTemplateService.getTemplateVariables(request.templateType)
+            if (variables == null) {
+                ResponseEntity.ok(ApiResponse.error(ErrorCode.NOT_FOUND, messageSource = messageSource))
+            } else {
+                ResponseEntity.ok(ApiResponse.success(variables))
+            }
+        } catch (e: Exception) {
+            logger.error("获取模板变量失败: ${e.message}", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, messageSource = messageSource))
+        }
+    }
+
+    /**
+     * 更新模板
+     */
+    @PostMapping("/templates/update")
+    fun updateTemplate(@RequestBody request: UpdateTemplateRequestWithId): ResponseEntity<ApiResponse<NotificationTemplateDto>> {
+        return try {
+            if (request.templateType.isBlank()) {
+                return ResponseEntity.ok(ApiResponse.paramError("模板类型不能为空"))
+            }
+            if (request.templateContent.isBlank()) {
+                return ResponseEntity.ok(ApiResponse.paramError("模板内容不能为空"))
+            }
+
+            val template = notificationTemplateService.updateTemplate(request.templateType, request.templateContent)
+            ResponseEntity.ok(ApiResponse.success(template))
+        } catch (e: Exception) {
+            logger.error("更新模板失败: ${e.message}", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, messageSource = messageSource))
+        }
+    }
+
+    /**
+     * 重置模板为默认
+     */
+    @PostMapping("/templates/reset")
+    fun resetTemplate(@RequestBody request: TemplateDetailRequest): ResponseEntity<ApiResponse<NotificationTemplateDto>> {
+        return try {
+            if (request.templateType.isBlank()) {
+                return ResponseEntity.ok(ApiResponse.paramError("模板类型不能为空"))
+            }
+
+            val template = notificationTemplateService.resetTemplate(request.templateType)
+            if (template == null) {
+                ResponseEntity.ok(ApiResponse.error(ErrorCode.NOT_FOUND, messageSource = messageSource))
+            } else {
+                ResponseEntity.ok(ApiResponse.success(template))
+            }
+        } catch (e: Exception) {
+            logger.error("重置模板失败: ${e.message}", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, messageSource = messageSource))
+        }
+    }
+
+    /**
+     * 发送模板测试消息
+     */
+    @PostMapping("/templates/test")
+    fun testTemplate(@RequestBody request: TestTemplateRequest): ResponseEntity<ApiResponse<Boolean>> {
+        return try {
+            if (request.templateType.isBlank()) {
+                return ResponseEntity.ok(ApiResponse.paramError("模板类型不能为空"))
+            }
+
+            val success = runBlocking {
+                notificationTemplateService.sendTestMessage(request.templateType, request.templateContent)
+            }
+
+            if (success) {
+                ResponseEntity.ok(ApiResponse.success(true))
+            } else {
+                ResponseEntity.ok(ApiResponse.error(
+                    ErrorCode.NOTIFICATION_TEST_FAILED,
+                    messageSource = messageSource
+                ))
+            }
+        } catch (e: Exception) {
+            logger.error("发送模板测试消息失败: ${e.message}", e)
+            ResponseEntity.ok(ApiResponse.error(
+                ErrorCode.NOTIFICATION_TEST_FAILED,
+                customMsg = "发送测试消息失败：${e.message}",
+                messageSource = messageSource
+            ))
+        }
+    }
 }
 
 /**
@@ -382,5 +533,20 @@ data class NotificationConfigUpdateEnabledRequest(
  */
 data class NotificationConfigDeleteRequest(
     val id: Long
+)
+
+/**
+ * 模板详情请求
+ */
+data class TemplateDetailRequest(
+    val templateType: String
+)
+
+/**
+ * 更新模板请求（带类型）
+ */
+data class UpdateTemplateRequestWithId(
+    val templateType: String,
+    val templateContent: String
 )
 

@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Card, Form, Button, Switch, Input, InputNumber, message, Typography, Space, Alert, Select, Table, Tag, Popconfirm, Modal } from 'antd'
-import { SaveOutlined, CheckCircleOutlined, ReloadOutlined, GlobalOutlined, NotificationOutlined, KeyOutlined, LinkOutlined, PlusOutlined, EditOutlined, DeleteOutlined, SendOutlined } from '@ant-design/icons'
+import { useNavigate } from 'react-router-dom'
+import { Card, Form, Button, Switch, Input, InputNumber, message, Typography, Space, Alert, Select } from 'antd'
+import { SaveOutlined, CheckCircleOutlined, ReloadOutlined, GlobalOutlined, NotificationOutlined, KeyOutlined, LinkOutlined, RightOutlined } from '@ant-design/icons'
 import { apiService } from '../services/api'
 import { useMediaQuery } from 'react-responsive'
 import { useTranslation } from 'react-i18next'
-import type { SystemConfig, BuilderApiKeyUpdateRequest, NotificationConfig, NotificationConfigRequest, NotificationConfigUpdateRequest } from '../types'
-import { TelegramConfigForm } from '../components/notifications'
+import type { SystemConfig, BuilderApiKeyUpdateRequest } from '../types'
 import SystemUpdate from './SystemUpdate'
 
 const { Title, Text, Paragraph } = Typography
@@ -33,20 +33,13 @@ interface ProxyCheckResponse {
 const SystemSettings: React.FC = () => {
   const { t, i18n: i18nInstance } = useTranslation()
   const isMobile = useMediaQuery({ maxWidth: 768 })
+  const navigate = useNavigate()
 
   // 第一部分：多语言
   const [languageForm] = Form.useForm()
   const [currentLang, setCurrentLang] = useState<string>('auto')
 
-  // 第二部分：消息推送设置
-  const [notificationConfigs, setNotificationConfigs] = useState<NotificationConfig[]>([])
-  const [notificationLoading, setNotificationLoading] = useState(false)
-  const [notificationModalVisible, setNotificationModalVisible] = useState(false)
-  const [editingNotificationConfig, setEditingNotificationConfig] = useState<NotificationConfig | null>(null)
-  const [notificationForm] = Form.useForm()
-  const [testLoading, setTestLoading] = useState(false)
-
-  // 第三部分：Relayer配置
+  // 第二部分：Relayer配置
   const [relayerForm] = Form.useForm()
   const [autoRedeemForm] = Form.useForm()
   const [systemConfig, setSystemConfig] = useState<SystemConfig | null>(null)
@@ -67,7 +60,6 @@ const SystemSettings: React.FC = () => {
     languageForm.setFieldsValue({ language: savedLanguage })
 
     // 加载其他配置
-    fetchNotificationConfigs()
     fetchSystemConfig()
     fetchProxyConfig()
   }, [])
@@ -103,246 +95,7 @@ const SystemSettings: React.FC = () => {
     }
   }
 
-  // ==================== 第二部分：消息推送设置 ====================
-  const fetchNotificationConfigs = async () => {
-    setNotificationLoading(true)
-    try {
-      const response = await apiService.notifications.list({ type: 'telegram' })
-      if (response.data.code === 0 && response.data.data) {
-        setNotificationConfigs(response.data.data)
-      } else {
-        message.error(response.data.msg || t('notificationSettings.fetchFailed'))
-      }
-    } catch (error: any) {
-      message.error(error.message || t('notificationSettings.fetchFailed'))
-    } finally {
-      setNotificationLoading(false)
-    }
-  }
-
-  const handleNotificationCreate = () => {
-    setEditingNotificationConfig(null)
-    notificationForm.resetFields()
-    notificationForm.setFieldsValue({
-      type: 'telegram',
-      enabled: true,
-      config: {
-        botToken: '',
-        chatIds: []
-      }
-    })
-    setNotificationModalVisible(true)
-  }
-
-  const handleNotificationEdit = (config: NotificationConfig) => {
-    setEditingNotificationConfig(config)
-
-    let botToken = ''
-    let chatIds = ''
-
-    if (config.config) {
-      if ('data' in config.config && config.config.data) {
-        const data = config.config.data as any
-        botToken = data.botToken || ''
-        if (data.chatIds) {
-          if (Array.isArray(data.chatIds)) {
-            chatIds = data.chatIds.join(',')
-          } else if (typeof data.chatIds === 'string') {
-            chatIds = data.chatIds
-          }
-        }
-      } else {
-        if ('botToken' in config.config) {
-          botToken = (config.config as any).botToken || ''
-        }
-        if ('chatIds' in config.config) {
-          const ids = (config.config as any).chatIds
-          if (Array.isArray(ids)) {
-            chatIds = ids.join(',')
-          } else if (typeof ids === 'string') {
-            chatIds = ids
-          }
-        }
-      }
-    }
-
-    notificationForm.setFieldsValue({
-      type: config.type,
-      name: config.name,
-      enabled: config.enabled,
-      config: {
-        botToken: botToken,
-        chatIds: chatIds
-      }
-    })
-    setNotificationModalVisible(true)
-  }
-
-  const handleNotificationDelete = async (id: number) => {
-    try {
-      const response = await apiService.notifications.delete({ id })
-      if (response.data.code === 0) {
-        message.success(t('notificationSettings.deleteSuccess'))
-        fetchNotificationConfigs()
-      } else {
-        message.error(response.data.msg || t('notificationSettings.deleteFailed'))
-      }
-    } catch (error: any) {
-      message.error(error.message || t('notificationSettings.deleteFailed'))
-    }
-  }
-
-  const handleNotificationUpdateEnabled = async (id: number, enabled: boolean) => {
-    try {
-      const response = await apiService.notifications.updateEnabled({ id, enabled })
-      if (response.data.code === 0) {
-        message.success(enabled ? t('notificationSettings.enableSuccess') : t('notificationSettings.disableSuccess'))
-        fetchNotificationConfigs()
-      } else {
-        message.error(response.data.msg || t('notificationSettings.updateStatusFailed'))
-      }
-    } catch (error: any) {
-      message.error(error.message || t('notificationSettings.updateStatusFailed'))
-    }
-  }
-
-  const handleNotificationTest = async () => {
-    setTestLoading(true)
-    try {
-      const response = await apiService.notifications.test({ message: '这是一条测试消息' })
-      if (response.data.code === 0 && response.data.data) {
-        message.success(t('notificationSettings.testSuccess'))
-      } else {
-        message.error(response.data.msg || t('notificationSettings.testFailed'))
-      }
-    } catch (error: any) {
-      message.error(error.message || t('notificationSettings.testFailed'))
-    } finally {
-      setTestLoading(false)
-    }
-  }
-
-  const handleNotificationSubmit = async () => {
-    try {
-      const values = await notificationForm.validateFields()
-
-      const chatIds = typeof values.config.chatIds === 'string'
-        ? values.config.chatIds.split(',').map((id: string) => id.trim()).filter((id: string) => id)
-        : values.config.chatIds || []
-
-      const configData: NotificationConfigRequest | NotificationConfigUpdateRequest = {
-        type: values.type,
-        name: values.name,
-        enabled: values.enabled,
-        config: {
-          botToken: values.config.botToken,
-          chatIds: chatIds
-        }
-      }
-
-      if (editingNotificationConfig?.id) {
-        const updateData = {
-          ...configData,
-          id: editingNotificationConfig.id
-        } as NotificationConfigUpdateRequest
-
-        const response = await apiService.notifications.update(updateData)
-        if (response.data.code === 0) {
-          message.success(t('notificationSettings.updateSuccess'))
-          setNotificationModalVisible(false)
-          fetchNotificationConfigs()
-        } else {
-          message.error(response.data.msg || t('notificationSettings.updateFailed'))
-        }
-      } else {
-        const response = await apiService.notifications.create(configData)
-        if (response.data.code === 0) {
-          message.success(t('notificationSettings.createSuccess'))
-          setNotificationModalVisible(false)
-          fetchNotificationConfigs()
-        } else {
-          message.error(response.data.msg || t('notificationSettings.createFailed'))
-        }
-      }
-    } catch (error: any) {
-      if (error.errorFields) {
-        return
-      }
-      message.error(error.message || t('message.error'))
-    }
-  }
-
-  const notificationColumns = [
-    {
-      title: t('notificationSettings.configName'),
-      dataIndex: 'name',
-      key: 'name',
-    },
-    {
-      title: t('notificationSettings.type'),
-      dataIndex: 'type',
-      key: 'type',
-      render: (type: string) => <Tag color="blue">{type.toUpperCase()}</Tag>
-    },
-    {
-      title: t('notificationSettings.status'),
-      dataIndex: 'enabled',
-      key: 'enabled',
-      render: (enabled: boolean) => (
-        <Tag color={enabled ? 'green' : 'default'}>
-          {enabled ? t('notificationSettings.enabledStatus') : t('notificationSettings.disabledStatus')}
-        </Tag>
-      )
-    },
-    {
-      title: t('common.actions'),
-      key: 'action',
-      width: isMobile ? 120 : 200,
-      render: (_: any, record: NotificationConfig) => (
-        <Space size="small" wrap>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleNotificationEdit(record)}
-          >
-            {t('notificationSettings.edit')}
-          </Button>
-          <Switch
-            checked={record.enabled}
-            size="small"
-            onChange={(checked) => handleNotificationUpdateEnabled(record.id!, checked)}
-          />
-          <Button
-            type="link"
-            size="small"
-            icon={<SendOutlined />}
-            loading={testLoading}
-            onClick={handleNotificationTest}
-          >
-            {t('notificationSettings.test')}
-          </Button>
-          <Popconfirm
-            title={t('notificationSettings.deleteConfirm')}
-            onConfirm={() => handleNotificationDelete(record.id!)}
-            okText={t('common.confirm')}
-            cancelText={t('common.cancel')}
-          >
-            <Button
-              type="link"
-              danger
-              size="small"
-              icon={<DeleteOutlined />}
-            >
-              {t('notificationSettings.delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      )
-    }
-  ]
-
-  // ==================== 第三部分：Relayer配置 ====================
+  // ==================== 第二部分：Relayer配置 ====================
   const fetchSystemConfig = async () => {
     try {
       const response = await apiService.systemConfig.get()
@@ -551,7 +304,7 @@ const SystemSettings: React.FC = () => {
         </Form>
       </Card>
 
-      {/* 第二部分：消息推送设置 */}
+      {/* 第二部分：消息推送设置（独立页面入口） */}
       <Card
         title={
           <Space>
@@ -563,73 +316,24 @@ const SystemSettings: React.FC = () => {
         extra={
           <Button
             type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleNotificationCreate}
+            icon={<RightOutlined />}
+            onClick={() => navigate('/system-settings/notification')}
           >
-            {t('notificationSettings.addConfig')}
+            {t('notificationSettings.title')}
           </Button>
         }
       >
-        <Table
-          columns={notificationColumns}
-          dataSource={notificationConfigs}
-          loading={notificationLoading}
-          rowKey="id"
-          pagination={false}
-          scroll={{ x: isMobile ? 600 : 'auto' }}
-        />
-
-        <Modal
-          title={editingNotificationConfig ? t('notificationSettings.editConfig') : t('notificationSettings.addConfig')}
-          open={notificationModalVisible}
-          onOk={handleNotificationSubmit}
-          onCancel={() => setNotificationModalVisible(false)}
-          width={isMobile ? '90%' : 600}
-          okText={t('common.confirm')}
-          cancelText={t('common.cancel')}
+        <Paragraph type="secondary" style={{ marginBottom: 16 }}>
+          {t('notificationSettings.botConfig')}、{t('notificationSettings.templateConfig')}等请在独立页面中配置。
+        </Paragraph>
+        <Button
+          type="link"
+          icon={<RightOutlined />}
+          onClick={() => navigate('/system-settings/notification')}
+          style={{ padding: 0 }}
         >
-          <Form
-            form={notificationForm}
-            layout="vertical"
-          >
-            <Form.Item
-              name="type"
-              label={t('notificationSettings.type')}
-              rules={[{ required: true, message: t('notificationSettings.typeRequired') }]}
-            >
-              <Input disabled value="telegram" />
-            </Form.Item>
-
-            <Form.Item
-              name="name"
-              label={t('notificationSettings.configName')}
-              rules={[{ required: true, message: t('notificationSettings.configNameRequired') }]}
-            >
-              <Input placeholder={t('notificationSettings.configNamePlaceholder')} />
-            </Form.Item>
-
-            <Form.Item
-              name="enabled"
-              label={t('notificationSettings.enabled')}
-              valuePropName="checked"
-            >
-              <Switch />
-            </Form.Item>
-
-            <Form.Item shouldUpdate={(prevValues, currentValues) => {
-              return prevValues.type !== currentValues.type ||
-                prevValues.config !== currentValues.config
-            }}>
-              {() => {
-                const currentType = notificationForm.getFieldValue('type') || 'telegram'
-                if (currentType === 'telegram') {
-                  return <TelegramConfigForm form={notificationForm} />
-                }
-                return null
-              }}
-            </Form.Item>
-          </Form>
-        </Modal>
+          {t('notificationSettings.title')} →
+        </Button>
       </Card>
 
       {/* 第三部分：Relayer配置 */}

@@ -42,7 +42,8 @@
     "pageOf": "第",
     "ascending": "升序",
     "descending": "降序",
-    "day": "天"
+    "day": "天",
+    "orders": "單"
   },
   "account": {
     "title": "賬戶管理",
@@ -176,7 +177,8 @@
     "updateFailed": "更新賬戶失敗",
     "getDetailFailedForEdit": "獲取賬戶詳情失敗",
     "loading": "加載中...",
-    "fetchFailed": "獲取賬戶列表失敗"
+    "fetchFailed": "獲取賬戶列表失敗",
+    "noData": "暫無賬戶數據"
   },
   "accountImport": {
     "title": "導入賬戶",
@@ -660,7 +662,8 @@
     "deleteSuccess": "刪除用戶成功",
     "deleteFailed": "刪除用戶失敗",
     "deleteConfirm": "確定要刪除這個用戶嗎？",
-    "total": "共 {{total}} 條"
+    "total": "共 {{total}} 條",
+    "noData": "暫無用戶數據"
   },
   "statistics": {
     "title": "統計信息",
@@ -1121,7 +1124,9 @@
     "updateStatusFailed": "更新跟單狀態失敗",
     "deleteSuccess": "刪除跟單成功",
     "deleteFailed": "刪除跟單失敗",
-    "deleteConfirm": "確定要刪除這個跟單關係嗎？"
+    "deleteConfirm": "確定要刪除這個跟單關係嗎？",
+    "profitRate": "收益率",
+    "noData": "暫無跟單配置"
   },
   "notificationSettings": {
     "title": "消息推送設置",
@@ -1162,7 +1167,95 @@
     "getChatIdsFailed": "獲取 Chat IDs 失敗",
     "getChatIdsNoToken": "請先填寫 Bot Token",
     "getChatIdsNoMessage": "未找到 Chat ID，請先向機器人發送一條消息（如 /start），然後重試",
-    "getChatIdsButton": "獲取 Chat ID"
+    "getChatIdsButton": "獲取 Chat ID",
+    "botConfig": "機器人配置",
+    "templateConfig": "模板配置",
+    "templates": {
+      "title": "消息模板配置",
+      "templateType": "模板類型",
+      "templateContent": "模板內容",
+      "isDefault": "默認模板",
+      "isCustom": "自定義模板",
+      "resetToDefault": "重置為默認",
+      "resetConfirm": "確定要重置為默認模板嗎？您的自定義內容將丟失。",
+      "resetSuccess": "重置成功",
+      "resetFailed": "重置失敗",
+      "saveSuccess": "保存成功",
+      "saveFailed": "保存失敗",
+      "testSuccess": "測試消息發送成功，請檢查 Telegram",
+      "testFailed": "測試消息發送失敗",
+      "variables": "可用變量",
+      "clickToCopy": "點擊複製",
+      "copied": "已複製",
+      "commonVariables": "通用變量",
+      "orderVariables": "訂單變量",
+      "copyTradingVariables": "跟單變量",
+      "redeemVariables": "贖回變量",
+      "errorVariables": "錯誤變量",
+      "filterVariables": "過濾變量",
+      "strategyVariables": "策略變量",
+      "contentPlaceholder": "在此輸入模板內容，使用 {{變量名}} 插入動態內容",
+      "variableLabels": {
+        "account_name": "賬戶名稱",
+        "wallet_address": "錢包地址",
+        "time": "時間",
+        "order_id": "訂單ID",
+        "market_title": "市場標題",
+        "market_link": "市場鏈接",
+        "side": "方向",
+        "outcome": "市場方向",
+        "price": "價格",
+        "quantity": "數量",
+        "amount": "金額",
+        "available_balance": "可用餘額",
+        "leader_name": "Leader 名稱",
+        "config_name": "跟單配置名",
+        "error_message": "錯誤信息",
+        "filter_type": "過濾類型",
+        "filter_reason": "過濾原因",
+        "strategy_name": "策略名稱",
+        "transaction_hash": "交易哈希",
+        "total_value": "贖回總價值"
+      },
+      "variableDescriptions": {
+        "account_name": "執行訂單的賬戶名稱",
+        "wallet_address": "錢包地址（已脫敏）",
+        "time": "通知發送時間",
+        "order_id": "訂單唯一標識",
+        "market_title": "市場/事件名稱",
+        "market_link": "Polymarket 市場鏈接",
+        "side": "訂單方向（買入/賣出）",
+        "outcome": "市場方向（YES/NO 等）",
+        "price": "訂單價格",
+        "quantity": "訂單數量（shares）",
+        "amount": "訂單金額（USDC）",
+        "available_balance": "賬戶可用餘額（USDC）",
+        "leader_name": "跟單的 Leader 名稱/備註",
+        "config_name": "跟單配置名稱",
+        "error_message": "訂單失敗原因",
+        "filter_type": "訂單被過濾的類型",
+        "filter_reason": "訂單被過濾的詳細原因",
+        "strategy_name": "加密價差策略名稱",
+        "transaction_hash": "贖回交易的哈希值",
+        "total_value": "贖回的總價值（USDC）"
+      }
+    },
+    "templateTypes": {
+      "ORDER_SUCCESS": "訂單成功通知",
+      "ORDER_FAILED": "訂單失敗通知",
+      "ORDER_FILTERED": "訂單過濾通知",
+      "CRYPTO_TAIL_SUCCESS": "加密價差策略成功通知",
+      "REDEEM_SUCCESS": "倉位贖回成功通知",
+      "REDEEM_NO_RETURN": "倉位結算（無收益）通知"
+    },
+    "templateTypeDescriptions": {
+      "ORDER_SUCCESS": "訂單創建成功時發送的通知",
+      "ORDER_FAILED": "訂單創建失敗時發送的通知",
+      "ORDER_FILTERED": "訂單被風控過濾時發送的通知",
+      "CRYPTO_TAIL_SUCCESS": "加密價差策略下單成功時發送的通知",
+      "REDEEM_SUCCESS": "倉位贖回成功時發送的通知",
+      "REDEEM_NO_RETURN": "倉位結算但無收益時發送的通知"
+    }
   },
   "telegramConfig": {
     "title": "Telegram 配置說明",
@@ -1351,6 +1444,8 @@
     "title": "回測",
     "taskName": "任務名稱",
     "leader": "Leader",
+    "balance": "資金 (初始→最終)",
+    "profit": "收益 (金額/比例)",
     "initialBalance": "初始資金",
     "backtestDays": "回測天數",
     "status": "狀態",
@@ -1399,6 +1494,7 @@
     "createCopyTradingSuccess": "跟單配置創建成功",
     "noTasks": "暫無回測任務",
     "noTrades": "暫無交易記錄",
+    "noData": "暫無回測數據",
     "fetchTasksFailed": "獲取任務列表失敗",
     "fetchTaskDetailFailed": "獲取任務詳情失敗",
     "fetchTradesFailed": "獲取交易記錄失敗",
@@ -1496,7 +1592,9 @@
       "strategyName": "策略名稱",
       "account": "賬戶",
       "market": "關聯市場",
+      "marketAndTime": "市場/時間",
       "timeWindow": "時間區間",
+      "config": "配置",
       "priceRange": "價格區間",
       "amountMode": "投入方式",
       "ratio": "比例",
@@ -1509,6 +1607,7 @@
       "disable": "停用",
       "delete": "刪除",
       "viewTriggers": "訂單",
+      "viewPnlCurve": "收益曲線",
       "deleteConfirm": "確定刪除該策略？",
       "fetchFailed": "獲取列表失敗",
       "configGuide": "配置指南"
@@ -1576,6 +1675,20 @@
       "emptySuccess": "暫無成功記錄",
       "emptyFail": "暫無失敗記錄",
       "totalCount": "共 {count} 條"
+    },
+    "pnlCurve": {
+      "title": "收益曲線",
+      "totalPnl": "總收益",
+      "settledCount": "已結算筆數",
+      "winRate": "勝率",
+      "maxDrawdown": "最大回撤",
+      "timeRange": "時間範圍",
+      "today": "今日",
+      "last7Days": "近7天",
+      "last30Days": "近30天",
+      "all": "全部",
+      "customRange": "自定義",
+      "empty": "暫無已結算訂單，無法展示收益曲線"
     }
   },
   "cryptoTailMonitor": {
@@ -1644,6 +1757,49 @@
       "switchToLatest": "切換到最新週期",
       "periodEnded": "當前週期已結束",
       "newPeriodAvailable": "新週期已開始"
+    },
+    "manualOrder": {
+      "title": "手動下單",
+      "buttonUp": "買入 Up",
+      "buttonDown": "買入 Down",
+      "confirmTitle": "手動下單確認",
+      "marketTitle": "市場標題",
+      "direction": "方向",
+      "directionUp": "Up",
+      "directionDown": "Down",
+      "orderPrice": "下單價格",
+      "orderSize": "下單數量",
+      "totalAmount": "總金額",
+      "account": "賬戶",
+      "cancel": "取消",
+      "confirm": "確認下單",
+      "orderUnit": "USDC",
+      "sizeUnit": "張",
+      "statusNotOrdered": "未下單",
+      "statusOrdered": "本週期已下單",
+      "statusOrderedAuto": "本週期已自動下單",
+      "statusOrderedManual": "本週期已手動下單",
+      "errorInsufficientBalance": "賬戶餘額不足，可用餘額：{balance} USDC",
+      "errorPriceOutOfRange": "價格必須在 0~1 之間",
+      "errorMinSize": "數量不能少於 1 張",
+      "errorExceedsBalance": "總金額超過可用餘額",
+      "errorPriceRequired": "請輸入下單價格",
+      "errorSizeRequired": "請輸入下單數量",
+      "success": "手動下單成功",
+      "failed": "手動下單失敗：{{reason}}",
+      "errorSigning": "簽名失敗：{reason}",
+      "errorNetwork": "網絡錯誤，請稍後重試",
+      "priceNotLoaded": "價格數據未加載",
+      "insufficientBalance": "餘額不足，可用金額少於 1 USDC",
+      "fetchBalanceFailed": "獲取賬戶餘額失敗",
+      "availableBalance": "可用餘額",
+      "fetchLatestPrice": "獲取最新價",
+      "priceUpdated": "價格已更新",
+      "maxSize": "最大",
+      "invalidPriceOrBalance": "價格或餘額無效",
+      "insufficientBalanceForMax": "餘額不足以購買最大數量",
+      "maxSizeUpdated": "已更新為最大數量",
+      "periodChanged": "週期已切換，彈窗已關閉"
     }
   }
 }

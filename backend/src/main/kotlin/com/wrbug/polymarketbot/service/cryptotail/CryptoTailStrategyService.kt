@@ -9,6 +9,7 @@ import com.wrbug.polymarketbot.enums.SpreadDirection
 import com.wrbug.polymarketbot.repository.CryptoTailStrategyRepository
 import com.wrbug.polymarketbot.repository.CryptoTailStrategyTriggerRepository
 import com.wrbug.polymarketbot.event.CryptoTailStrategyChangedEvent
+import com.wrbug.polymarketbot.util.gt
 import com.wrbug.polymarketbot.util.toSafeBigDecimal
 import org.slf4j.LoggerFactory
 import org.springframework.context.ApplicationEventPublisher
@@ -216,6 +217,61 @@ class CryptoTailStrategyService(
             Result.success(CryptoTailStrategyListResponse(list = dtos))
         } catch (e: Exception) {
             logger.error("查询加密价差策略列表失败: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    fun getPnlCurve(request: CryptoTailPnlCurveRequest): Result<CryptoTailPnlCurveResponse> {
+        return try {
+            val strategy = strategyRepository.findById(request.strategyId).orElse(null)
+                ?: return Result.failure(IllegalArgumentException(ErrorCode.CRYPTO_TAIL_STRATEGY_NOT_FOUND.messageKey))
+            val start = request.startDate ?: 0L
+            val end = request.endDate ?: Long.MAX_VALUE
+            val triggers = triggerRepository.findResolvedByStrategyIdAndTimeRangeOrderBySettledAsc(
+                request.strategyId, start, end
+            )
+            var cumulative = BigDecimal.ZERO
+            var peak = BigDecimal.ZERO
+            var maxDrawdown = BigDecimal.ZERO
+            var winCountInRange = 0L
+            val curveData = triggers.map { t ->
+                val pnl = t.realizedPnl ?: BigDecimal.ZERO
+                cumulative = cumulative.add(pnl)
+                if (cumulative.gt(peak)) peak = cumulative
+                val drawdown = peak.subtract(cumulative)
+                if (drawdown.gt(maxDrawdown)) maxDrawdown = drawdown
+                if (t.winnerOutcomeIndex != null && t.outcomeIndex == t.winnerOutcomeIndex) winCountInRange++
+                val ts = t.settledAt ?: t.createdAt
+                CryptoTailPnlCurvePoint(
+                    timestamp = ts,
+                    cumulativePnl = cumulative.toPlainString(),
+                    pointPnl = pnl.toPlainString(),
+                    settledCount = 0L
+                )
+            }.mapIndexed { index, p ->
+                p.copy(settledCount = (index + 1).toLong())
+            }
+            val totalPnl = if (curveData.isEmpty()) BigDecimal.ZERO else curveData.last().cumulativePnl.toSafeBigDecimal()
+            val settledCountInRange = curveData.size.toLong()
+            val winRateStr = if (settledCountInRange > 0L) {
+                BigDecimal(winCountInRange).divide(BigDecimal(settledCountInRange), 4, java.math.RoundingMode.HALF_UP).toPlainString()
+            } else null
+            Result.success(
+                CryptoTailPnlCurveResponse(
+                    strategyId = request.strategyId,
+                    strategyName = strategy.name ?: strategy.marketSlugPrefix,
+                    totalRealizedPnl = totalPnl.toPlainString(),
+                    settledCount = settledCountInRange,
+                    winCount = winCountInRange,
+                    winRate = winRateStr,
+                    maxDrawdown = if (maxDrawdown.compareTo(BigDecimal.ZERO) > 0) maxDrawdown.toPlainString() else null,
+                    curveData = curveData
+                )
+            )
+        } catch (e: IllegalArgumentException) {
+            Result.failure(e)
+        } catch (e: Exception) {
+            logger.error("查询收益曲线失败: ${e.message}", e)
             Result.failure(e)
         }
     }
