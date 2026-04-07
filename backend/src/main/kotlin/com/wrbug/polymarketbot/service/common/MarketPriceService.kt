@@ -24,7 +24,8 @@ class MarketPriceService(
     private val blockchainService: BlockchainService,
     private val retrofitFactory: RetrofitFactory,
     private val accountRepository: AccountRepository,
-    private val cryptoUtils: CryptoUtils
+    private val cryptoUtils: CryptoUtils,
+    private val marketService: MarketService
 ) {
     
     private val logger = LoggerFactory.getLogger(MarketPriceService::class.java)
@@ -232,13 +233,13 @@ class MarketPriceService(
      */
     private suspend fun getPriceFromClobOrderbook(marketId: String, outcomeIndex: Int): BigDecimal? {
         return try {
-            // 获取 tokenId（用于查询特定 outcome 的订单簿）
-            val tokenIdResult = blockchainService.getTokenId(marketId, outcomeIndex)
-            if (!tokenIdResult.isSuccess) {
-                return null
-            }
-            
-            val tokenId = tokenIdResult.getOrNull() ?: return null
+            val tokenId = marketService.getClobTokenIdFromGamma(marketId, outcomeIndex)
+                ?: run {
+                    val tokenIdResult = blockchainService.getTokenId(marketId, outcomeIndex)
+                    if (!tokenIdResult.isSuccess) return null
+                    tokenIdResult.getOrNull()
+                }
+                ?: return null
             
             // 尝试使用带鉴权的 CLOB API，如果没有则使用不带鉴权的 API
             val clobApi = try {

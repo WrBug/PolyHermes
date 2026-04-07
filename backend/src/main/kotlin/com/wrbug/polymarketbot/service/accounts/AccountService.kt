@@ -1189,7 +1189,15 @@ class AccountService(
             // 需要先获取 tokenId，以便后续通过 CLOB API 获取三元及以上市场的价格
             // 优先使用 outcomeIndex，如果没有则返回错误（不再通过 side 字符串推断）
             val tokenIdResult = if (request.outcomeIndex != null) {
-                blockchainService.getTokenId(request.marketId, request.outcomeIndex)
+                val fromGamma = marketService.getClobTokenIdFromGamma(request.marketId, request.outcomeIndex)
+                if (fromGamma != null) {
+                    logger.debug(
+                        "卖出仓位使用 Gamma clob_token_ids: marketId=${request.marketId}, outcomeIndex=${request.outcomeIndex}"
+                    )
+                    Result.success(fromGamma)
+                } else {
+                    blockchainService.getTokenId(request.marketId, request.outcomeIndex)
+                }
             } else {
                 logger.warn("缺少 outcomeIndex 参数，无法计算 tokenId: marketId=${request.marketId}, side=${request.side}")
                 Result.failure<String>(IllegalArgumentException("缺少 outcomeIndex 参数，无法计算 tokenId。请提供 outcomeIndex 参数"))

@@ -258,7 +258,7 @@ open class CopyOrderTrackingService(
                         continue
                     }
 
-                    // 获取 tokenId：优先使用链上解析得到的 tokenId（与 Gamma clobTokenIds 一致），否则用 conditionId+outcomeIndex 链上重算
+                    // 获取 tokenId：优先 Leader/WS 携带的 tokenId；否则 Gamma clob_token_ids；再否则链上重算
                     val tokenId = if (!trade.tokenId.isNullOrBlank()) {
                         trade.tokenId
                     } else {
@@ -266,12 +266,22 @@ open class CopyOrderTrackingService(
                             logger.warn("交易缺少outcomeIndex且无tokenId，无法确定tokenId: tradeId=${trade.id}, market=${trade.market}")
                             continue
                         }
-                        val tokenIdResult = blockchainService.getTokenId(trade.market, trade.outcomeIndex)
-                        if (tokenIdResult.isFailure) {
-                            logger.error("获取tokenId失败: market=${trade.market}, outcomeIndex=${trade.outcomeIndex}, error=${tokenIdResult.exceptionOrNull()?.message}")
+                        val tokenIdResolved = marketService.getClobTokenIdFromGamma(trade.market, trade.outcomeIndex)
+                            ?: run {
+                                val tokenIdResult = blockchainService.getTokenId(trade.market, trade.outcomeIndex)
+                                if (tokenIdResult.isFailure) {
+                                    logger.error(
+                                        "获取tokenId失败: market=${trade.market}, outcomeIndex=${trade.outcomeIndex}, error=${tokenIdResult.exceptionOrNull()?.message}"
+                                    )
+                                    null
+                                } else {
+                                    tokenIdResult.getOrNull()
+                                }
+                            }
+                        if (tokenIdResolved.isNullOrBlank()) {
                             continue
                         }
-                        tokenIdResult.getOrNull() ?: continue
+                        tokenIdResolved
                     }
 
                     // 当链上解析时 Gamma 失败导致 market/outcomeIndex 为空时，按 tokenId 补查市场信息
@@ -928,7 +938,7 @@ open class CopyOrderTrackingService(
             finalNeedMatch = BigDecimal.ONE
         }
 
-        // 4. 获取 tokenId：优先使用链上解析得到的 tokenId，否则用 conditionId+outcomeIndex 链上重算
+        // 4. 获取 tokenId：优先 Leader 携带的 tokenId；否则 Gamma clob_token_ids；再否则链上重算
         val tokenId = if (!leaderSellTrade.tokenId.isNullOrBlank()) {
             leaderSellTrade.tokenId
         } else {
@@ -936,12 +946,25 @@ open class CopyOrderTrackingService(
                 logger.error("卖出交易缺少outcomeIndex且无tokenId: market=${leaderSellTrade.market}")
                 return
             }
-            val tokenIdResult = blockchainService.getTokenId(leaderSellTrade.market, leaderSellTrade.outcomeIndex)
-            if (tokenIdResult.isFailure) {
-                logger.error("获取tokenId失败: market=${leaderSellTrade.market}, outcomeIndex=${leaderSellTrade.outcomeIndex}, error=${tokenIdResult.exceptionOrNull()?.message}")
-                return
+            val fromGamma = marketService.getClobTokenIdFromGamma(
+                leaderSellTrade.market,
+                leaderSellTrade.outcomeIndex
+            )
+            if (!fromGamma.isNullOrBlank()) {
+                fromGamma
+            } else {
+                val tokenIdResult = blockchainService.getTokenId(
+                    leaderSellTrade.market,
+                    leaderSellTrade.outcomeIndex
+                )
+                if (tokenIdResult.isFailure) {
+                    logger.error(
+                        "获取tokenId失败: market=${leaderSellTrade.market}, outcomeIndex=${leaderSellTrade.outcomeIndex}, error=${tokenIdResult.exceptionOrNull()?.message}"
+                    )
+                    return
+                }
+                tokenIdResult.getOrNull() ?: return
             }
-            tokenIdResult.getOrNull() ?: return
         }
 
         // 5. 计算卖出价格（优先使用订单簿 bestBid，失败则使用 Leader 价格，固定按90%计算）

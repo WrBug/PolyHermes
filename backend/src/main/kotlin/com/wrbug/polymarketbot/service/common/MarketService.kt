@@ -263,6 +263,44 @@ class MarketService(
     }
 
     /**
+     * 从 Gamma 市场元数据解析 CLOB 实际使用的 tokenId（clob_token_ids 按 outcome 顺序）。
+     * Neg Risk 等市场中，链上 ConditionalTokens+USDC 计算的 positionId 与 CLOB 订单簿不一致，
+     * 必须以 Gamma 返回的列表为准，否则 CLOB 的 /book 等接口会返回 404。
+     *
+     * @param conditionId 条件 ID（与 Gamma condition_ids 一致）
+     * @param outcomeIndex 结果下标，与持仓/下单使用的 outcomeIndex 一致
+     * @return CLOB tokenId 字符串；Gamma 无数据或下标越界时返回 null
+     */
+    suspend fun getClobTokenIdFromGamma(conditionId: String, outcomeIndex: Int): String? {
+        if (conditionId.isBlank() || outcomeIndex < 0) {
+            return null
+        }
+        return try {
+            val gammaApi = retrofitFactory.createGammaApi()
+            val response = gammaApi.listMarkets(conditionIds = listOf(conditionId))
+            if (!response.isSuccessful || response.body().isNullOrEmpty()) {
+                return null
+            }
+            val market = response.body()!!.first()
+            val clobTokenIdsRaw = market.clobTokenIds ?: market.clob_token_ids
+            val clobTokenIds = (clobTokenIdsRaw ?: "").parseStringArray()
+            if (outcomeIndex >= clobTokenIds.size) {
+                logger.debug(
+                    "Gamma clob_token_ids 长度不足: conditionId=$conditionId, outcomeIndex=$outcomeIndex, size=${clobTokenIds.size}"
+                )
+                return null
+            }
+            val id = clobTokenIds[outcomeIndex].trim()
+            if (id.isEmpty()) null else id
+        } catch (e: Exception) {
+            logger.warn(
+                "从 Gamma 解析 CLOB tokenId 失败: conditionId=$conditionId, outcomeIndex=$outcomeIndex, error=${e.message}"
+            )
+            null
+        }
+    }
+
+    /**
      * 根据 conditionId 查询该市场是否为 Neg Risk（需使用 Neg Risk Exchange 签约）
      * 用于跟单下单时选择正确的 exchange 合约，避免 invalid signature
      */
