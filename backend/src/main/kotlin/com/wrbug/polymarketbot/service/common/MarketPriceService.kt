@@ -250,6 +250,12 @@ class MarketPriceService(
             
             val orderbookResponse = clobApi.getOrderbook(tokenId = tokenId, market = null)
             
+            // 404 表示订单簿不存在，返回 null 以触发 Gamma API 降级
+            if (orderbookResponse.code() == 404) {
+                logger.debug("CLOB 订单簿不存在（404）: tokenId=$tokenId，降级到 Gamma API")
+                return null
+            }
+            
             if (!orderbookResponse.isSuccessful || orderbookResponse.body() == null) {
                 return null
             }

@@ -28,6 +28,10 @@ class PolymarketClobService(
             val response = clobApi.getOrderbook(tokenId = null, market = market)
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
+            } else if (response.code() == 404) {
+                // 404 表示市场不存在或订单簿为空（如新上市市场、即将结算的市场），返回空结果而非错误
+                logger.debug("订单簿不存在（404）: market=$market")
+                Result.success(OrderbookResponse(bids = emptyList(), asks = emptyList()))
             } else {
                 Result.failure(Exception("获取订单簿失败: ${response.code()} ${response.message()}"))
             }
@@ -46,6 +50,10 @@ class PolymarketClobService(
             val response = clobApi.getOrderbook(tokenId = tokenId, market = null)
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
+            } else if (response.code() == 404) {
+                // 404 表示该 token 的订单簿不存在（如新上市市场、即将结算的市场），返回空结果而非错误
+                logger.debug("订单簿不存在（404）: tokenId=$tokenId")
+                Result.success(OrderbookResponse(bids = emptyList(), asks = emptyList()))
             } else {
                 Result.failure(Exception("获取订单簿失败: ${response.code()} ${response.message()}"))
             }
@@ -142,8 +150,9 @@ class PolymarketClobService(
             // 市价卖单：需要 bestBid（最高买入价）
             val bestBid = orderbook.bids.firstOrNull()?.price
             if (bestBid == null) {
-                val errorMsg = "订单表 bids 为空: tokenId=$tokenId"
-                logger.error(errorMsg)
+                // 订单簿为空，返回更友好的错误信息
+                val errorMsg = "当前市场暂时无法卖出（订单簿为空），请尝试使用限价单"
+                logger.warn("市价卖单订单簿为空: tokenId=$tokenId")
                 throw IllegalStateException(errorMsg)
             }
             
@@ -166,8 +175,9 @@ class PolymarketClobService(
             // 市价买单：需要 bestAsk（最低卖出价）
             val bestAsk = orderbook.asks.firstOrNull()?.price
             if (bestAsk == null) {
-                val errorMsg = "订单表 asks 为空: tokenId=$tokenId"
-                logger.error(errorMsg)
+                // 订单簿为空，返回更友好的错误信息
+                val errorMsg = "当前市场暂时无法买入（订单簿为空），请尝试使用限价单"
+                logger.warn("市价买单订单簿为空: tokenId=$tokenId")
                 throw IllegalStateException(errorMsg)
             }
             
