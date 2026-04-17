@@ -8,6 +8,12 @@ import org.springframework.stereotype.Service
 import java.math.BigDecimal
 
 /**
+ * 订单簿不存在的异常（HTTP 404）
+ * 表示该 token 没有活跃的订单簿，不是致命错误，调用方可以决定回退策略
+ */
+class OrderbookNotFoundException(message: String) : Exception(message)
+
+/**
  * Polymarket CLOB API 服务封装
  * 提供订单操作、市场数据、交易数据等功能
  */
@@ -46,6 +52,11 @@ class PolymarketClobService(
             val response = clobApi.getOrderbook(tokenId = tokenId, market = null)
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
+            } else if (response.code() == 404) {
+                // 404 表示该 token 没有活跃的订单簿（可能是流动性不足或市场已结算）
+                // 这不是致命错误，调用方可以决定是否需要回退
+                logger.warn("订单簿不存在 (404): tokenId=$tokenId")
+                Result.failure(OrderbookNotFoundException("订单簿不存在: tokenId=$tokenId"))
             } else {
                 Result.failure(Exception("获取订单簿失败: ${response.code()} ${response.message()}"))
             }
@@ -128,7 +139,7 @@ class PolymarketClobService(
             val error = orderbookResult.exceptionOrNull()
             val errorMsg = "获取订单表失败: ${error?.message ?: "未知错误"}"
             logger.error(errorMsg)
-            throw IllegalStateException(errorMsg)
+            throw IllegalStateException(errorMsg, error)
         }
         
         val orderbook = orderbookResult.getOrNull()

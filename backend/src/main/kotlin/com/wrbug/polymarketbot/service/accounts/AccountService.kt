@@ -15,8 +15,10 @@ import com.wrbug.polymarketbot.util.getEventSlug
 import com.google.gson.JsonObject
 import com.google.gson.JsonPrimitive
 import com.wrbug.polymarketbot.service.common.PolymarketClobService
+import com.wrbug.polymarketbot.service.common.OrderbookNotFoundException
 import com.wrbug.polymarketbot.service.common.BlockchainService
 import com.wrbug.polymarketbot.service.common.MarketService
+import com.wrbug.polymarketbot.service.common.MarketPriceService
 import com.wrbug.polymarketbot.service.common.PolymarketApiKeyService
 import com.wrbug.polymarketbot.service.copytrading.orders.OrderPushService
 import com.wrbug.polymarketbot.service.copytrading.orders.OrderSigningService
@@ -44,6 +46,7 @@ class AccountService(
     private val orderSigningService: OrderSigningService,
     private val cryptoUtils: CryptoUtils,
     private val marketService: MarketService,  // 市场信息服务
+    private val marketPriceService: MarketPriceService,  // 市场价格服务（用于订单簿回退）
     private val telegramNotificationService: TelegramNotificationService? = null,  // 可选，避免循环依赖
     private val relayClientService: RelayClientService,
     private val jsonUtils: JsonUtils
@@ -1211,15 +1214,32 @@ class AccountService(
             // - 市价买单：从订单表获取 bestAsk（最低卖出价），然后加上 BUY_PRICE_ADJUSTMENT
             // 限价订单：使用用户输入的价格
             // 注意：使用 outcomeIndex 和 tokenId 支持多元市场（二元、三元及以上）
-            // 如果无法获取订单表，将抛出异常
+            // 如果无法获取订单表，尝试从市场价格回退
             val sellPrice = if (request.orderType == "MARKET") {
                 try {
                     // 市价单：从订单表获取最优价（卖出订单，需要 bestBid）
                     // 通过 tokenId 获取对应 outcome 的订单表，支持多元市场
                     getOptimalPriceFromOrderbook(tokenId, isSellOrder = true)
                 } catch (e: IllegalStateException) {
-                    logger.error("无法获取订单表最优价: ${e.message}", e)
-                    return Result.failure(IllegalStateException("无法获取订单表最优价: ${e.message}"))
+                    if (e.cause is OrderbookNotFoundException) {
+                        // 订单簿不存在（404），尝试从市场价格获取作为回退
+                        logger.warn("订单簿不存在，尝试从市场价格回退: tokenId=$tokenId, marketId=${request.marketId}")
+                        val fallbackPrice = try {
+                            marketPriceService.getCurrentMarketPrice(request.marketId, request.outcomeIndex ?: 0)
+                        } catch (ex: Exception) {
+                            logger.error("回退到市场价格也失败: ${ex.message}", ex)
+                            return Result.failure(IllegalStateException("无法获取卖出价格：订单簿不存在且市场价格获取失败 (${e.message})"))
+                        }
+                        if (fallbackPrice <= BigDecimal.ZERO || fallbackPrice > BigDecimal("0.99")) {
+                            return Result.failure(IllegalStateException("无法获取有效的卖出价格：回退价格异常 ($fallbackPrice)"))
+                        }
+                        // 回退价格使用更激进的调整（减 0.03），确保市价单能快速成交
+                        val adjustedFallback = fallbackPrice.subtract(BigDecimal("0.03"))
+                        adjustedFallback.coerceAtLeast(BigDecimal("0.01")).coerceAtMost(BigDecimal("0.99")).toPlainString()
+                    } else {
+                        logger.error("无法获取订单表最优价: ${e.message}", e)
+                        return Result.failure(IllegalStateException("无法获取订单表最优价: ${e.message}"))
+                    }
                 }
             } else {
                 // 限价订单：使用用户输入的价格
@@ -1251,6 +1271,15 @@ class AccountService(
             // 7. 解密私钥
             val decryptedPrivateKey = decryptPrivateKey(account)
 
+            // 检查是否为 Neg Risk 市场，使用对应的 Exchange 合约签名
+            val negRisk = marketService.getNegRiskByConditionId(request.marketId) == true
+            val exchangeContract = if (negRisk) {
+                logger.info("Neg Risk 市场，使用 Neg Risk Exchange 签名: marketId=${request.marketId}")
+                orderSigningService.getExchangeContract(negRisk = true)
+            } else {
+                null
+            }
+
             // 获取费率（根据 Polymarket Maker Rebates Program 要求）
             val feeRateResult = clobService.getFeeRate(tokenId)
             val feeRateBps = if (feeRateResult.isSuccess) {
@@ -1272,7 +1301,8 @@ class AccountService(
                     signatureType = orderSigningService.getSignatureTypeForWalletType(account.walletType),
                     nonce = "0",
                     feeRateBps = feeRateBps,  // 使用动态获取的费率
-                    expiration = expiration
+                    expiration = expiration,
+                    exchangeContract = exchangeContract  // Neg Risk 市场使用对应的 Exchange 合约
                 )
             } catch (e: Exception) {
                 logger.error("创建并签名订单失败", e)
