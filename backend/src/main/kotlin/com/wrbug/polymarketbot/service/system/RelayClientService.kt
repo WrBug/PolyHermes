@@ -39,8 +39,14 @@ class RelayClientService(
     // ConditionalTokens 合约地址
     private val conditionalTokensAddress = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045"
 
-    // USDC.e 合约地址（普通市场抵押品）
-    private val usdcContractAddress = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
+    // pUSD 合约地址（普通市场抵押品）
+    private val usdcContractAddress = "0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB"
+
+    // USDC.e 合约地址（仅用于 wrap 到 pUSD）
+    private val usdceContractAddress = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
+
+    // CollateralOnramp 合约地址（USDC.e → pUSD）
+    private val collateralOnrampAddress = "0x93070a847efEf7F70739046A929D47a521F5B8ee"
 
     // Neg Risk 市场使用的 WrappedCollateral 合约地址（Polygon，neg-risk-ctf-adapter）
     private val negRiskWrappedCollateralAddress = "0x3A3BD7bb9528E159577F7C2e685CC81A765002E2"
@@ -318,6 +324,41 @@ class RelayClientService(
         return SafeTransaction(
             to = usdcContractAddress,
             operation = 0,  // CALL
+            data = callData,
+            value = "0"
+        )
+    }
+
+    /**
+     * 创建 USDC.e approve 交易（用于 wrap 到 pUSD）
+     * 授权 CollateralOnramp 合约花费用户的 USDC.e
+     */
+    fun createUsdceApproveForWrapTx(amount: BigInteger): SafeTransaction {
+        val functionSelector = EthereumUtils.getFunctionSelector("approve(address,uint256)")
+        val encodedSpender = EthereumUtils.encodeAddress(collateralOnrampAddress)
+        val encodedAmount = EthereumUtils.encodeUint256(amount)
+        val callData = "0x" + functionSelector.removePrefix("0x") + encodedSpender + encodedAmount
+        return SafeTransaction(
+            to = usdceContractAddress,
+            operation = 0,
+            data = callData,
+            value = "0"
+        )
+    }
+
+    /**
+     * 创建 USDC.e → pUSD wrap 交易
+     * CollateralOnramp.wrap(address _asset, address _to, uint256 _amount)
+     */
+    fun createWrapToPusdTx(recipientAddress: String, amount: BigInteger): SafeTransaction {
+        val functionSelector = EthereumUtils.getFunctionSelector("wrap(address,address,uint256)")
+        val asset = EthereumUtils.encodeAddress(usdceContractAddress)
+        val to = EthereumUtils.encodeAddress(recipientAddress)
+        val amt = EthereumUtils.encodeUint256(amount)
+        val callData = "0x" + functionSelector.removePrefix("0x") + asset + to + amt
+        return SafeTransaction(
+            to = collateralOnrampAddress,
+            operation = 0,
             data = callData,
             value = "0"
         )

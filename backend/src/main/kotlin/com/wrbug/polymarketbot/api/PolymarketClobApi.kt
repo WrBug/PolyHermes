@@ -73,7 +73,7 @@ interface PolymarketClobApi {
      */
     @POST("/orders/batch")
     suspend fun createOrdersBatch(
-        @Body request: CreateOrdersBatchRequest
+        @Body request: List<NewOrderRequest>
     ): Response<List<OrderResponse>>
     
     /**
@@ -174,22 +174,25 @@ interface PolymarketClobApi {
 // 请求和响应数据类
 
 /**
- * 签名的订单对象（根据官方文档）
- * 参考: https://docs.polymarket.com/developers/CLOB/orders/create-order
+ * V2 签名的订单对象
+ * EIP-712 签名字段: salt, maker, signer, tokenId, makerAmount, takerAmount, side, signatureType, timestamp, metadata, builder
+ * API payload 额外字段: taker, expiration (不在 EIP-712 签名中，但 API 请求需要)
+ * 参考: clob-client-v2/src/types/ordersV2.ts NewOrderV2
  */
 data class SignedOrderObject(
     val salt: Long,                    // random salt used to create unique order
     val maker: String,                  // maker address (funder)
     val signer: String,                 // signing address
-    val taker: String,                  // taker address (operator)
+    val taker: String,                  // taker address (zero address for public orders, NOT in EIP-712 signing)
     val tokenId: String,                // ERC1155 token ID of conditional token being traded
     val makerAmount: String,            // maximum amount maker is willing to spend
     val takerAmount: String,            // minimum amount taker will pay the maker in return
-    val expiration: String,             // unix expiration timestamp
-    val nonce: String,                  // maker's exchange nonce of the order is associated
-    val feeRateBps: String,             // fee rate basis points as required by the operator
     val side: String,                   // buy or sell enum index ("BUY" or "SELL")
     val signatureType: Int,             // signature type enum index
+    val timestamp: String,              // order creation time in milliseconds (V2)
+    val expiration: String,             // expiration timestamp unix seconds, "0" = no expiration (NOT in EIP-712 signing)
+    val metadata: String,               // bytes32 metadata (V2)
+    val builder: String,                // bytes32 builder code (V2)
     val signature: String               // hex encoded signature
 )
 
@@ -198,10 +201,11 @@ data class SignedOrderObject(
  * 参考: https://docs.polymarket.com/developers/CLOB/orders/create-order
  */
 data class NewOrderRequest(
-    val order: SignedOrderObject,       // signed object
+    val order: SignedOrderObject,       // V2 signed object
     val owner: String,                  // api key of order owner
     val orderType: String,              // order type ("FOK", "GTC", "GTD", "FAK")
-    val deferExec: Boolean = false      // defer execution flag
+    val deferExec: Boolean = false,     // defer execution
+    val postOnly: Boolean = false       // post only (maker-only)
 )
 
 /**
@@ -234,26 +238,6 @@ data class NewOrderResponse(
             ?: "创建订单失败"
     }
 }
-
-/**
- * 旧的订单请求格式（已废弃，保留用于兼容）
- * @deprecated 使用 NewOrderRequest 代替
- */
-@Deprecated("使用 NewOrderRequest 代替，需要签名的订单对象")
-data class CreateOrderRequest(
-    val market: String? = null,      // condition ID（可选，如果提供tokenId则不需要）
-    val token_id: String? = null,    // token ID（可选，如果提供market则不需要）
-    val side: String,                // "BUY" or "SELL"
-    val price: String,
-    val size: String,
-    val type: String = "LIMIT",
-    val expiration: Long? = null
-)
-
-@Deprecated("使用 NewOrderRequest 代替")
-data class CreateOrdersBatchRequest(
-    val orders: List<NewOrderRequest>
-)
 
 data class CancelOrdersBatchRequest(
     val orderIds: List<String>

@@ -61,7 +61,6 @@ private data class PeriodContext(
     val apiSecretDecrypted: String,
     val apiPassphraseDecrypted: String,
     val clobApi: PolymarketClobApi,
-    val feeRateByTokenId: Map<String, String>,
     val signatureType: Int,
     val tokenIds: List<String>,
     val marketTitle: String?
@@ -152,9 +151,6 @@ class CryptoTailStrategyExecutionService(
         }
 
         val clobApi = retrofitFactory.createClobApi(account.apiKey, apiSecret, apiPassphrase, account.walletAddress)
-        val feeRateByTokenId = tokenIds.associate { tokenId ->
-            tokenId to (clobService.getFeeRate(tokenId).getOrNull()?.toString() ?: "0")
-        }
         val signatureType = orderSigningService.getSignatureTypeForWalletType(account.walletType)
 
         if (strategy.amountMode.uppercase() != "RATIO" && strategy.amountValue < MIN_ORDER_USDC) return null
@@ -167,7 +163,6 @@ class CryptoTailStrategyExecutionService(
             apiSecretDecrypted = apiSecret,
             apiPassphraseDecrypted = apiPassphrase,
             clobApi = clobApi,
-            feeRateByTokenId = feeRateByTokenId,
             signatureType = signatureType,
             tokenIds = tokenIds,
             marketTitle = marketTitle
@@ -397,7 +392,6 @@ class CryptoTailStrategyExecutionService(
             }
             val priceStr = price.toPlainString()
             val size = computeSize(amountUsdc, price)
-            val feeRateBps = ctx.feeRateByTokenId[tokenId] ?: "0"
             val signedOrder = orderSigningService.createAndSignOrder(
                 privateKey = ctx.decryptedPrivateKey,
                 makerAddress = ctx.account.proxyAddress,
@@ -405,16 +399,12 @@ class CryptoTailStrategyExecutionService(
                 side = "BUY",
                 price = priceStr,
                 size = size,
-                signatureType = ctx.signatureType,
-                nonce = "0",
-                feeRateBps = feeRateBps,
-                expiration = "0"
+                signatureType = ctx.signatureType
             )
             val orderRequest = NewOrderRequest(
                 order = signedOrder,
                 owner = ctx.account.apiKey!!,
-                orderType = "FAK",
-                deferExec = false
+                orderType = "FAK"
             )
             submitOrderAndSaveRecord(
                 ctx.clobApi,
@@ -609,7 +599,6 @@ class CryptoTailStrategyExecutionService(
             ""
         }
         val clobApi = retrofitFactory.createClobApi(account.apiKey, apiSecret, apiPassphrase, account.walletAddress)
-        val feeRateBps = clobService.getFeeRate(tokenId).getOrNull()?.toString() ?: "0"
         val signatureType = orderSigningService.getSignatureTypeForWalletType(account.walletType)
 
         val signedOrder = orderSigningService.createAndSignOrder(
@@ -619,16 +608,12 @@ class CryptoTailStrategyExecutionService(
             side = "BUY",
             price = priceStr,
             size = size,
-            signatureType = signatureType,
-            nonce = "0",
-            feeRateBps = feeRateBps,
-            expiration = "0"
+            signatureType = signatureType
         )
         val orderRequest = NewOrderRequest(
             order = signedOrder,
             owner = account.apiKey!!,
-            orderType = "FAK",
-            deferExec = false
+            orderType = "FAK"
         )
         submitOrderAndSaveRecord(
             clobApi,
@@ -745,7 +730,6 @@ class CryptoTailStrategyExecutionService(
 
                     val priceStr = priceRounded.toPlainString()
                     val sizeStr = size.toPlainString()
-                    val feeRateBps = ctx.feeRateByTokenId[tokenId] ?: "0"
 
                     val signedOrder = orderSigningService.createAndSignOrder(
                         privateKey = ctx.decryptedPrivateKey,
@@ -754,17 +738,13 @@ class CryptoTailStrategyExecutionService(
                         side = "BUY",
                         price = priceStr,
                         size = sizeStr,
-                        signatureType = ctx.signatureType,
-                        nonce = "0",
-                        feeRateBps = feeRateBps,
-                        expiration = "0"
+                        signatureType = ctx.signatureType
                     )
 
                     val orderRequest = NewOrderRequest(
                         order = signedOrder,
                         owner = ctx.account.apiKey!!,
-                        orderType = "FAK",
-                        deferExec = false
+                        orderType = "FAK"
                     )
 
                     val orderResult = submitOrderForManualOrder(

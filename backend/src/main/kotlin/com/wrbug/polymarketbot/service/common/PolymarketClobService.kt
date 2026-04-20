@@ -223,15 +223,7 @@ class PolymarketClobService(
         }
     }
     
-    /**
-     * 创建订单（已废弃，使用 createSignedOrder 代替）
-     * @deprecated 使用 createSignedOrder 代替，需要签名的订单对象
-     */
-    @Deprecated("使用 createSignedOrder 代替")
-    suspend fun createOrder(request: CreateOrderRequest): Result<OrderResponse> {
-        return Result.failure(UnsupportedOperationException("已废弃，请使用 createSignedOrder 方法"))
-    }
-    
+
     /**
      * 创建签名的订单
      * 注意：此方法需要完整的订单签名逻辑，当前为占位实现

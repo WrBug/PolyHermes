@@ -10,7 +10,7 @@ import java.math.BigInteger
 object EthereumUtils {
     
     // Polymarket 合约地址（Polygon 主网）
-    private val COLLATERAL_TOKEN_ADDRESS = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174" // USDC
+    private val COLLATERAL_TOKEN_ADDRESS = "0xC011a7E12a19f7B1f670d46F03B03f3342E82DFB" // pUSD
     private val CONDITIONAL_TOKENS_ADDRESS = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045" // ConditionalTokens
     
     /**

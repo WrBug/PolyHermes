@@ -562,16 +562,7 @@ open class CopyOrderTrackingService(
                     // 解密私钥
                     val decryptedPrivateKey = decryptPrivateKey(account)
 
-                    // 获取费率（根据 Polymarket Maker Rebates Program 要求）
-                    val feeRateResult = clobService.getFeeRate(tokenId)
-                    val feeRateBps = if (feeRateResult.isSuccess) {
-                        feeRateResult.getOrNull()?.toString() ?: "0"
-                    } else {
-                        logger.warn("获取费率失败，使用默认值 0: tokenId=$tokenId, error=${feeRateResult.exceptionOrNull()?.message}")
-                        "0"
-                    }
-
-                    logger.info("准备创建买入订单: copyTradingId=${copyTrading.id}, tradeId=${trade.id}, leaderPrice=${trade.price}, tolerance=${copyTrading.priceTolerance}, calculatedPrice=$buyPrice, quantity=$finalBuyQuantity, baseFee=$feeRateBps")
+                    logger.info("准备创建买入订单: copyTradingId=${copyTrading.id}, tradeId=${trade.id}, leaderPrice=${trade.price}, tolerance=${copyTrading.priceTolerance}, calculatedPrice=$buyPrice, quantity=$finalBuyQuantity")
 
                     // Neg Risk 市场需用 Neg Risk Exchange 签约，否则服务端返回 invalid signature
                     val negRisk = marketService.getNegRiskByConditionId(effectiveMarketId) == true
@@ -594,7 +585,6 @@ open class CopyOrderTrackingService(
                         owner = account.apiKey,
                         copyTradingId = copyTrading.id!!,
                         tradeId = trade.id,
-                        feeRateBps = feeRateBps,
                         signatureType = orderSigningService.getSignatureTypeForWalletType(account.walletType)
                     )
 
@@ -1018,15 +1008,6 @@ open class CopyOrderTrackingService(
         // 8. 解密私钥（在方法开始时解密一次，后续复用）
         val decryptedPrivateKey = decryptPrivateKey(account)
 
-        // 获取费率（根据 Polymarket Maker Rebates Program 要求）
-        val feeRateResult = clobService.getFeeRate(tokenId)
-        val feeRateBps = if (feeRateResult.isSuccess) {
-            feeRateResult.getOrNull()?.toString() ?: "0"
-        } else {
-            logger.warn("获取费率失败，使用默认值 0: tokenId=$tokenId, error=${feeRateResult.exceptionOrNull()?.message}")
-            "0"
-        }
-
         // 9. Neg Risk 市场需用 Neg Risk Exchange 签约
         val negRiskSell = marketService.getNegRiskByConditionId(leaderSellTrade.market) == true
         val exchangeContractSell = orderSigningService.getExchangeContract(negRiskSell)
@@ -1042,9 +1023,6 @@ open class CopyOrderTrackingService(
                 price = sellPrice.toString(),
                 size = totalMatched.toString(),
                 signatureType = orderSigningService.getSignatureTypeForWalletType(account.walletType),
-                nonce = "0",
-                feeRateBps = feeRateBps,  // 使用动态获取的费率
-                expiration = "0",
                 exchangeContract = exchangeContractSell
             )
         } catch (e: Exception) {
@@ -1058,8 +1036,7 @@ open class CopyOrderTrackingService(
         val orderRequest = NewOrderRequest(
             order = signedOrder,
             owner = account.apiKey,
-            orderType = "FAK",  // Fill-And-Kill
-            deferExec = false
+            orderType = "FAK"  // Fill-And-Kill
         )
 
         // 12. 创建带认证的CLOB API客户端（使用解密后的凭证）
@@ -1084,7 +1061,6 @@ open class CopyOrderTrackingService(
             owner = account.apiKey,
             copyTradingId = copyTrading.id,
             tradeId = leaderSellTrade.id,
-            feeRateBps = feeRateBps,
             signatureType = orderSigningService.getSignatureTypeForWalletType(account.walletType)
         )
 
@@ -1179,7 +1155,6 @@ open class CopyOrderTrackingService(
      * @param owner API Key（用于owner字段）
      * @param copyTradingId 跟单配置ID（用于日志）
      * @param tradeId Leader 交易ID（用于日志）
-     * @param feeRateBps 费率基点（从API动态获取）
      * @param signatureType 签名类型（1=Magic, 2=Safe）
      * @return 成功返回订单ID，失败返回异常
      */
@@ -1196,7 +1171,6 @@ open class CopyOrderTrackingService(
         owner: String,
         copyTradingId: Long,
         tradeId: String,
-        feeRateBps: String,
         signatureType: Int
     ): Result<String> {
         var lastError: Exception? = null
@@ -1213,9 +1187,6 @@ open class CopyOrderTrackingService(
                     price = price,
                     size = size,
                     signatureType = signatureType,
-                    nonce = "0",
-                    feeRateBps = feeRateBps,  // 使用动态获取的费率
-                    expiration = "0",
                     exchangeContract = exchangeContract
                 )
 
@@ -1232,8 +1203,7 @@ open class CopyOrderTrackingService(
                 val orderRequest = NewOrderRequest(
                     order = signedOrder,
                     owner = owner,
-                    orderType = "FAK",  // Fill-And-Kill
-                    deferExec = false
+                    orderType = "FAK"  // Fill-And-Kill
                 )
 
                 // 调用 API 创建订单

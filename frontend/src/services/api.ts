@@ -284,9 +284,21 @@ export const apiService = {
     /**
      * 赎回仓位
      */
-    redeemPositions: (data: any) => 
+    redeemPositions: (data: any) =>
       apiClient.post<ApiResponse<any>>('/accounts/positions/redeem', data),
-    
+
+    /**
+     * 将 USDC.e wrap 为 pUSD（V2 迁移）
+     */
+    wrapToPusd: (accountId: number) =>
+      apiClient.post<ApiResponse<{ transactionHash: string | null }>>('/accounts/wrap-to-pusd', { accountId }),
+
+    /**
+     * 查询 USDC.e 余额（V2 迁移用）
+     */
+    getUsdceBalance: (accountId: number) =>
+      apiClient.post<ApiResponse<{ balance: string }>>('/accounts/usdce-balance', { accountId }),
+
   },
   
   /**

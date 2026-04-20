@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Card, Table, Button, Space, Tag, Popconfirm, message, Typography, Spin, Modal, Descriptions, Divider, Form, Input, Alert, Tooltip, List, Empty } from 'antd'
-import { PlusOutlined, ReloadOutlined, EditOutlined, CopyOutlined, EyeOutlined, DeleteOutlined, WalletOutlined } from '@ant-design/icons'
+import { PlusOutlined, ReloadOutlined, EditOutlined, CopyOutlined, EyeOutlined, DeleteOutlined, WalletOutlined, SwapOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useAccountStore } from '../store/accountStore'
 import type { Account } from '../types'
@@ -8,6 +8,7 @@ import { useMediaQuery } from 'react-responsive'
 import { formatUSDC } from '../utils'
 import AccountImportForm from '../components/AccountImportForm'
 import AccountSetupStatusBlock from '../components/AccountSetupStatusBlock'
+import apiService from '../services/api'
 
 const { Title } = Typography
 
@@ -27,6 +28,43 @@ const AccountList: React.FC = () => {
   const [editLoading, setEditLoading] = useState(false)
   const [accountImportModalVisible, setAccountImportModalVisible] = useState(false)
   const [accountImportForm] = Form.useForm()
+  const [wrapLoading, setWrapLoading] = useState<Record<number, boolean>>({})
+
+  const handleWrapToPusd = async (account: Account) => {
+    try {
+      setWrapLoading(prev => ({ ...prev, [account.id]: true }))
+      const res = await apiService.accounts.getUsdceBalance(account.id)
+      if (res.data.code !== 0 || !res.data.data) {
+        message.error(res.data.msg || '查询 USDC.e 余额失败')
+        return
+      }
+      const balance = parseFloat(res.data.data.balance)
+      if (balance <= 0) {
+        message.info('USDC.e 余额为 0，无需迁移')
+        return
+      }
+      Modal.confirm({
+        title: 'USDC.e → pUSD 迁移',
+        content: `检测到 ${balance.toFixed(2)} USDC.e，将全部 wrap 为 pUSD。确认继续？`,
+        okText: '确认迁移',
+        cancelText: '取消',
+        onOk: async () => {
+          const wrapRes = await apiService.accounts.wrapToPusd(account.id)
+          if (wrapRes.data.code === 0) {
+            const txHash = wrapRes.data.data?.transactionHash
+            message.success(txHash ? `迁移成功，交易: ${txHash.slice(0, 10)}...` : '迁移成功（无需操作）')
+            fetchAccountBalance(account.id)
+          } else {
+            message.error(wrapRes.data.msg || '迁移失败')
+          }
+        }
+      })
+    } catch (e: any) {
+      message.error(e.message || '迁移失败')
+    } finally {
+      setWrapLoading(prev => ({ ...prev, [account.id]: false }))
+    }
+  }
 
   useEffect(() => {
     fetchAccounts()
@@ -371,6 +409,26 @@ const AccountList: React.FC = () => {
               onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
             >
               <EditOutlined style={{ fontSize: '16px', color: '#1890ff' }} />
+            </div>
+          </Tooltip>
+
+          <Tooltip title="USDC.e → pUSD">
+            <div
+              onClick={() => handleWrapToPusd(record)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '32px',
+                height: '32px',
+                cursor: wrapLoading[record.id] ? 'wait' : 'pointer',
+                borderRadius: '6px',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fff7e6'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              <SwapOutlined style={{ fontSize: '16px', color: '#fa8c16' }} spin={wrapLoading[record.id]} />
             </div>
           </Tooltip>
 

@@ -815,9 +815,11 @@ class OrderStatusUpdateService(
                     val actualPrice = orderDetail.price?.toSafeBigDecimal() ?: order.price
                     val actualSize = orderDetail.originalSize?.toSafeBigDecimal() ?: order.quantity
                     val actualOutcome = orderDetail.outcome
+                    // 使用交易所订单的实际创建时间（API返回秒级，转为毫秒）
+                    val actualCreatedAt = if (orderDetail.createdAt > 0) orderDetail.createdAt * 1000 else order.createdAt
 
                     // 更新订单数据（如果实际数据与临时数据不同）
-                    val needUpdate = actualPrice != order.price || actualSize != order.quantity
+                    val needUpdate = actualPrice != order.price || actualSize != order.quantity || actualCreatedAt != order.createdAt
 
                     // 先保存更新后的订单，标记 notificationSent = true
                     // 这样可以防止其他并发任务重复发送通知
@@ -838,7 +840,7 @@ class OrderStatusUpdateService(
                         status = order.status,
                         notificationSent = true,  // 标记为已发送通知
                         source = order.source,  // 保留原始订单来源
-                        createdAt = order.createdAt,
+                        createdAt = actualCreatedAt,
                         updatedAt = System.currentTimeMillis()
                     )
 

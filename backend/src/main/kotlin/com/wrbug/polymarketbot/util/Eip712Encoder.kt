@@ -167,9 +167,8 @@ object Eip712Encoder {
     }
     
     /**
-     * 编码 ExchangeOrder 域分隔符
-     * 参考: @polymarket/order-utils 的 ExchangeOrderBuilder
-     * Domain: { name: "Polymarket CTF Exchange", version: "1", chainId: chainId, verifyingContract: exchangeContract }
+     * 编码 ExchangeOrder V2 域分隔符
+     * Domain: { name: "Polymarket CTF Exchange", version: "2", chainId: chainId, verifyingContract: exchangeContract }
      */
     fun encodeExchangeDomain(
         chainId: Long,
@@ -184,9 +183,9 @@ object Eip712Encoder {
                 "verifyingContract" to "address"
             )
         )
-        
+
         val nameHash = encodeString("Polymarket CTF Exchange")
-        val versionHash = encodeString("1")
+        val versionHash = encodeString("2")
         val chainIdBytes = encodeUint256(BigInteger.valueOf(chainId))
         val contractBytes = encodeAddress(verifyingContract)
         
@@ -201,23 +200,21 @@ object Eip712Encoder {
     }
     
     /**
-     * 编码 ExchangeOrder 消息哈希
-     * 参考: @polymarket/order-utils 的 ExchangeOrderBuilder
-     * Order: { salt, maker, signer, taker, tokenId, makerAmount, takerAmount, expiration, nonce, feeRateBps, side, signatureType }
+     * 编码 ExchangeOrder V2 消息哈希
+     * V2 Order: { salt, maker, signer, tokenId, makerAmount, takerAmount, side, signatureType, timestamp, metadata, builder }
      */
     fun encodeExchangeOrder(
         salt: Long,
         maker: String,
         signer: String,
-        taker: String,
         tokenId: String,
         makerAmount: String,
         takerAmount: String,
-        expiration: String,
-        nonce: String,
-        feeRateBps: String,
         side: String,
-        signatureType: Int
+        signatureType: Int,
+        timestamp: String,
+        metadata: String,
+        builder: String
     ): ByteArray {
         val orderTypeHash = encodeType(
             "Order",
@@ -225,57 +222,51 @@ object Eip712Encoder {
                 "salt" to "uint256",
                 "maker" to "address",
                 "signer" to "address",
-                "taker" to "address",
                 "tokenId" to "uint256",
                 "makerAmount" to "uint256",
                 "takerAmount" to "uint256",
-                "expiration" to "uint256",
-                "nonce" to "uint256",
-                "feeRateBps" to "uint256",
                 "side" to "uint8",
-                "signatureType" to "uint8"
+                "signatureType" to "uint8",
+                "timestamp" to "uint256",
+                "metadata" to "bytes32",
+                "builder" to "bytes32"
             )
         )
-        
-        // 编码订单字段
+
         val saltBytes = encodeUint256(BigInteger.valueOf(salt))
         val makerBytes = encodeAddress(maker)
         val signerBytes = encodeAddress(signer)
-        val takerBytes = encodeAddress(taker)
         val tokenIdBytes = encodeUint256(BigInteger(tokenId))
         val makerAmountBytes = encodeUint256(BigInteger(makerAmount))
         val takerAmountBytes = encodeUint256(BigInteger(takerAmount))
-        val expirationBytes = encodeUint256(BigInteger(expiration))
-        val nonceBytes = encodeUint256(BigInteger(nonce))
-        val feeRateBpsBytes = encodeUint256(BigInteger(feeRateBps))
-        
-        // side: BUY = 0, SELL = 1 (uint8，但需要编码为 32 字节)
+
         val sideValue = when (side.uppercase()) {
             "BUY" -> 0
             "SELL" -> 1
             else -> throw IllegalArgumentException("side 必须是 BUY 或 SELL")
         }
-        // uint8 类型，但 EIP-712 编码时仍需要 32 字节
         val sideBytes = encodeUint256(BigInteger.valueOf(sideValue.toLong()))
         val signatureTypeBytes = encodeUint256(BigInteger.valueOf(signatureType.toLong()))
-        
-        // 组合所有字段
-        val encoded = ByteArray(32 * 13)  // 13 个字段，每个 32 字节
+
+        val timestampBytes = encodeUint256(BigInteger(timestamp))
+        val metadataBytes = Numeric.hexStringToByteArray(metadata.removePrefix("0x").padStart(64, '0'))
+        val builderBytes = Numeric.hexStringToByteArray(builder.removePrefix("0x").padStart(64, '0'))
+
+        val encoded = ByteArray(32 * 12)  // typeHash + 11 个字段
         var offset = 0
         System.arraycopy(orderTypeHash, 0, encoded, offset, 32); offset += 32
         System.arraycopy(saltBytes, 0, encoded, offset, 32); offset += 32
         System.arraycopy(makerBytes, 0, encoded, offset, 32); offset += 32
         System.arraycopy(signerBytes, 0, encoded, offset, 32); offset += 32
-        System.arraycopy(takerBytes, 0, encoded, offset, 32); offset += 32
         System.arraycopy(tokenIdBytes, 0, encoded, offset, 32); offset += 32
         System.arraycopy(makerAmountBytes, 0, encoded, offset, 32); offset += 32
         System.arraycopy(takerAmountBytes, 0, encoded, offset, 32); offset += 32
-        System.arraycopy(expirationBytes, 0, encoded, offset, 32); offset += 32
-        System.arraycopy(nonceBytes, 0, encoded, offset, 32); offset += 32
-        System.arraycopy(feeRateBpsBytes, 0, encoded, offset, 32); offset += 32
         System.arraycopy(sideBytes, 0, encoded, offset, 32); offset += 32
-        System.arraycopy(signatureTypeBytes, 0, encoded, offset, 32)
-        
+        System.arraycopy(signatureTypeBytes, 0, encoded, offset, 32); offset += 32
+        System.arraycopy(timestampBytes, 0, encoded, offset, 32); offset += 32
+        System.arraycopy(metadataBytes, 0, encoded, offset, 32); offset += 32
+        System.arraycopy(builderBytes, 0, encoded, offset, 32)
+
         return keccak256(encoded)
     }
     

@@ -371,8 +371,8 @@ class AccountService(
      */
     private val setupApprovalSpenders = mapOf(
         "CTF_CONTRACT" to "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045",           // Conditional Tokens
-        "CTF_EXCHANGE" to "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E",             // 普通市场交易所
-        "NEG_RISK_EXCHANGE" to "0xC5d563A36AE78145C45a50134d48A1215220f80a",         // 负风险市场交易所
+        "CTF_EXCHANGE" to "0xE111180000d2663C0091e4f400237545B87B996B",             // 普通市场交易所
+        "NEG_RISK_EXCHANGE" to "0xe2222d279d744050d28e00520010520000310F59",         // 负风险市场交易所
         "NEG_RISK_ADAPTER" to "0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296"          // 负风险适配器（非 WCOL 地址）
     )
 
@@ -1244,21 +1244,8 @@ class AccountService(
                 else -> "GTC"
             }
 
-            // GTC 和 FOK 订单的 expiration 必须为 "0"
-            // 只有 GTD 订单才需要设置具体的过期时间
-            val expiration = "0"
-
             // 7. 解密私钥
             val decryptedPrivateKey = decryptPrivateKey(account)
-
-            // 获取费率（根据 Polymarket Maker Rebates Program 要求）
-            val feeRateResult = clobService.getFeeRate(tokenId)
-            val feeRateBps = if (feeRateResult.isSuccess) {
-                feeRateResult.getOrNull()?.toString() ?: "0"
-            } else {
-                logger.warn("获取费率失败，使用默认值 0: tokenId=$tokenId, error=${feeRateResult.exceptionOrNull()?.message}")
-                "0"
-            }
 
             // 11. 创建并签名订单（使用计算后的卖出数量，按账户钱包类型使用对应 signatureType）
             val signedOrder = try {
@@ -1269,10 +1256,7 @@ class AccountService(
                     side = "SELL",
                     price = sellPrice,
                     size = sellQuantity.toPlainString(),  // 使用计算后的卖出数量
-                    signatureType = orderSigningService.getSignatureTypeForWalletType(account.walletType),
-                    nonce = "0",
-                    feeRateBps = feeRateBps,  // 使用动态获取的费率
-                    expiration = expiration
+                    signatureType = orderSigningService.getSignatureTypeForWalletType(account.walletType)
                 )
             } catch (e: Exception) {
                 logger.error("创建并签名订单失败", e)
@@ -1284,8 +1268,7 @@ class AccountService(
             val newOrderRequest = com.wrbug.polymarketbot.api.NewOrderRequest(
                 order = signedOrder,
                 owner = account.apiKey,  // API Key
-                orderType = orderType,
-                deferExec = false
+                orderType = orderType
             )
 
             // 13. 解密 API 凭证并使用账户的API凭证创建订单
@@ -1924,6 +1907,32 @@ class AccountService(
             logger.warn("检查活跃订单异常: ${e.message}，允许删除账户", e)
             false
         }
+    }
+
+    /**
+     * 将账户的 USDC.e wrap 为 pUSD
+     */
+    suspend fun wrapUsdcToPusd(accountId: Long): Result<String?> {
+        val account = accountRepository.findById(accountId).orElse(null)
+            ?: return Result.failure(IllegalArgumentException("账户不存在"))
+        if (account.proxyAddress.isBlank()) {
+            return Result.failure(IllegalStateException("账户代理地址不存在"))
+        }
+        val privateKey = cryptoUtils.decrypt(account.privateKey)
+        val walletType = WalletType.fromStringOrDefault(account.walletType, WalletType.SAFE)
+        return blockchainService.wrapUsdcToPusd(privateKey, account.proxyAddress, walletType)
+    }
+
+    /**
+     * 查询 USDC.e 余额（用于迁移提示）
+     */
+    suspend fun getUsdceBalance(accountId: Long): Result<BigDecimal> {
+        val account = accountRepository.findById(accountId).orElse(null)
+            ?: return Result.failure(IllegalArgumentException("账户不存在"))
+        if (account.proxyAddress.isBlank()) {
+            return Result.failure(IllegalStateException("账户代理地址不存在"))
+        }
+        return blockchainService.queryUsdceBalance(account.proxyAddress)
     }
 }
 

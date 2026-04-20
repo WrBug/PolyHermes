@@ -41,10 +41,9 @@ class OrderSigningService {
         return if (walletTypeEnum == com.wrbug.polymarketbot.enums.WalletType.MAGIC) 1 else 2
     }
 
-    // Polygon 主网合约地址（标准 CTF Exchange）
-    private val EXCHANGE_CONTRACT = "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E"
-    // Neg Risk CTF Exchange（neg risk 市场需用此合约签约，否则服务端返回 invalid signature）
-    private val NEG_RISK_EXCHANGE_CONTRACT = "0xC5d563A36AE78145C45a50134d48A1215220f80a"
+    // V2 合约地址
+    private val EXCHANGE_CONTRACT = "0xE111180000d2663C0091e4f400237545B87B996B"
+    private val NEG_RISK_EXCHANGE_CONTRACT = "0xe2222d279d744050d28e00520010520000310F59"
     private val CHAIN_ID = 137L
     
     // USDC 有 6 位小数
@@ -156,8 +155,8 @@ class OrderSigningService {
     }
     
     /**
-     * 创建并签名订单
-     * 
+     * 创建并签名订单 (V2)
+     *
      * @param privateKey 私钥（十六进制字符串）
      * @param makerAddress maker 地址（funder，通常是 proxyAddress）
      * @param tokenId token ID
@@ -165,9 +164,6 @@ class OrderSigningService {
      * @param price 价格
      * @param size 数量
      * @param signatureType 签名类型（1: Email/Magic, 2: Browser Wallet, 0: EOA）
-     * @param nonce nonce（默认 "0"）
-     * @param feeRateBps 费率基点（默认 "0"）
-     * @param expiration 过期时间戳（秒，0 表示永不过期）
      * @param exchangeContract 签约用 exchange 合约地址；null 时用标准 CTF Exchange，neg risk 市场需传 Neg Risk Exchange
      * @return 签名的订单对象
      */
@@ -178,10 +174,7 @@ class OrderSigningService {
         side: String,
         price: String,
         size: String,
-        signatureType: Int = 2,  // 默认使用 Browser Wallet（与正确订单数据一致）
-        nonce: String = "0",
-        feeRateBps: String = "0",
-        expiration: String = "0",
+        signatureType: Int = 2,
         exchangeContract: String? = null
     ): SignedOrderObject {
         try {
@@ -189,33 +182,32 @@ class OrderSigningService {
             val cleanPrivateKey = privateKey.removePrefix("0x")
             val privateKeyBigInt = BigInteger(cleanPrivateKey, 16)
             val credentials = Credentials.create(privateKeyBigInt.toString(16))
-            // 统一转换为小写，确保与 EIP-712 编码时使用的地址格式一致
-            // EIP-712 编码时地址会被转换为小写，所以订单对象中的地址也应该是小写
             val signerAddress = credentials.address.lowercase()
-            
+
             // 2. 计算订单金额
             val amounts = calculateOrderAmounts(side, size, price)
-            
-            // 3. 生成 salt（使用时间戳，毫秒）
+
+            // 3. 生成 salt 和 timestamp（V2: timestamp 替代 nonce 保证唯一性）
             val salt = generateSalt()
-            
-            // 4. taker 地址（默认使用零地址）
-            val taker = "0x0000000000000000000000000000000000000000"
-            
+            val timestamp = System.currentTimeMillis().toString()
+
+            // 4. V2 字段默认值
+            val metadata = "0x0000000000000000000000000000000000000000000000000000000000000000"
+            val builder = "0x0000000000000000000000000000000000000000000000000000000000000000"
+
             // 5. 确保 maker 地址也是小写格式
             val makerAddressLower = makerAddress.lowercase()
-            
-            // 打印签名前的订单参数（DEBUG 级别，避免敏感信息泄露）
-            logger.debug("========== 订单签名前参数 ==========")
+
+            logger.debug("========== 订单签名前参数 (V2) ==========")
             logger.debug("订单方向: $side, 价格: $price, 数量: $size")
             logger.debug("Token ID: $tokenId")
             logger.debug("Maker: ${makerAddressLower.take(10)}...${makerAddressLower.takeLast(6)}")
             logger.debug("Signer: ${signerAddress.take(10)}...${signerAddress.takeLast(6)}")
             logger.debug("Amounts - Maker: ${amounts.makerAmount}, Taker: ${amounts.takerAmount}")
-            logger.debug("Salt: $salt, Expiration: $expiration, Nonce: $nonce, FeeRateBPS: $feeRateBps")
+            logger.debug("Salt: $salt, Timestamp: $timestamp")
             logger.debug("Signature Type: $signatureType, Chain ID: $CHAIN_ID")
-            
-            // 6. 构建订单数据并签名（neg risk 市场需用 NEG_RISK_EXCHANGE_CONTRACT）
+
+            // 6. 构建订单数据并签名
             val contract = exchangeContract?.takeIf { it.isNotBlank() } ?: EXCHANGE_CONTRACT
             val signature = signOrder(
                 privateKey = privateKey,
@@ -224,44 +216,41 @@ class OrderSigningService {
                 salt = salt,
                 maker = makerAddressLower,
                 signer = signerAddress,
-                taker = taker,
                 tokenId = tokenId,
                 makerAmount = amounts.makerAmount,
                 takerAmount = amounts.takerAmount,
-                expiration = expiration,
-                nonce = nonce,
-                feeRateBps = feeRateBps,
                 side = side.uppercase(),
-                signatureType = signatureType
+                signatureType = signatureType,
+                timestamp = timestamp,
+                metadata = metadata,
+                builder = builder
             )
-            
-            // 7. 创建签名的订单对象
-            // 注意：所有地址字段都使用小写格式，确保与签名时使用的地址一致
+
+            // 7. 创建 V2 签名订单对象
             return SignedOrderObject(
                 salt = salt,
                 maker = makerAddressLower,
                 signer = signerAddress,
-                taker = taker,
+                taker = "0x0000000000000000000000000000000000000000",
                 tokenId = tokenId,
                 makerAmount = amounts.makerAmount,
                 takerAmount = amounts.takerAmount,
-                expiration = expiration,
-                nonce = nonce,
-                feeRateBps = feeRateBps,
                 side = side.uppercase(),
                 signatureType = signatureType,
+                timestamp = timestamp,
+                expiration = "0",
+                metadata = metadata,
+                builder = builder,
                 signature = signature
             )
         } catch (e: Exception) {
-            logger.error("创建并签名订单失败", e)
-            throw RuntimeException("创建并签名订单失败: ${e.message}", e)
+            logger.error("创建并签名订单失败 (V2)", e)
+            throw RuntimeException("创建并签名订单失败 (V2): ${e.message}", e)
         }
     }
     
     /**
-     * 签名订单（EIP-712）
-     * 
-     * 参考: @polymarket/order-utils 的 ExchangeOrderBuilder
+     * 签名订单 V2（EIP-712）
      */
     private fun signOrder(
         privateKey: String,
@@ -270,56 +259,47 @@ class OrderSigningService {
         salt: Long,
         maker: String,
         signer: String,
-        taker: String,
         tokenId: String,
         makerAmount: String,
         takerAmount: String,
-        expiration: String,
-        nonce: String,
-        feeRateBps: String,
         side: String,
-        signatureType: Int
+        signatureType: Int,
+        timestamp: String,
+        metadata: String,
+        builder: String
     ): String {
         try {
-            // 1. 私钥与密钥对
             val cleanPrivateKey = privateKey.removePrefix("0x")
             val privateKeyBigInt = BigInteger(cleanPrivateKey, 16)
             val credentials = Credentials.create(privateKeyBigInt.toString(16))
             val ecKeyPair = credentials.ecKeyPair
 
-            // 2. 编码域分隔符（verifyingContract 显式小写，与 EIP-712 约定一致）
             val domainSeparator = com.wrbug.polymarketbot.util.Eip712Encoder.encodeExchangeDomain(
                 chainId = chainId,
                 verifyingContract = exchangeContract.lowercase()
             )
 
-            // 3. 编码订单消息哈希
-            // signatureType：1 = POLY_PROXY (Magic), 2 = POLY_GNOSIS_SAFE (Safe), 0 = EOA
             val orderHash = com.wrbug.polymarketbot.util.Eip712Encoder.encodeExchangeOrder(
                 salt = salt,
                 maker = maker,
                 signer = signer,
-                taker = taker,
                 tokenId = tokenId,
                 makerAmount = makerAmount,
                 takerAmount = takerAmount,
-                expiration = expiration,
-                nonce = nonce,
-                feeRateBps = feeRateBps,
                 side = side,
-                signatureType = signatureType
+                signatureType = signatureType,
+                timestamp = timestamp,
+                metadata = metadata,
+                builder = builder
             )
 
-            // 4. 计算完整 EIP-712 结构化数据哈希
             val structuredHash = com.wrbug.polymarketbot.util.Eip712Encoder.hashStructuredData(
                 domainSeparator = domainSeparator,
                 messageHash = orderHash
             )
 
-            // 5. 使用私钥签名（needToHash=false，对 32 字节 hash 直接签名）
             val signature = org.web3j.crypto.Sign.signMessage(structuredHash, ecKeyPair, false)
 
-            // 6. 组合 r + s + v
             val rHex = org.web3j.utils.Numeric.toHexString(signature.r).removePrefix("0x").padStart(64, '0')
             val sHex = org.web3j.utils.Numeric.toHexString(signature.s).removePrefix("0x").padStart(64, '0')
             val vBytes = signature.v
@@ -328,8 +308,8 @@ class OrderSigningService {
 
             return "0x$rHex$sHex$vHex"
         } catch (e: Exception) {
-            logger.error("订单签名失败", e)
-            throw RuntimeException("订单签名失败: ${e.message}", e)
+            logger.error("订单签名失败 (V2)", e)
+            throw RuntimeException("订单签名失败 (V2): ${e.message}", e)
         }
     }
     

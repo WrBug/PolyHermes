@@ -112,4 +112,5 @@ __pycache__/
 clob-client/
 builder-relayer-client/
 landing-page/
-
+clob-client-v2/
+settings.local.json

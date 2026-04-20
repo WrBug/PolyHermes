@@ -572,5 +572,53 @@ class AccountController(
         }
     }
 
+    /**
+     * 将 USDC.e wrap 为 pUSD（V2 迁移）
+     */
+    @PostMapping("/wrap-to-pusd")
+    fun wrapToPusd(@RequestBody request: Map<String, Any>): ResponseEntity<ApiResponse<Map<String, String?>>> {
+        return try {
+            val accountId = (request["accountId"] as? Number)?.toLong()
+                ?: return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ACCOUNT_ID_INVALID, messageSource = messageSource))
+            val result = runBlocking { accountService.wrapUsdcToPusd(accountId) }
+            result.fold(
+                onSuccess = { txHash ->
+                    ResponseEntity.ok(ApiResponse.success(mapOf("transactionHash" to txHash)))
+                },
+                onFailure = { e ->
+                    logger.error("USDC.e → pUSD wrap 失败: ${e.message}", e)
+                    ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
+                }
+            )
+        } catch (e: Exception) {
+            logger.error("USDC.e → pUSD wrap 异常: ${e.message}", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
+        }
+    }
+
+    /**
+     * 查询 USDC.e 余额（V2 迁移用）
+     */
+    @PostMapping("/usdce-balance")
+    fun getUsdceBalance(@RequestBody request: Map<String, Any>): ResponseEntity<ApiResponse<Map<String, String>>> {
+        return try {
+            val accountId = (request["accountId"] as? Number)?.toLong()
+                ?: return ResponseEntity.ok(ApiResponse.error(ErrorCode.PARAM_ACCOUNT_ID_INVALID, messageSource = messageSource))
+            val result = runBlocking { accountService.getUsdceBalance(accountId) }
+            result.fold(
+                onSuccess = { balance ->
+                    ResponseEntity.ok(ApiResponse.success(mapOf("balance" to balance.toPlainString())))
+                },
+                onFailure = { e ->
+                    logger.error("查询 USDC.e 余额失败: ${e.message}", e)
+                    ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
+                }
+            )
+        } catch (e: Exception) {
+            logger.error("查询 USDC.e 余额异常: ${e.message}", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
+        }
+    }
+
 }
 

@@ -9,7 +9,7 @@ object PolymarketConstants {
     /**
      * Polymarket CLOB API 基础 URL
      */
-    const val CLOB_BASE_URL = "https://clob.polymarket.com"
+    const val CLOB_BASE_URL = "https://clob-v2.polymarket.com"
     
     /**
      * Polymarket RTDS WebSocket URL
