@@ -21,20 +21,12 @@ class PolymarketClobService(
     
     /**
      * 获取订单簿
-     * 使用 market 参数（condition ID）
+     * 使用 tokenId 参数（市场已不再支持 market 参数）
+     * @deprecated Polymarket CLOB API 不再支持 market 参数，请使用 getOrderbookByTokenId(tokenId)
      */
-    suspend fun getOrderbook(market: String): Result<OrderbookResponse> {
-        return try {
-            val response = clobApi.getOrderbook(tokenId = null, market = market)
-            if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
-            } else {
-                Result.failure(Exception("获取订单簿失败: ${response.code()} ${response.message()}"))
-            }
-        } catch (e: Exception) {
-            logger.error("获取订单簿异常: ${e.message}", e)
-            Result.failure(e)
-        }
+    @Deprecated("Polymarket CLOB API 不再支持 market 参数，请使用 getOrderbookByTokenId(tokenId)")
+    suspend fun getOrderbook(tokenId: String): Result<OrderbookResponse> {
+        return getOrderbookByTokenId(tokenId)
     }
     
     /**
@@ -191,10 +183,12 @@ class PolymarketClobService(
     
     /**
      * 获取价格信息
+     * @deprecated Polymarket CLOB API 不再支持 market 参数，请使用 getOrderbookByTokenId 获取订单簿后自行计算价格
      */
-    suspend fun getPrice(market: String): Result<PriceResponse> {
+    @Deprecated("Polymarket CLOB API 不再支持 market 参数")
+    suspend fun getPrice(tokenId: String, side: String): Result<PriceResponse> {
         return try {
-            val response = clobApi.getPrice(market)
+            val response = clobApi.getPrice(tokenId = tokenId, side = side, market = null)
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
             } else {
@@ -208,15 +202,28 @@ class PolymarketClobService(
     
     /**
      * 获取中间价
+     * 注意：Polymarket CLOB API 的 /midpoint 接口需要 token_id 参数，不再支持 market 参数
+     * @deprecated Polymarket CLOB API 不再支持 market 参数，请使用 getOrderbookByTokenId 获取订单簿后自行计算中间价
      */
-    suspend fun getMidpoint(market: String): Result<MidpointResponse> {
+    @Deprecated("Polymarket CLOB API 不再支持 market 参数，请使用 getOrderbookByTokenId 获取订单簿后自行计算中间价")
+    suspend fun getMidpoint(tokenId: String): Result<MidpointResponse> {
         return try {
-            val response = clobApi.getMidpoint(market)
-            if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
-            } else {
-                Result.failure(Exception("获取中间价失败: ${response.code()} ${response.message()}"))
+            // 通过订单簿计算中间价
+            val orderbookResult = getOrderbookByTokenId(tokenId)
+            if (!orderbookResult.isSuccess) {
+                return Result.failure(Exception("获取中间价失败: ${orderbookResult.exceptionOrNull()?.message ?: \"未知错误\"}"))
             }
+            val orderbook = orderbookResult.getOrNull()
+            if (orderbook == null) {
+                return Result.failure(Exception("获取中间价失败: 订单簿为空"))
+            }
+            val bestBid = orderbook.bids.firstOrNull()?.price?.toSafeBigDecimal()
+            val bestAsk = orderbook.asks.firstOrNull()?.price?.toSafeBigDecimal()
+            if (bestBid == null || bestAsk == null) {
+                return Result.failure(Exception("获取中间价失败: 买一或卖一为空"))
+            }
+            val midpoint = (bestBid + bestAsk).divide(BigDecimal("2"), 6, java.math.RoundingMode.HALF_UP)
+            Result.success(MidpointResponse(midpoint = midpoint.toPlainString()))
         } catch (e: Exception) {
             logger.error("获取中间价异常: ${e.message}", e)
             Result.failure(e)
