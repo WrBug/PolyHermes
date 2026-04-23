@@ -91,6 +91,11 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          # 经 env 注入，避免 Issue 标题等含引号/换行/$ 时被写入 run 脚本导致截断或语法错误
+          ISSUE_NUM: ${{ steps.pr.outputs.ISSUE_NUMBER }}
+          ISSUE_TITLE: ${{ steps.issue.outputs.title }}
+          ISSUE_URL: ${{ steps.issue.outputs.url }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
           # 与 docker-build 一致：未配置则跳过
           if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
@@ -98,13 +103,12 @@ jobs:
             exit 0
           fi
 
-          ISSUE_NUM="${{ steps.pr.outputs.ISSUE_NUMBER }}"
-          ISSUE_TITLE="${{ steps.issue.outputs.title }}"
-          ISSUE_URL="${{ steps.issue.outputs.url }}"
-          PR_URL="${{ github.event.pull_request.html_url }}"
-
-          # 与 docker-build 相同的 HTML 消息格式
-          MESSAGE="✅ <b>AI 修复的 Issue 已关闭</b>"$'\n'$'\n'"🔢 <b>Issue:</b> #${ISSUE_NUM} ${ISSUE_TITLE}"$'\n'"📎 <a href=\"${ISSUE_URL}\">查看 Issue</a>"$'\n'"🔗 <a href=\"${PR_URL}\">查看 PR</a>"
+          MESSAGE=$(jq -n -r \
+            --arg num "$ISSUE_NUM" \
+            --arg title "$ISSUE_TITLE" \
+            --arg iu "$ISSUE_URL" \
+            --arg pu "$PR_URL" \
+            '"✅ <b>AI 修复的 Issue 已关闭</b>\n\n🔢 <b>Issue:</b> #" + $num + " " + $title + "\n📎 <a href=\"" + $iu + "\">查看 Issue</a>\n🔗 <a href=\"" + $pu + "\">查看 PR</a>"')
 
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -H "Content-Type: application/json" \
