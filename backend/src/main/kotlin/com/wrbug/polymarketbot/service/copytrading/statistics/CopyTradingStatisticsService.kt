@@ -16,6 +16,7 @@ import com.wrbug.polymarketbot.service.common.BlockchainService
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 跟单统计服务
@@ -34,6 +35,8 @@ class CopyTradingStatisticsService(
 ) {
     
     private val logger = LoggerFactory.getLogger(CopyTradingStatisticsService::class.java)
+    private val quoteCacheTtlMillis = 30_000L
+    private val quoteCache = ConcurrentHashMap<String, CachedPositionQuotes>()
     
     /**
      * 获取跟单关系统计
@@ -61,7 +64,12 @@ class CopyTradingStatisticsService(
             // currentPositionCost 使用跟单系统记录的剩余仓位成本；currentPositionValue 使用
             // Polymarket Data API 当前价格按剩余份额估值。若某个未平仓仓位没有报价，按 0
             // 估值，避免已归零/待赎回仓位继续被统计成成本价。
-            val quotes = buildPositionValuationQuotes(account?.proxyAddress)
+            val hasOpenPosition = buyOrders.any { it.remainingQuantity.toSafeBigDecimal().gt(BigDecimal.ZERO) }
+            val quotes = if (hasOpenPosition) {
+                buildPositionValuationQuotes(account?.proxyAddress)
+            } else {
+                emptyList()
+            }
             val statistics = CopyTradingPnlCalculator.calculate(buyOrders, sellRecords, matchDetails, quotes)
             
             // 7. 构建响应（总盈亏 = 已实现盈亏 + 未实现盈亏）
@@ -102,16 +110,22 @@ class CopyTradingStatisticsService(
      * copyTradingId 归因，避免同一钱包下多个 Leader 或手工仓位混在一起。
      */
     private suspend fun buildPositionValuationQuotes(proxyAddress: String?): List<PositionValuationQuote> {
-        if (proxyAddress.isNullOrBlank()) return emptyList()
+        val normalizedProxyAddress = proxyAddress?.trim()?.lowercase()?.takeIf { it.isNotBlank() }
+            ?: return emptyList()
+
+        val now = System.currentTimeMillis()
+        quoteCache[normalizedProxyAddress]
+            ?.takeIf { it.expiresAtMillis > now }
+            ?.let { return it.quotes }
 
         return try {
-            val positionsResult = blockchainService.getPositions(proxyAddress)
+            val positionsResult = blockchainService.getPositions(normalizedProxyAddress)
             if (positionsResult.isFailure) {
-                logger.warn("获取持仓报价失败: proxyAddress=${proxyAddress.take(10)}..., error=${positionsResult.exceptionOrNull()?.message}")
+                logger.warn("获取持仓报价失败: proxyAddress=${normalizedProxyAddress.take(10)}..., error=${positionsResult.exceptionOrNull()?.message}")
                 return emptyList()
             }
 
-            positionsResult.getOrNull().orEmpty().mapNotNull { position ->
+            val quotes = positionsResult.getOrNull().orEmpty().mapNotNull { position ->
                 val marketId = position.conditionId?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
                 val currentPrice = position.curPrice?.toSafeBigDecimal()
                     ?: derivePriceFromPositionValue(position.currentValue, position.size)
@@ -124,8 +138,13 @@ class CopyTradingStatisticsService(
                     currentPrice = currentPrice
                 )
             }
+            quoteCache[normalizedProxyAddress] = CachedPositionQuotes(
+                quotes = quotes,
+                expiresAtMillis = now + quoteCacheTtlMillis
+            )
+            quotes
         } catch (e: Exception) {
-            logger.warn("获取持仓报价异常: proxyAddress=${proxyAddress.take(10)}..., error=${e.message}", e)
+            logger.warn("获取持仓报价异常: proxyAddress=${normalizedProxyAddress.take(10)}..., error=${e.message}", e)
             emptyList()
         }
     }
@@ -136,6 +155,11 @@ class CopyTradingStatisticsService(
         if (quantity.lte(BigDecimal.ZERO)) return null
         return value.div(quantity)
     }
+
+    private data class CachedPositionQuotes(
+        val quotes: List<PositionValuationQuote>,
+        val expiresAtMillis: Long
+    )
 
     /**
      * 查询订单列表
