@@ -7,17 +7,16 @@ import com.wrbug.polymarketbot.util.toSafeBigDecimal
 import com.wrbug.polymarketbot.util.multi
 import com.wrbug.polymarketbot.util.div
 import com.wrbug.polymarketbot.util.gt
-import com.wrbug.polymarketbot.util.eq
 import com.wrbug.polymarketbot.util.lte
 import org.slf4j.LoggerFactory
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Pageable
 import org.springframework.data.domain.Sort
-import com.wrbug.polymarketbot.service.accounts.AccountService
 import com.wrbug.polymarketbot.service.common.BlockchainService
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 跟单统计服务
@@ -31,10 +30,13 @@ class CopyTradingStatisticsService(
     private val sellMatchDetailRepository: SellMatchDetailRepository,
     private val accountRepository: AccountRepository,
     private val leaderRepository: LeaderRepository,
-    private val marketService: com.wrbug.polymarketbot.service.common.MarketService
+    private val marketService: com.wrbug.polymarketbot.service.common.MarketService,
+    private val blockchainService: BlockchainService
 ) {
     
     private val logger = LoggerFactory.getLogger(CopyTradingStatisticsService::class.java)
+    private val quoteCacheTtlMillis = 30_000L
+    private val quoteCache = ConcurrentHashMap<String, CachedPositionQuotes>()
     
     /**
      * 获取跟单关系统计
@@ -58,15 +60,19 @@ class CopyTradingStatisticsService(
             // 5. 获取匹配明细
             val matchDetails = sellMatchDetailRepository.findByCopyTradingId(copyTradingId)
             
-            // 6. 计算统计信息
-            val statistics = calculateStatistics(buyOrders, sellRecords, matchDetails)
+            // 6. 获取当前价格并计算真实口径统计
+            // currentPositionCost 使用跟单系统记录的剩余仓位成本；currentPositionValue 使用
+            // Polymarket Data API 当前价格按剩余份额估值。若某个未平仓仓位没有报价，按 0
+            // 估值，避免已归零/待赎回仓位继续被统计成成本价。
+            val hasOpenPosition = buyOrders.any { it.remainingQuantity.toSafeBigDecimal().gt(BigDecimal.ZERO) }
+            val quotes = if (hasOpenPosition) {
+                buildPositionValuationQuotes(account?.proxyAddress)
+            } else {
+                emptyList()
+            }
+            val statistics = CopyTradingPnlCalculator.calculate(buyOrders, sellRecords, matchDetails, quotes)
             
-            // 7. 不再计算未实现盈亏和持仓价值（优化性能）
-            // 未实现盈亏计算需要查询链上持仓和市场价格，性能开销大
-            val unrealizedPnl = "0"
-            val positionValue = "0"
-            
-            // 8. 构建响应（总盈亏 = 已实现盈亏）
+            // 7. 构建响应（总盈亏 = 已实现盈亏 + 未实现盈亏）
             val response = CopyTradingStatisticsResponse(
                 copyTradingId = copyTradingId,
                 accountId = copyTrading.accountId,
@@ -74,19 +80,20 @@ class CopyTradingStatisticsService(
                 leaderId = copyTrading.leaderId,
                 leaderName = leader?.leaderName,
                 enabled = copyTrading.enabled,
-                totalBuyQuantity = statistics.totalBuyQuantity,
+                totalBuyQuantity = statistics.totalBuyQuantity.toString(),
                 totalBuyOrders = statistics.totalBuyOrders,
-                totalBuyAmount = statistics.totalBuyAmount,
-                avgBuyPrice = statistics.avgBuyPrice,
-                totalSellQuantity = statistics.totalSellQuantity,
+                totalBuyAmount = statistics.totalBuyAmount.toString(),
+                avgBuyPrice = statistics.avgBuyPrice.toString(),
+                totalSellQuantity = statistics.totalSellQuantity.toString(),
                 totalSellOrders = statistics.totalSellOrders,
-                totalSellAmount = statistics.totalSellAmount,
-                currentPositionQuantity = statistics.currentPositionQuantity,
-                currentPositionValue = positionValue,
-                totalRealizedPnl = statistics.totalRealizedPnl,
-                totalUnrealizedPnl = unrealizedPnl,
-                totalPnl = statistics.totalRealizedPnl,
-                totalPnlPercent = calculatePnlPercentOnlyRealized(statistics.totalBuyAmount, statistics.totalRealizedPnl)
+                totalSellAmount = statistics.totalSellAmount.toString(),
+                currentPositionQuantity = statistics.currentPositionQuantity.toString(),
+                currentPositionCost = statistics.currentPositionCost.toString(),
+                currentPositionValue = statistics.currentPositionValue.toString(),
+                totalRealizedPnl = statistics.totalRealizedPnl.toString(),
+                totalUnrealizedPnl = statistics.totalUnrealizedPnl.toString(),
+                totalPnl = statistics.totalPnl.toString(),
+                totalPnlPercent = statistics.totalPnlPercent.toString()
             )
             
             Result.success(response)
@@ -96,6 +103,64 @@ class CopyTradingStatisticsService(
         }
     }
     
+    /**
+     * 获取账户当前仓位报价，用于给跟单系统中仍有 remainingQuantity 的订单做市值估算。
+     *
+     * 注意：报价只用于估值，不直接使用 Data API 的 size/currentValue 汇总；这样可以按
+     * copyTradingId 归因，避免同一钱包下多个 Leader 或手工仓位混在一起。
+     */
+    private suspend fun buildPositionValuationQuotes(proxyAddress: String?): List<PositionValuationQuote> {
+        val normalizedProxyAddress = proxyAddress?.trim()?.lowercase()?.takeIf { it.isNotBlank() }
+            ?: return emptyList()
+
+        val now = System.currentTimeMillis()
+        quoteCache[normalizedProxyAddress]
+            ?.takeIf { it.expiresAtMillis > now }
+            ?.let { return it.quotes }
+
+        return try {
+            val positionsResult = blockchainService.getPositions(normalizedProxyAddress)
+            if (positionsResult.isFailure) {
+                logger.warn("获取持仓报价失败: proxyAddress=${normalizedProxyAddress.take(10)}..., error=${positionsResult.exceptionOrNull()?.message}")
+                return emptyList()
+            }
+
+            val quotes = positionsResult.getOrNull().orEmpty().mapNotNull { position ->
+                val marketId = position.conditionId?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val currentPrice = position.curPrice?.toSafeBigDecimal()
+                    ?: derivePriceFromPositionValue(position.currentValue, position.size)
+                    ?: BigDecimal.ZERO
+
+                PositionValuationQuote(
+                    marketId = marketId,
+                    outcomeIndex = position.outcomeIndex,
+                    side = position.outcome,
+                    currentPrice = currentPrice
+                )
+            }
+            quoteCache[normalizedProxyAddress] = CachedPositionQuotes(
+                quotes = quotes,
+                expiresAtMillis = now + quoteCacheTtlMillis
+            )
+            quotes
+        } catch (e: Exception) {
+            logger.warn("获取持仓报价异常: proxyAddress=${normalizedProxyAddress.take(10)}..., error=${e.message}", e)
+            emptyList()
+        }
+    }
+
+    private fun derivePriceFromPositionValue(currentValue: Double?, size: Double?): BigDecimal? {
+        val value = currentValue?.toSafeBigDecimal() ?: return null
+        val quantity = size?.toSafeBigDecimal() ?: return null
+        if (quantity.lte(BigDecimal.ZERO)) return null
+        return value.div(quantity)
+    }
+
+    private data class CachedPositionQuotes(
+        val quotes: List<PositionValuationQuote>,
+        val expiresAtMillis: Long
+    )
+
     /**
      * 查询订单列表
      */
@@ -338,65 +403,6 @@ class CopyTradingStatisticsService(
     }
     
     /**
-     * 计算统计信息
-     */
-    private fun calculateStatistics(
-        buyOrders: List<CopyOrderTracking>,
-        sellRecords: List<SellMatchRecord>,
-        matchDetails: List<SellMatchDetail>
-    ): StatisticsData {
-        // 买入统计
-        val totalBuyQuantity = buyOrders.sumOf { it.quantity.toSafeBigDecimal() }
-        val totalBuyAmount = buyOrders.sumOf { it.quantity.toSafeBigDecimal().multi(it.price) }
-        val totalBuyOrders = buyOrders.size.toLong()
-        val avgBuyPrice = if (totalBuyQuantity.gt(BigDecimal.ZERO)) {
-            totalBuyAmount.div(totalBuyQuantity)
-        } else {
-            BigDecimal.ZERO
-        }
-        
-        // 卖出统计
-        // 使用 SellMatchDetail 计算总卖出金额，确保准确性
-        // 因为每个明细都记录了准确的匹配数量和卖出价格
-        val totalSellQuantity = sellRecords.sumOf { it.totalMatchedQuantity.toSafeBigDecimal() }
-        val totalSellAmount = matchDetails.sumOf { it.matchedQuantity.toSafeBigDecimal().multi(it.sellPrice) }
-        val totalSellOrders = sellRecords.size.toLong()
-        
-        // 持仓统计
-        val currentPositionQuantity = buyOrders.sumOf { it.remainingQuantity.toSafeBigDecimal() }
-        
-        // 已实现盈亏
-        val totalRealizedPnl = matchDetails.sumOf { it.realizedPnl.toSafeBigDecimal() }
-        
-        return StatisticsData(
-            totalBuyQuantity = totalBuyQuantity.toString(),
-            totalBuyOrders = totalBuyOrders,
-            totalBuyAmount = totalBuyAmount.toString(),
-            avgBuyPrice = avgBuyPrice.toString(),
-            totalSellQuantity = totalSellQuantity.toString(),
-            totalSellOrders = totalSellOrders,
-            totalSellAmount = totalSellAmount.toString(),
-            currentPositionQuantity = currentPositionQuantity.toString(),
-            totalRealizedPnl = totalRealizedPnl.toString()
-        )
-    }
-    
-    /**
-     * 计算盈亏百分比（仅基于已实现盈亏）
-     */
-    private fun calculatePnlPercentOnlyRealized(
-        totalBuyAmount: String,
-        totalRealizedPnl: String
-    ): String {
-        val buyAmount = totalBuyAmount.toSafeBigDecimal()
-        if (buyAmount.lte(BigDecimal.ZERO)) return "0"
-        
-        val percent = totalRealizedPnl.toSafeBigDecimal().div(buyAmount).multi(100)
-        
-        return percent.setScale(2, RoundingMode.HALF_UP).toString()
-    }
-    
-    /**
      * 获取全局统计
      */
     suspend fun getGlobalStatistics(startTime: Long? = null, endTime: Long? = null): Result<StatisticsResponse> {
@@ -555,21 +561,6 @@ class CopyTradingStatisticsService(
             maxLoss = maxLoss.toString()
         )
     }
-    
-    /**
-     * 统计数据结构
-     */
-    private data class StatisticsData(
-        val totalBuyQuantity: String,
-        val totalBuyOrders: Long,
-        val totalBuyAmount: String,
-        val avgBuyPrice: String,
-        val totalSellQuantity: String,
-        val totalSellOrders: Long,
-        val totalSellAmount: String,
-        val currentPositionQuantity: String,
-        val totalRealizedPnl: String
-    )
     
     /**
      * 获取按市场分组的买入订单列表

@@ -118,7 +118,23 @@ const StatisticsModal: React.FC<StatisticsModalProps> = ({
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', borderBottom: '1px solid #f0f0f0' }}>
             <div style={{ fontSize: '14px', color: '#666', flex: '0 0 auto', marginRight: '12px' }}>
-              {t('copyTradingOrders.totalPnl') || '总盈亏'}
+              {t('copyTradingOrders.currentPositionCost') || '当前持仓成本'}
+            </div>
+            <div style={{ fontSize: '16px', fontWeight: '500', color: '#333', flex: '1', textAlign: 'right' }}>
+              <span style={{ fontSize: 'clamp(12px, 4vw, 16px)' }}>{formatUSDC(statistics.currentPositionCost)} USDC</span>
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', borderBottom: '1px solid #f0f0f0' }}>
+            <div style={{ fontSize: '14px', color: '#666', flex: '0 0 auto', marginRight: '12px' }}>
+              {t('copyTradingOrders.currentPositionValue') || '当前持仓市值'}
+            </div>
+            <div style={{ fontSize: '16px', fontWeight: '500', color: '#333', flex: '1', textAlign: 'right' }}>
+              <span style={{ fontSize: 'clamp(12px, 4vw, 16px)' }}>{formatUSDC(statistics.currentPositionValue)} USDC</span>
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', borderBottom: '1px solid #f0f0f0' }}>
+            <div style={{ fontSize: '14px', color: '#666', flex: '0 0 auto', marginRight: '12px' }}>
+              {t('copyTradingOrders.totalPnl') || '总盈亏（含未实现）'}
             </div>
             <div style={{ fontSize: '16px', fontWeight: 'bold', color: getPnlColor(statistics.totalPnl), flex: '1', textAlign: 'right', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px' }}>
               {getPnlIcon(statistics.totalPnl)}
@@ -179,7 +195,21 @@ const StatisticsModal: React.FC<StatisticsModalProps> = ({
             </Col>
             <Col xs={24} sm={12} md={8}>
               <Statistic
-                title={t('copyTradingOrders.totalPnl') || '总盈亏'}
+                title={t('copyTradingOrders.currentPositionCost') || '当前持仓成本'}
+                value={formatUSDC(statistics.currentPositionCost)}
+                suffix="USDC"
+              />
+            </Col>
+            <Col xs={24} sm={12} md={8}>
+              <Statistic
+                title={t('copyTradingOrders.currentPositionValue') || '当前持仓市值'}
+                value={formatUSDC(statistics.currentPositionValue)}
+                suffix="USDC"
+              />
+            </Col>
+            <Col xs={24} sm={12} md={8}>
+              <Statistic
+                title={t('copyTradingOrders.totalPnl') || '总盈亏（含未实现）'}
                 value={formatUSDC(statistics.totalPnl)}
                 suffix="USDC"
                 valueStyle={{ color: getPnlColor(statistics.totalPnl) }}

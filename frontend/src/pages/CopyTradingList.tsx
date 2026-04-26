@@ -256,7 +256,7 @@ const CopyTradingList: React.FC = () => {
       )
     },
     {
-      title: t('copyTradingList.totalPnl') || '总盈亏',
+      title: '总盈亏（含未实现）',
       key: 'totalPnl',
       width: isMobile ? 100 : 150,
       render: (_: any, record: CopyTrading) => {
@@ -537,7 +537,7 @@ const CopyTradingList: React.FC = () => {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
                           <div>
                             <div style={{ fontSize: '10px', color: '#8c8c8c' }}>
-                              {t('copyTradingList.totalPnl') || '总盈亏'}
+                              总盈亏（含未实现）
                             </div>
                             {stats ? (
                               <div style={{ 

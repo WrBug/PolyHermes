@@ -197,7 +197,6 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
     setSelectedProxyType('')
     setStep('input')
     form.setFieldsValue({ walletAddress: '', privateKey: '', mnemonic: '' })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [importType])
   
   const handleSubmit = async (values: any) => {
