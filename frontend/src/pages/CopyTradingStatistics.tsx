@@ -195,14 +195,28 @@ const CopyTradingStatisticsPage: React.FC = () => {
       {/* 持仓统计卡片 */}
       <Card title="持仓统计" style={{ marginBottom: 16 }}>
         <Row gutter={[16, 16]}>
-          <Col xs={24} sm={12} md={12}>
+          <Col xs={24} sm={12} md={6}>
             <Statistic
               title="当前持仓数量"
               value={formatNumber(statistics.currentPositionQuantity, 4)}
               suffix=""
             />
           </Col>
-          <Col xs={24} sm={12} md={12}>
+          <Col xs={24} sm={12} md={6}>
+            <Statistic
+              title="当前持仓成本"
+              value={formatUSDC(statistics.currentPositionCost)}
+              suffix="USDC"
+            />
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <Statistic
+              title="当前持仓市值"
+              value={formatUSDC(statistics.currentPositionValue)}
+              suffix="USDC"
+            />
+          </Col>
+          <Col xs={24} sm={12} md={6}>
             <Statistic
               title="平均买入价格"
               value={formatNumber(statistics.avgBuyPrice, 4)}
@@ -235,7 +249,7 @@ const CopyTradingStatisticsPage: React.FC = () => {
           </Col>
           <Col xs={24} sm={12} md={6}>
             <Statistic
-              title="总盈亏"
+              title="总盈亏（含未实现）"
               value={formatUSDC(statistics.totalPnl)}
               valueStyle={{ color: getPnlColor(statistics.totalPnl) }}
               prefix={getPnlIcon(statistics.totalPnl)}

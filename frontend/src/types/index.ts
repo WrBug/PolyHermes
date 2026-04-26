@@ -705,7 +705,8 @@ export interface CopyTradingStatistics {
   
   // 持仓统计
   currentPositionQuantity: string
-  currentPositionValue: string  // 当前实现总是返回 "0"，保留用于未来扩展
+  currentPositionCost: string
+  currentPositionValue: string  // 按当前价格估算的持仓市值
   
   // 盈亏统计
   totalRealizedPnl: string

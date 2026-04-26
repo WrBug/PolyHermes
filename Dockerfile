@@ -100,6 +100,17 @@ RUN if [ "$BUILD_IN_DOCKER" = "true" ]; then \
       fi; \
     fi
 
+# 统一选出可执行 JAR，避免 *-plain.jar 和 bootJar 同时存在导致最终 COPY 匹配多个文件
+RUN set -e; \
+    JAR="$(find build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*-plain.jar' | head -n 1)"; \
+    if [ -z "$JAR" ]; then \
+      echo "❌ 错误：找不到可执行 JAR（已排除 *-plain.jar）"; \
+      exit 1; \
+    fi; \
+    if [ "$JAR" != "build/libs/app.jar" ]; then \
+      cp "$JAR" build/libs/app.jar; \
+    fi
+
 # ==================== 阶段3：运行环境 ====================
 FROM eclipse-temurin:17-jre-jammy
 
@@ -114,7 +125,7 @@ RUN apt-get update && \
 # 从构建阶段复制文件
 # 当 BUILD_IN_DOCKER=false 时，构建阶段已经复制了外部产物
 COPY --from=frontend-build /app/frontend/dist /usr/share/nginx/html
-COPY --from=backend-build /app/backend/build/libs/*.jar app.jar
+COPY --from=backend-build /app/backend/build/libs/app.jar app.jar
 
 # 复制 Nginx 配置
 COPY docker/nginx.conf /etc/nginx/nginx.conf

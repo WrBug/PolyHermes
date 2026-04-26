@@ -24,6 +24,7 @@ data class CopyTradingStatisticsResponse(
     
     // 持仓统计
     val currentPositionQuantity: String,
+    val currentPositionCost: String,
     val currentPositionValue: String,
     
     // 盈亏统计
