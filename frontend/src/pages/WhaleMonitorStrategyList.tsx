@@ -1,31 +1,25 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Card, Table, Button, Space, Tag, Popconfirm, Switch, message, Select, Modal, Form, Input, InputNumber, Tabs, Empty, Tooltip } from 'antd'
 import { PlusOutlined, EditOutlined, UnorderedListOutlined, DeleteOutlined, RightOutlined } from '@ant-design/icons'
-import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useMediaQuery } from 'react-responsive'
 import { apiService } from '../services/api'
 import { useAccountStore } from '../store/accountStore'
 import {
-  clearWhaleMonitorFormDraft,
   conditionIdsToMarkets,
-  loadWhaleMonitorFormDraft,
-  saveWhaleMonitorFormDraft,
   strategyMarketsToItems
 } from '../constants/whaleMonitor'
 import type {
   WhaleMonitorStrategyDto,
   WhaleMonitorTriggerDto,
   WhaleMonitorMarketItem,
-  WhaleMonitorStrategyListLocationState,
   Account
 } from '../types'
 import { formatUSDC } from '../utils'
+import WhaleMonitorMarketSelectModal from '../components/WhaleMonitorMarketSelectModal'
 
 const WhaleMonitorStrategyList: React.FC = () => {
   const { t } = useTranslation()
-  const navigate = useNavigate()
-  const location = useLocation()
   const isMobile = useMediaQuery({ maxWidth: 768 })
   const { accounts, fetchAccounts } = useAccountStore()
 
@@ -39,8 +33,7 @@ const WhaleMonitorStrategyList: React.FC = () => {
   const [form] = Form.useForm()
   const [submitting, setSubmitting] = useState(false)
   const [selectedMarkets, setSelectedMarkets] = useState<WhaleMonitorMarketItem[]>([])
-  const [pendingFormDraft, setPendingFormDraft] = useState<ReturnType<typeof loadWhaleMonitorFormDraft>>(null)
-  const draftRestoreStarted = useRef(false)
+  const [marketSelectVisible, setMarketSelectVisible] = useState(false)
 
   const [triggerVisible, setTriggerVisible] = useState(false)
   const [triggerStrategyId, setTriggerStrategyId] = useState<number>(0)
@@ -57,57 +50,6 @@ const WhaleMonitorStrategyList: React.FC = () => {
   useEffect(() => {
     fetchList()
   }, [filterAccountId, filterEnabled])
-
-  useEffect(() => {
-    if (draftRestoreStarted.current) return
-    const draft = loadWhaleMonitorFormDraft()
-    const state = location.state as WhaleMonitorStrategyListLocationState | null
-    if (!draft && !state?.selectedMarkets) return
-
-    draftRestoreStarted.current = true
-    if (draft) clearWhaleMonitorFormDraft()
-    if (state?.selectedMarkets) {
-      navigate(location.pathname, { replace: true, state: null })
-    }
-
-    if (draft) {
-      setPendingFormDraft({
-        ...draft,
-        selectedMarkets: state?.selectedMarkets ?? draft.selectedMarkets
-      })
-    }
-  }, [location.pathname, location.state, navigate])
-
-  useEffect(() => {
-    if (!pendingFormDraft) return
-    if (pendingFormDraft.editingStrategyId && loading) return
-    if (pendingFormDraft.editingStrategyId) {
-      const strategy = strategies.find(s => s.id === pendingFormDraft.editingStrategyId)
-      if (!strategy) {
-        setPendingFormDraft(null)
-        return
-      }
-      setEditingStrategy(strategy)
-    } else {
-      setEditingStrategy(null)
-    }
-    const draftStrategy = pendingFormDraft.editingStrategyId
-      ? strategies.find(s => s.id === pendingFormDraft.editingStrategyId)
-      : undefined
-    const knownMarkets =
-      draftStrategy?.markets && draftStrategy.markets.length > 0
-        ? strategyMarketsToItems(draftStrategy.markets)
-        : pendingFormDraft.selectedMarkets
-    setSelectedMarkets(
-      conditionIdsToMarkets(
-        draftStrategy?.conditionIds ?? knownMarkets.map(m => m.conditionId),
-        knownMarkets
-      )
-    )
-    form.setFieldsValue(pendingFormDraft.formValues)
-    setFormVisible(true)
-    setPendingFormDraft(null)
-  }, [pendingFormDraft, strategies, loading, form])
 
   const fetchList = async () => {
     setLoading(true)
@@ -159,16 +101,7 @@ const WhaleMonitorStrategyList: React.FC = () => {
     }
   }
 
-  const goToMarketSelect = () => {
-    saveWhaleMonitorFormDraft({
-      formValues: form.getFieldsValue(),
-      selectedMarkets,
-      editingStrategyId: editingStrategy?.id
-    })
-    navigate('/whale-monitor-strategy/markets', {
-      state: { selectedMarkets }
-    })
-  }
+  const openMarketSelect = () => setMarketSelectVisible(true)
 
   const showCreateModal = () => {
     setEditingStrategy(null)
@@ -582,7 +515,7 @@ const WhaleMonitorStrategyList: React.FC = () => {
               )}
               <Button
                 block={isMobile}
-                onClick={goToMarketSelect}
+                onClick={openMarketSelect}
                 style={{ minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
               >
                 <span>
@@ -622,6 +555,16 @@ const WhaleMonitorStrategyList: React.FC = () => {
           </Form.Item>
         </Form>
       </Modal>
+
+      <WhaleMonitorMarketSelectModal
+        open={marketSelectVisible}
+        initialSelected={selectedMarkets}
+        onCancel={() => setMarketSelectVisible(false)}
+        onConfirm={(selected) => {
+          setSelectedMarkets(selected)
+          setMarketSelectVisible(false)
+        }}
+      />
 
       <Modal
         title={t('whaleMonitorStrategy.triggerRecords.title')}

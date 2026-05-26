@@ -11,6 +11,7 @@ import com.wrbug.polymarketbot.util.getEventSlug
 import com.wrbug.polymarketbot.util.parseStringArray
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import java.time.Instant
 import java.time.format.DateTimeFormatter
@@ -205,9 +206,20 @@ class MarketService(
                 )
             }
             
-            val savedMarket = marketRepository.save(market)
-            marketCache.put(marketId, savedMarket)
-            savedMarket
+            try {
+                val savedMarket = marketRepository.save(market)
+                marketCache.put(marketId, savedMarket)
+                savedMarket
+            } catch (e: DataIntegrityViolationException) {
+                // 并发写入同一个 marketId 时可能触发唯一索引冲突，这里降级为查询并返回已有记录
+                val existingAfter = marketRepository.findByMarketId(marketId)
+                if (existingAfter != null) {
+                    marketCache.put(marketId, existingAfter)
+                    existingAfter
+                } else {
+                    throw e
+                }
+            }
         } catch (e: Exception) {
             logger.error("保存市场信息失败: marketId=$marketId, error=${e.message}", e)
             null
