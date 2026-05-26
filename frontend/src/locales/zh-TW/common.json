@@ -1907,7 +1907,7 @@
       "subtitle": "按分類篩選或搜索市場名稱，可多選",
       "back": "返回",
       "searchPlaceholder": "搜索市場名稱（至少 2 個字符）",
-      "searchHint": "請輸入關鍵詞搜索，或選擇上方分類篩選",
+      "searchHint": "請選擇上方分類，或輸入至少 2 個字符搜索",
       "sportsGamesHint": "體育聯賽將展示單場比賽盤口；也可輸入隊名搜索",
       "sportsGamesEmpty": "該聯賽當前暫無進行中的單場比賽盤口，可嘗試搜索隊名或稍後再試",
       "empty": "未找到匹配的市場",

@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next'
 import { groupMarketsBySection, type WhaleMonitorMarketGroup } from '../constants/whaleMonitor'
 import type { WhaleMonitorMarketItem } from '../types'
 import WhaleMonitorMarketListItem from './WhaleMonitorMarketListItem'
-import WhaleMonitorMarketThumbnail from './WhaleMonitorMarketThumbnail'
 
 const { Text, Title } = Typography
 
@@ -16,31 +15,44 @@ interface WhaleMonitorMarketGroupedListProps {
   onToggleGroup: (markets: WhaleMonitorMarketItem[], checked: boolean) => void
 }
 
+const renderFlatMarketList = (
+  markets: WhaleMonitorMarketItem[],
+  selectedMap: Map<string, WhaleMonitorMarketItem>,
+  isMobile: boolean,
+  onToggleMarket: (market: WhaleMonitorMarketItem, checked: boolean) => void,
+  compact = false
+) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 4 : 8 }}>
+    {markets.map(market => (
+      <WhaleMonitorMarketListItem
+        key={market.conditionId}
+        market={market}
+        checked={selectedMap.has(market.conditionId)}
+        isMobile={isMobile}
+        hideEventTitle
+        compact={compact}
+        onToggle={checked => onToggleMarket(market, checked)}
+      />
+    ))}
+  </div>
+)
+
 const renderMarketGroups = (
   groups: WhaleMonitorMarketGroup[],
   selectedMap: Map<string, WhaleMonitorMarketItem>,
   isMobile: boolean,
   onToggleMarket: (market: WhaleMonitorMarketItem, checked: boolean) => void,
   onToggleGroup: (markets: WhaleMonitorMarketItem[], checked: boolean) => void,
-  t: (key: string, options?: Record<string, number>) => string
+  t: (key: string, options?: Record<string, number>) => string,
+  defaultActiveKeys?: string[]
 ) => {
-  const showAsGroups = groups.length > 1 || (groups.length === 1 && groups[0].key.startsWith('event:'))
-
-  if (!showAsGroups) {
-    const flatMarkets = groups.flatMap(g => g.markets)
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? 4 : 8 }}>
-        {flatMarkets.map(market => (
-          <WhaleMonitorMarketListItem
-            key={market.conditionId}
-            market={market}
-            checked={selectedMap.has(market.conditionId)}
-            isMobile={isMobile}
-            hideEventTitle
-            onToggle={checked => onToggleMarket(market, checked)}
-          />
-        ))}
-      </div>
+  if (groups.length <= 1) {
+    return renderFlatMarketList(
+      groups.flatMap(g => g.markets),
+      selectedMap,
+      isMobile,
+      onToggleMarket,
+      groups.length === 1 && groups[0].key.startsWith('event:')
     )
   }
 
@@ -62,16 +74,13 @@ const renderMarketGroups = (
             paddingRight: 8
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
-            <WhaleMonitorMarketThumbnail src={group.imageUrl} size={32} alt={group.title} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <Text strong style={{ wordBreak: 'break-word' }}>
-                {group.title}
-              </Text>
-              <Text type="secondary" style={{ fontSize: 12, marginLeft: 0, display: 'block' }}>
-                {t('whaleMonitorStrategy.marketSelect.marketsInGroup', { count: group.markets.length })}
-              </Text>
-            </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Text strong style={{ wordBreak: 'break-word' }}>
+              {group.title}
+            </Text>
+            <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
+              {t('whaleMonitorStrategy.marketSelect.marketsInGroup', { count: group.markets.length })}
+            </Text>
           </div>
           <div onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
             <Checkbox
@@ -105,10 +114,41 @@ const renderMarketGroups = (
   return (
     <Collapse
       bordered={false}
-      defaultActiveKey={groups.map(g => g.key)}
+      defaultActiveKey={defaultActiveKeys ?? groups.map(g => g.key)}
       items={collapseItems}
       style={{ background: 'transparent' }}
     />
+  )
+}
+
+const renderSectionHeader = (sectionTitle: string, marketCount: number) => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+    <Text strong style={{ fontSize: 16 }}>
+      {sectionTitle}
+    </Text>
+    <Text type="secondary" style={{ fontSize: 13, fontWeight: 400 }}>
+      ({marketCount})
+    </Text>
+  </div>
+)
+
+const renderSectionBody = (
+  section: { key: 'game' | 'season'; groups: WhaleMonitorMarketGroup[] },
+  selectedMap: Map<string, WhaleMonitorMarketItem>,
+  isMobile: boolean,
+  onToggleMarket: (market: WhaleMonitorMarketItem, checked: boolean) => void,
+  onToggleGroup: (markets: WhaleMonitorMarketItem[], checked: boolean) => void,
+  t: (key: string, options?: Record<string, number>) => string
+) => {
+  const isSeason = section.key === 'season'
+  return renderMarketGroups(
+    section.groups,
+    selectedMap,
+    isMobile,
+    onToggleMarket,
+    onToggleGroup,
+    t,
+    isSeason ? [] : section.groups.map(g => g.key)
   )
 }
 
@@ -131,37 +171,95 @@ const WhaleMonitorMarketGroupedList: React.FC<WhaleMonitorMarketGroupedListProps
     [markets, t]
   )
 
+  const totalGroups = sections.reduce((sum, s) => sum + s.groups.length, 0)
+  const allMarkets = sections.flatMap(s => s.groups.flatMap(g => g.markets))
+
+  if (totalGroups <= 1) {
+    return renderFlatMarketList(allMarkets, selectedMap, isMobile, onToggleMarket)
+  }
+
   if (sections.length === 1) {
     const section = sections[0]
-    const showSectionTitle =
-      markets.some(m => m.marketType === 'game' || m.marketType === 'season') ||
-      section.groups.some(g => g.key.startsWith('event:'))
+    const marketCount = section.groups.reduce((sum, g) => sum + g.markets.length, 0)
+
+    if (section.key === 'season' && section.groups.length > 1) {
+      return (
+        <Collapse
+          bordered={false}
+          defaultActiveKey={[]}
+          style={{ background: 'transparent' }}
+          items={[
+            {
+              key: 'season-section',
+              label: renderSectionHeader(section.title, marketCount),
+              children: renderSectionBody(
+                section,
+                selectedMap,
+                isMobile,
+                onToggleMarket,
+                onToggleGroup,
+                t
+              )
+            }
+          ]}
+        />
+      )
+    }
+
     return (
       <>
-        {showSectionTitle && (
-          <Title level={5} style={{ marginTop: 0, marginBottom: 12 }}>
-            {section.title}
-          </Title>
-        )}
-        {renderMarketGroups(section.groups, selectedMap, isMobile, onToggleMarket, onToggleGroup, t)}
+        <Title level={5} style={{ marginTop: 0, marginBottom: 12 }}>
+          {section.title}
+          <Text type="secondary" style={{ fontSize: 13, fontWeight: 400, marginLeft: 8 }}>
+            ({marketCount})
+          </Text>
+        </Title>
+        {renderSectionBody(section, selectedMap, isMobile, onToggleMarket, onToggleGroup, t)}
       </>
     )
   }
 
   return (
     <div>
-      {sections.map((section, index) => (
-        <div key={section.key}>
-          {index > 0 && <Divider style={{ margin: '16px 0' }} />}
-          <Title level={5} style={{ marginTop: index === 0 ? 0 : undefined, marginBottom: 12 }}>
-            {section.title}
-            <Text type="secondary" style={{ fontSize: 13, fontWeight: 400, marginLeft: 8 }}>
-              ({section.groups.reduce((sum, g) => sum + g.markets.length, 0)})
-            </Text>
-          </Title>
-          {renderMarketGroups(section.groups, selectedMap, isMobile, onToggleMarket, onToggleGroup, t)}
-        </div>
-      ))}
+      {sections.map((section, index) => {
+        const marketCount = section.groups.reduce((sum, g) => sum + g.markets.length, 0)
+        return (
+          <div key={section.key}>
+            {index > 0 && <Divider style={{ margin: '16px 0' }} />}
+            {section.key === 'season' && section.groups.length > 1 ? (
+              <Collapse
+                bordered={false}
+                defaultActiveKey={[]}
+                style={{ background: 'transparent' }}
+                items={[
+                  {
+                    key: 'season-section',
+                    label: renderSectionHeader(section.title, marketCount),
+                    children: renderSectionBody(
+                      section,
+                      selectedMap,
+                      isMobile,
+                      onToggleMarket,
+                      onToggleGroup,
+                      t
+                    )
+                  }
+                ]}
+              />
+            ) : (
+              <>
+                <Title level={5} style={{ marginTop: index === 0 ? 0 : undefined, marginBottom: 12 }}>
+                  {section.title}
+                  <Text type="secondary" style={{ fontSize: 13, fontWeight: 400, marginLeft: 8 }}>
+                    ({marketCount})
+                  </Text>
+                </Title>
+                {renderSectionBody(section, selectedMap, isMobile, onToggleMarket, onToggleGroup, t)}
+              </>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

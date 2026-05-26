@@ -1907,7 +1907,7 @@
       "subtitle": "Filter by category or search by name. Multiple selection supported.",
       "back": "Back",
       "searchPlaceholder": "Search market name (min. 2 characters)",
-      "searchHint": "Enter keywords or pick a category above",
+      "searchHint": "Pick a category above, or enter at least 2 characters to search",
       "sportsGamesHint": "Sports leagues show individual game markets; search by team name",
       "sportsGamesEmpty": "No active game markets for this league. Try searching a team name or check back later.",
       "empty": "No markets found",

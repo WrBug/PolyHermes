@@ -1,10 +1,9 @@
 import { Checkbox, Tag, Typography } from 'antd'
 import { LinkOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
-import { parseMarketOutcomes, pickMarketImageUrl } from '../constants/whaleMonitor'
+import { parseMarketOutcomes } from '../constants/whaleMonitor'
 import type { WhaleMonitorMarketItem } from '../types'
 import { formatUSDC } from '../utils'
-import WhaleMonitorMarketThumbnail from './WhaleMonitorMarketThumbnail'
 
 const { Text } = Typography
 
@@ -33,9 +32,6 @@ const WhaleMonitorMarketListItem: React.FC<WhaleMonitorMarketListItemProps> = ({
   const volumeDisplay =
     market.volume && parseFloat(market.volume) > 0 ? formatUSDC(market.volume) : null
   const polymarketUrl = market.slug ? `https://polymarket.com/event/${market.slug}` : null
-  const imageUrl = pickMarketImageUrl(market)
-  const thumbSize = compact ? 36 : isMobile ? 40 : 44
-
   const handleOpenLink = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (polymarketUrl) {
@@ -72,7 +68,6 @@ const WhaleMonitorMarketListItem: React.FC<WhaleMonitorMarketListItemProps> = ({
         onChange={e => onToggle(e.target.checked)}
         style={{ marginTop: 2 }}
       />
-      <WhaleMonitorMarketThumbnail src={imageUrl} size={thumbSize} />
       <div style={{ flex: 1, minWidth: 0 }}>
         {market.eventTitle && !hideEventTitle && (
           <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 2 }}>

@@ -1907,7 +1907,7 @@
       "subtitle": "按分类筛选或搜索市场名称，可多选",
       "back": "返回",
       "searchPlaceholder": "搜索市场名称（至少 2 个字符）",
-      "searchHint": "请输入关键词搜索，或选择上方分类筛选",
+      "searchHint": "请选择上方分类，或输入至少 2 个字符搜索",
       "sportsGamesHint": "体育联赛将展示单场比赛盘口；也可输入队名搜索",
       "sportsGamesEmpty": "该联赛当前暂无进行中的单场比赛盘口，可尝试搜索队名或稍后再试",
       "empty": "未找到匹配的市场",

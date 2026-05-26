@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
   Button,
@@ -23,12 +23,26 @@ import type { WhaleMonitorMarketItem, WhaleMonitorMarketSelectLocationState } fr
 const { Title, Text } = Typography
 
 const TAG_OPTIONS = [
-  { key: 'all', value: '' },
   { key: 'sports', value: '1' },
   { key: 'politics', value: '2' },
   { key: 'crypto', value: '21' },
   { key: 'popCulture', value: '100639' }
 ] as const
+
+const MIN_SEARCH_LENGTH = 2
+
+interface TagViewCache {
+  sportSubSeriesId?: string
+  keyword: string
+  debouncedKeyword: string
+  markets: WhaleMonitorMarketItem[]
+}
+
+const buildListCacheKey = (
+  tag: string,
+  seriesId: string | undefined,
+  searchKeyword: string
+): string => `${tag}::${seriesId ?? ''}::${searchKeyword}`
 
 const WhaleMonitorMarketSelect: React.FC = () => {
   const { t } = useTranslation()
@@ -41,7 +55,7 @@ const WhaleMonitorMarketSelect: React.FC = () => {
 
   const [keyword, setKeyword] = useState('')
   const [debouncedKeyword, setDebouncedKeyword] = useState('')
-  const [tagId, setTagId] = useState<string>('')
+  const [tagId, setTagId] = useState<string | undefined>(undefined)
   const [sportSubSeriesId, setSportSubSeriesId] = useState<string | undefined>(undefined)
   const [sportSubCategories, setSportSubCategories] = useState<
     Array<{ id: number; slug: string; label: string; tagId: string; seriesId: string; image?: string }>
@@ -53,6 +67,12 @@ const WhaleMonitorMarketSelect: React.FC = () => {
     initialSelected.forEach(m => map.set(m.conditionId, m))
     return map
   })
+
+  const tagViewCacheRef = useRef<Map<string, TagViewCache>>(new Map())
+  const listCacheRef = useRef<Map<string, WhaleMonitorMarketItem[]>>(new Map())
+  const skipNextFetchRef = useRef(false)
+  const initialTagSetRef = useRef(false)
+  const initialSportLeagueSetRef = useRef(false)
 
   const tagSegmentOptions = useMemo(
     () =>
@@ -68,17 +88,7 @@ const WhaleMonitorMarketSelect: React.FC = () => {
     return () => clearTimeout(timer)
   }, [keyword])
 
-  useEffect(() => {
-    if (tagId === '1') {
-      fetchSportSubCategories()
-      setSportSubSeriesId(undefined)
-    } else {
-      setSportSubCategories([])
-      setSportSubSeriesId(undefined)
-    }
-  }, [tagId])
-
-  const fetchSportSubCategories = async () => {
+  const fetchSportSubCategories = useCallback(async () => {
     try {
       const res = await apiService.markets.sportsCategories()
       if (res.data.code === 0 && res.data.data) {
@@ -91,35 +101,137 @@ const WhaleMonitorMarketSelect: React.FC = () => {
     } catch {
       setSportSubCategories([])
     }
+  }, [])
+
+  useEffect(() => {
+    if (initialTagSetRef.current) return
+    initialTagSetRef.current = true
+    setTagId(TAG_OPTIONS[0].value)
+  }, [])
+
+  useEffect(() => {
+    if (tagId === '1') {
+      if (sportSubCategories.length === 0) {
+        fetchSportSubCategories()
+      }
+    } else {
+      setSportSubCategories([])
+    }
+  }, [tagId, sportSubCategories.length, fetchSportSubCategories])
+
+  useEffect(() => {
+    if (tagId !== '1' || sportSubCategories.length === 0) return
+    if (sportSubSeriesId) return
+    const tagCached = tagViewCacheRef.current.get('1')
+    if (tagCached?.sportSubSeriesId) {
+      setSportSubSeriesId(tagCached.sportSubSeriesId)
+      return
+    }
+    if (!initialSportLeagueSetRef.current) {
+      initialSportLeagueSetRef.current = true
+      setSportSubSeriesId(sportSubCategories[0].seriesId)
+    }
+  }, [tagId, sportSubCategories, sportSubSeriesId])
+
+  const saveCurrentTagView = useCallback(() => {
+    if (!tagId) return
+    tagViewCacheRef.current.set(tagId, {
+      sportSubSeriesId,
+      keyword,
+      debouncedKeyword,
+      markets: marketList
+    })
+    listCacheRef.current.set(
+      buildListCacheKey(tagId, sportSubSeriesId, debouncedKeyword),
+      marketList
+    )
+  }, [tagId, sportSubSeriesId, keyword, debouncedKeyword, marketList])
+
+  const handleTagChange = (newTagId: string) => {
+    if (newTagId === tagId) return
+    saveCurrentTagView()
+
+    const cached = tagViewCacheRef.current.get(newTagId)
+    skipNextFetchRef.current = !!cached
+
+    setTagId(newTagId)
+
+    if (cached) {
+      setSportSubSeriesId(cached.sportSubSeriesId)
+      setKeyword(cached.keyword)
+      setDebouncedKeyword(cached.debouncedKeyword)
+      setMarketList(cached.markets)
+      if (newTagId === '1' && sportSubCategories.length === 0) {
+        fetchSportSubCategories()
+      }
+      return
+    }
+
+    setKeyword('')
+    setDebouncedKeyword('')
+    setMarketList([])
+    if (newTagId === '1') {
+      setSportSubSeriesId(undefined)
+      if (sportSubCategories.length === 0) {
+        fetchSportSubCategories()
+      }
+    } else {
+      setSportSubSeriesId(undefined)
+      setSportSubCategories([])
+    }
+  }
+
+  const flushSearch = () => {
+    setDebouncedKeyword(keyword.trim())
   }
 
   const fetchMarkets = useCallback(async () => {
+    if (!tagId) return
+
     const selectedSport = sportSubCategories.find(s => s.seriesId === sportSubSeriesId)
     const seriesId = sportSubSeriesId
     const sportSlug = selectedSport?.slug
-    const effectiveTagId = tagId && tagId !== '1' ? tagId : undefined
     const searchKeyword = debouncedKeyword
+    const hasKeyword = searchKeyword.length >= MIN_SEARCH_LENGTH
+    const categoryTagId = tagId !== '1' ? tagId : undefined
+    const sportsTagId = tagId === '1' && !seriesId && hasKeyword ? '1' : undefined
+    const effectiveTagId = categoryTagId || sportsTagId
+    const listCacheKey = buildListCacheKey(tagId, sportSubSeriesId, searchKeyword)
 
-    if (tagId === '1' && !sportSubSeriesId && searchKeyword.length < 2) {
+    if (tagId === '1' && !sportSubSeriesId && !hasKeyword) {
       setMarketList([])
       return
     }
-    if (!seriesId && !effectiveTagId && searchKeyword.length < 2) {
+    if (!seriesId && !effectiveTagId && !hasKeyword) {
       setMarketList([])
+      return
+    }
+
+    const listCached = listCacheRef.current.get(listCacheKey)
+    if (listCached) {
+      setMarketList(listCached)
       return
     }
 
     setLoading(true)
     try {
       const res = await apiService.markets.search({
-        keyword: searchKeyword.length >= 2 ? searchKeyword : '',
+        keyword: hasKeyword ? searchKeyword : '',
         seriesId: seriesId || undefined,
         sportSlug: seriesId ? sportSlug : undefined,
         tagId: seriesId ? undefined : effectiveTagId,
         limit: 200
       })
       if (res.data.code === 0 && res.data.data) {
-        setMarketList(res.data.data.map(m => toWhaleMonitorMarketItem(m)))
+        const items = res.data.data.map(m => toWhaleMonitorMarketItem(m))
+        listCacheRef.current.set(listCacheKey, items)
+        setMarketList(items)
+        tagViewCacheRef.current.set(tagId, {
+          sportSubSeriesId,
+          keyword,
+          debouncedKeyword: searchKeyword,
+          markets: items
+        })
       } else {
         setMarketList([])
       }
@@ -128,11 +240,20 @@ const WhaleMonitorMarketSelect: React.FC = () => {
     } finally {
       setLoading(false)
     }
-  }, [debouncedKeyword, tagId, sportSubSeriesId, sportSubCategories])
+  }, [debouncedKeyword, tagId, sportSubSeriesId, sportSubCategories, keyword])
 
   useEffect(() => {
+    if (skipNextFetchRef.current) {
+      skipNextFetchRef.current = false
+      return
+    }
     fetchMarkets()
   }, [fetchMarkets])
+
+  const handleSportLeagueChange = (seriesId: string | undefined) => {
+    saveCurrentTagView()
+    setSportSubSeriesId(seriesId)
+  }
 
   const selectedList = useMemo(() => Array.from(selectedMap.values()), [selectedMap])
 
@@ -172,10 +293,14 @@ const WhaleMonitorMarketSelect: React.FC = () => {
     navigate('/whale-monitor-strategy')
   }
 
-  const showSelectSportHint = tagId === '1' && !sportSubSeriesId && debouncedKeyword.length < 2
+  const showSelectSportHint = tagId === '1' && !sportSubSeriesId && debouncedKeyword.length < MIN_SEARCH_LENGTH
   const showSportsGamesEmpty =
-    tagId === '1' && !!sportSubSeriesId && marketList.length === 0 && !loading && debouncedKeyword.length < 2
-  const showSearchHint = !tagId && debouncedKeyword.length < 2
+    tagId === '1' &&
+    !!sportSubSeriesId &&
+    marketList.length === 0 &&
+    !loading &&
+    debouncedKeyword.length < MIN_SEARCH_LENGTH
+  const showSearchHint = !tagId && debouncedKeyword.length < MIN_SEARCH_LENGTH
 
   return (
     <div style={{ padding: isMobile ? 12 : 24, paddingBottom: isMobile ? 88 : 24 }}>
@@ -202,6 +327,7 @@ const WhaleMonitorMarketSelect: React.FC = () => {
           placeholder={t('whaleMonitorStrategy.marketSelect.searchPlaceholder')}
           value={keyword}
           onChange={e => setKeyword(e.target.value)}
+          onPressEnter={flushSearch}
           size={isMobile ? 'large' : 'middle'}
           style={{ marginBottom: 12 }}
         />
@@ -209,7 +335,7 @@ const WhaleMonitorMarketSelect: React.FC = () => {
           block={isMobile}
           options={tagSegmentOptions}
           value={tagId}
-          onChange={val => setTagId(val as string)}
+          onChange={val => handleTagChange(val)}
           style={{ marginBottom: tagId === '1' ? 12 : 0 }}
         />
         {tagId === '1' && sportSubCategories.length > 0 && (
@@ -220,7 +346,7 @@ const WhaleMonitorMarketSelect: React.FC = () => {
               placeholder={t('whaleMonitorStrategy.form.sportLeague')}
               style={{ width: '100%', marginTop: 12 }}
               value={sportSubSeriesId}
-              onChange={setSportSubSeriesId}
+              onChange={handleSportLeagueChange}
               optionFilterProp="label"
               size={isMobile ? 'large' : 'middle'}
               options={sportSubCategories.map(s => ({
