@@ -366,11 +366,25 @@
     "passwordHelpUpdate": "留空则不更新密码，输入新密码则更新",
     "check": "检查代理",
     "checkSuccess": "代理检查成功",
+    "checkSuccessWithGeoblockWarning": "代理可用，但地域受限",
     "checkFailed": "代理检查失败",
+    "geoblockTitle": "地域检测",
+    "geoblockAvailable": "出口 IP 可下单（{{location}}）",
+    "geoblockBlocked": "出口 IP 受限，无法下单（{{location}}）",
     "saveSuccess": "保存配置成功",
     "saveFailed": "保存配置失败",
     "getFailed": "获取代理配置失败",
     "latency": "延迟",
+    "checkResult": {
+      "connection": "代理连接",
+      "connected": "正常",
+      "failed": "失败",
+      "latency": "响应延迟",
+      "detail": "详情",
+      "geoblockOk": "可下单",
+      "geoblockBlocked": "地域受限",
+      "geoblockUnknown": "检测异常"
+    },
     "hostInvalid": "请输入有效的主机地址",
     "portInvalid": "端口必须在 1-65535 之间"
   },
@@ -1285,6 +1299,36 @@
     "webhookUrl": "Webhook URL",
     "webhookUrlPlaceholder": "Webhook URL（从 Slack App 设置中获取）",
     "webhookUrlRequired": "请输入 Webhook URL"
+  },
+  "geoblock": {
+    "title": "交易地域检查",
+    "checking": "正在检测交易服务器出口 IP 的地域限制…",
+    "checkingShort": "正在检测服务器地域…",
+    "ip": "检测 IP",
+    "location": "地区",
+    "refresh": "刷新",
+    "viewDocs": "查看官方地域限制说明",
+    "viewDocsShort": "说明",
+    "sourceServer": "检测对象：交易服务器",
+    "menu": {
+      "ok": "地域可用 · {{location}}",
+      "blocked": "地域受限 · {{location}}"
+    },
+    "available": {
+      "title": "当前服务器网络可向 Polymarket 提交订单",
+      "description": "检测 IP：{{ip}}，地区：{{location}}",
+      "short": "服务器可交易 · {{location}} · {{ip}}"
+    },
+    "blocked": {
+      "title": "当前服务器 IP 所在地区无法向 Polymarket 下单",
+      "description": "Polymarket 会拒绝来自受限地区的订单。请为交易服务器配置合规的网络或代理环境后再进行跟单。",
+      "short": "服务器 IP 受限（{{location}} · {{ip}}），无法下单"
+    },
+    "unknown": {
+      "title": "无法完成地域检测",
+      "description": "请检查服务器网络、代理配置或稍后重试。检测失败不会阻止您查看公告，但跟单前请自行确认网络环境。",
+      "short": "地域检测失败"
+    }
   },
   "announcements": {
     "title": "公告",

@@ -381,7 +381,21 @@
     "saveSuccess": "Configuration saved successfully",
     "saveFailed": "Failed to save configuration",
     "getFailed": "Failed to get proxy configuration",
-    "latency": "Latency"
+    "latency": "Latency",
+    "checkResult": {
+      "connection": "Proxy connection",
+      "connected": "OK",
+      "failed": "Failed",
+      "latency": "Response time",
+      "detail": "Details",
+      "geoblockOk": "Can trade",
+      "geoblockBlocked": "Region restricted",
+      "geoblockUnknown": "Check failed"
+    },
+    "checkSuccessWithGeoblockWarning": "Proxy is OK, but trading region is restricted",
+    "geoblockTitle": "Geo check",
+    "geoblockAvailable": "Egress IP can trade ({{location}})",
+    "geoblockBlocked": "Egress IP is restricted and orders are blocked ({{location}})"
   },
   "configPage": {
     "title": "Global Configuration",
@@ -1285,6 +1299,36 @@
     "webhookUrl": "Webhook URL",
     "webhookUrlPlaceholder": "Webhook URL (from Slack App settings)",
     "webhookUrlRequired": "Please enter Webhook URL"
+  },
+  "geoblock": {
+    "title": "Trading Region Check",
+    "checking": "Checking geographic restrictions for the trading server egress IP…",
+    "checkingShort": "Checking server region…",
+    "ip": "Detected IP",
+    "location": "Region",
+    "refresh": "Refresh",
+    "viewDocs": "View official geo restrictions",
+    "viewDocsShort": "Docs",
+    "sourceServer": "Source: trading server",
+    "menu": {
+      "ok": "Region OK · {{location}}",
+      "blocked": "Restricted · {{location}}"
+    },
+    "available": {
+      "title": "Trading server can place orders on Polymarket",
+      "description": "IP: {{ip}}, region: {{location}}",
+      "short": "Server OK · {{location}} · {{ip}}"
+    },
+    "blocked": {
+      "title": "Trading server IP is in a restricted region",
+      "description": "Polymarket rejects orders from restricted regions. Configure a compliant network or proxy for your trading server before copy trading.",
+      "short": "Server IP restricted ({{location}} · {{ip}}) — orders blocked"
+    },
+    "unknown": {
+      "title": "Could not complete region check",
+      "description": "Check server network, proxy settings, or try again later. You can still read announcements, but verify your network before copy trading.",
+      "short": "Region check failed"
+    }
   },
   "announcements": {
     "title": "Announcements",

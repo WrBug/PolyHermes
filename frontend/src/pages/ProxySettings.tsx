@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Card, Form, Button, Switch, Input, InputNumber, message, Typography, Space, Alert } from 'antd'
+import { Card, Form, Button, Switch, Input, InputNumber, message, Typography, Space } from 'antd'
 import { SaveOutlined, CheckCircleOutlined, ReloadOutlined } from '@ant-design/icons'
 import { apiService } from '../services/api'
 import { useTranslation } from 'react-i18next'
 import { useMediaQuery } from 'react-responsive'
+import ProxyCheckResultAlert, { type ProxyCheckResponse } from '../components/ProxyCheckResultAlert'
 
-const { Title, Text } = Typography
+const { Title } = Typography
 
 interface ProxyConfig {
   id?: number
@@ -18,13 +19,6 @@ interface ProxyConfig {
   lastSubscriptionUpdate?: number
   createdAt: number
   updatedAt: number
-}
-
-interface ProxyCheckResponse {
-  success: boolean
-  message: string
-  responseTime?: number
-  latency?: number
 }
 
 const ProxySettings: React.FC = () => {
@@ -211,24 +205,7 @@ const ProxySettings: React.FC = () => {
         </Form>
         
         {checkResult && (
-          <Alert
-            type={checkResult.success ? 'success' : 'error'}
-            message={checkResult.success ? (t('proxySettings.checkSuccess') || '代理检查成功') : (t('proxySettings.checkFailed') || '代理检查失败')}
-            description={
-              <div>
-                <Text>{checkResult.message}</Text>
-                {(checkResult.responseTime !== undefined || checkResult.latency !== undefined) && (
-                  <div style={{ marginTop: '8px' }}>
-                    <Text type="secondary">
-                      {t('proxySettings.latency') || '延迟'}: {(checkResult.latency ?? checkResult.responseTime) ?? 0}ms
-                    </Text>
-                  </div>
-                )}
-              </div>
-            }
-            style={{ marginTop: '16px' }}
-            showIcon
-          />
+          <ProxyCheckResultAlert result={checkResult} style={{ marginTop: '16px' }} />
         )}
       </Card>
     </div>

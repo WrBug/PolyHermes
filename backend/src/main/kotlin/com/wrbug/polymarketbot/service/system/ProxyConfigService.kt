@@ -24,7 +24,8 @@ import java.util.concurrent.TimeUnit
  */
 @Service
 class ProxyConfigService(
-    private val proxyConfigRepository: ProxyConfigRepository
+    private val proxyConfigRepository: ProxyConfigRepository,
+    private val geoblockService: GeoblockService
 ) : ApplicationContextAware {
     
     private var applicationContext: ApplicationContext? = null
@@ -148,99 +149,152 @@ class ProxyConfigService(
     }
     
     /**
-     * 检查代理是否可用
-     * 使用配置的代理请求 Polymarket 健康检查接口
+     * 检查代理是否可用，并检测经该代理访问 Polymarket 时的地域限制
      */
     fun checkProxy(): ProxyCheckResponse {
         return try {
             val config = proxyConfigRepository.findByEnabledTrue()
-                ?: return ProxyCheckResponse.create(
+            if (config == null) {
+                return ProxyCheckResponse.create(
                     success = false,
-                    message = "未配置代理或代理未启用"
+                    message = "未配置代理或代理未启用",
+                    geoblock = checkGeoblockForProxy(null)
                 )
-            
+            }
+
             if (config.type != "HTTP") {
                 return ProxyCheckResponse.create(
                     success = false,
-                    message = "当前仅支持检查 HTTP 代理（订阅代理检查功能待实现）"
+                    message = "当前仅支持检查 HTTP 代理（订阅代理检查功能待实现）",
+                    geoblock = checkGeoblockForProxy(null)
                 )
             }
-            
+
             if (config.host == null || config.port == null) {
                 return ProxyCheckResponse.create(
                     success = false,
-                    message = "代理配置不完整：缺少主机或端口"
+                    message = "代理配置不完整：缺少主机或端口",
+                    geoblock = checkGeoblockForProxy(null)
                 )
             }
-            
-            // 创建代理
-            val proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress(config.host, config.port))
-            
-            // 创建 OkHttpClient
-            val clientBuilder = OkHttpClient.Builder()
-                .proxy(proxy)
-                .connectTimeout(10, TimeUnit.SECONDS)
-                .readTimeout(10, TimeUnit.SECONDS)
-                .writeTimeout(10, TimeUnit.SECONDS)
-            
-            // 配置 SSL：信任所有证书（用于代理连接）
-            clientBuilder.createSSLSocketFactory()
-            clientBuilder.hostnameVerifier(TrustAllHostnameVerifier())
-            
-            // 如果配置了用户名和密码，添加代理认证
-            if (config.username != null && config.password != null) {
-                clientBuilder.proxyAuthenticator { _, response ->
-                    val credential = okhttp3.Credentials.basic(config.username, config.password)
-                    response.request.newBuilder()
-                        .header("Proxy-Authorization", credential)
-                        .build()
-                }
-            }
-            
-            val client = clientBuilder.build()
-            
-            // 请求 Polymarket 健康检查接口
+
+            val client = buildProxyHttpClient(config)
+            val geoblock = checkGeoblockForProxy(client)
+
             val request = Request.Builder()
                 .url("https://data-api.polymarket.com/")
                 .get()
                 .build()
-            
+
             val startTime = System.currentTimeMillis()
             val response = client.newCall(request).execute()
             val responseTime = System.currentTimeMillis() - startTime
-            
+
             val responseBody = response.body?.string()
-            
+
             if (response.isSuccessful && responseBody != null) {
-                // 检查响应内容是否为 {"data": "OK"}
                 if (responseBody.contains("\"data\"") && responseBody.contains("OK")) {
                     logger.info("代理检查成功：host=${config.host}, port=${config.port}, responseTime=${responseTime}ms")
+                    val message = buildProxyCheckMessage("代理连接成功", geoblock)
                     ProxyCheckResponse.create(
                         success = true,
-                        message = "代理连接成功",
-                        responseTime = responseTime
+                        message = message,
+                        responseTime = responseTime,
+                        geoblock = geoblock
                     )
                 } else {
                     ProxyCheckResponse.create(
                         success = false,
-                        message = "代理连接成功，但响应格式不正确：$responseBody",
-                        responseTime = responseTime
+                        message = buildProxyCheckMessage(
+                            "代理连接成功，但响应格式不正确：$responseBody",
+                            geoblock
+                        ),
+                        responseTime = responseTime,
+                        geoblock = geoblock
                     )
                 }
             } else {
                 ProxyCheckResponse.create(
                     success = false,
-                    message = "代理连接失败：HTTP ${response.code} ${response.message}",
-                    responseTime = responseTime
+                    message = buildProxyCheckMessage(
+                        "代理连接失败：HTTP ${response.code} ${response.message}",
+                        geoblock
+                    ),
+                    responseTime = responseTime,
+                    geoblock = geoblock
                 )
             }
         } catch (e: Exception) {
             logger.error("代理检查异常", e)
             ProxyCheckResponse.create(
                 success = false,
-                message = "代理检查失败：${e.message}"
+                message = "代理检查失败：${e.message}",
+                geoblock = checkGeoblockForProxy(null)
             )
         }
+    }
+
+    private fun buildProxyHttpClient(config: ProxyConfig): OkHttpClient {
+        val host = requireNotNull(config.host) { "代理主机不能为空" }
+        val port = requireNotNull(config.port) { "代理端口不能为空" }
+        val proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress(host, port))
+        val clientBuilder = OkHttpClient.Builder()
+            .proxy(proxy)
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .writeTimeout(10, TimeUnit.SECONDS)
+
+        clientBuilder.createSSLSocketFactory()
+        clientBuilder.hostnameVerifier(TrustAllHostnameVerifier())
+
+        if (config.username != null && config.password != null) {
+            clientBuilder.proxyAuthenticator { _, response ->
+                val credential = Credentials.basic(config.username, config.password)
+                response.request.newBuilder()
+                    .header("Proxy-Authorization", credential)
+                    .build()
+            }
+        }
+
+        return clientBuilder.build()
+    }
+
+    private fun checkGeoblockForProxy(client: OkHttpClient?): ProxyCheckGeoblockResult {
+        val httpClient = client ?: com.wrbug.polymarketbot.util.createClient()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .writeTimeout(10, TimeUnit.SECONDS)
+            .build()
+
+        return geoblockService.checkGeoblockWithClient(httpClient).fold(
+            onSuccess = { dto ->
+                ProxyCheckGeoblockResult(
+                    checked = true,
+                    blocked = dto.blocked,
+                    ip = dto.ip,
+                    country = dto.country,
+                    region = dto.region,
+                    message = if (dto.blocked) {
+                        "当前出口 IP（${dto.country}/${dto.region}）在 Polymarket 受限，无法下单"
+                    } else {
+                        "当前出口 IP（${dto.country}/${dto.region}）可向 Polymarket 下单"
+                    }
+                )
+            },
+            onFailure = { e ->
+                ProxyCheckGeoblockResult(
+                    checked = true,
+                    message = "地域限制检测失败：${e.message}"
+                )
+            }
+        )
+    }
+
+    private fun buildProxyCheckMessage(baseMessage: String, geoblock: ProxyCheckGeoblockResult): String {
+        if (!geoblock.checked || geoblock.message.isNullOrBlank()) {
+            return baseMessage
+        }
+        return "$baseMessage；${geoblock.message}"
     }
     
     /**

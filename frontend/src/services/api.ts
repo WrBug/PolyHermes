@@ -625,6 +625,15 @@ export const apiService = {
         success: boolean
         message: string
         responseTime?: number
+        latency?: number
+        geoblock?: {
+          checked: boolean
+          blocked?: boolean | null
+          ip?: string | null
+          country?: string | null
+          region?: string | null
+          message?: string | null
+        } | null
       }>>('/system/proxy/check', {}),
     
     /**
@@ -645,7 +654,20 @@ export const apiService = {
           message: string
           responseTime?: number
         }>
-      }>>('/system/proxy/api-health-check', {})
+      }>>('/system/proxy/api-health-check', {}),
+
+    /**
+     * 检查交易服务器出口 IP 的地域限制（Polymarket Geoblock）
+     */
+    checkGeoblock: () =>
+      apiClient.post<ApiResponse<{
+        blocked: boolean
+        ip: string
+        country: string
+        region: string
+        checkedAt: number
+        source: string
+      }>>('/system/proxy/geoblock-check', {})
   },
   
   /**

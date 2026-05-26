@@ -3,6 +3,7 @@ package com.wrbug.polymarketbot.controller.system
 import com.wrbug.polymarketbot.dto.*
 import com.wrbug.polymarketbot.enums.ErrorCode
 import com.wrbug.polymarketbot.service.system.ApiHealthCheckService
+import com.wrbug.polymarketbot.service.system.GeoblockService
 import com.wrbug.polymarketbot.service.system.ProxyConfigService
 import jakarta.servlet.http.HttpServletRequest
 import kotlinx.coroutines.runBlocking
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.*
 class ProxyConfigController(
     private val proxyConfigService: ProxyConfigService,
     private val apiHealthCheckService: ApiHealthCheckService,
+    private val geoblockService: GeoblockService,
     private val messageSource: MessageSource
 ) {
     
@@ -121,6 +123,32 @@ class ProxyConfigController(
         } catch (e: Exception) {
             logger.error("API 健康检查失败", e)
             ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, "API 健康检查失败：${e.message}", messageSource))
+        }
+    }
+
+    /**
+     * 检查交易服务器出口 IP 的地域限制（Polymarket Geoblock）
+     */
+    @PostMapping("/geoblock-check")
+    fun checkGeoblock(): ResponseEntity<ApiResponse<GeoblockCheckDto>> {
+        return try {
+            val result = runBlocking { geoblockService.checkGeoblock() }
+            if (result.isSuccess) {
+                ResponseEntity.ok(ApiResponse.success(result.getOrNull()))
+            } else {
+                val error = result.exceptionOrNull()
+                logger.error("Geoblock 检查失败", error)
+                ResponseEntity.ok(
+                    ApiResponse.error(
+                        ErrorCode.SERVER_ERROR,
+                        error?.message ?: "Geoblock 检查失败",
+                        messageSource
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            logger.error("Geoblock 检查异常", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, "Geoblock 检查失败：${e.message}", messageSource))
         }
     }
 }

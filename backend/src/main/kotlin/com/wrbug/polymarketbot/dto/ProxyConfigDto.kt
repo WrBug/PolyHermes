@@ -37,21 +37,40 @@ data class SubscriptionProxyConfigRequest(
 )
 
 /**
+ * 代理检查时的 Polymarket 地域限制检测结果
+ */
+data class ProxyCheckGeoblockResult(
+    val checked: Boolean,
+    val blocked: Boolean? = null,
+    val ip: String? = null,
+    val country: String? = null,
+    val region: String? = null,
+    val message: String? = null
+)
+
+/**
  * 代理检查响应
  */
 data class ProxyCheckResponse(
     val success: Boolean,
     val message: String,
     val responseTime: Long? = null,  // 响应时间（毫秒）
-    val latency: Long? = null  // 延迟（毫秒），与 responseTime 相同，用于前端显示
+    val latency: Long? = null,  // 延迟（毫秒），与 responseTime 相同，用于前端显示
+    val geoblock: ProxyCheckGeoblockResult? = null
 ) {
     companion object {
-        fun create(success: Boolean, message: String, responseTime: Long? = null): ProxyCheckResponse {
+        fun create(
+            success: Boolean,
+            message: String,
+            responseTime: Long? = null,
+            geoblock: ProxyCheckGeoblockResult? = null
+        ): ProxyCheckResponse {
             return ProxyCheckResponse(
                 success = success,
                 message = message,
                 responseTime = responseTime,
-                latency = responseTime  // latency 和 responseTime 相同
+                latency = responseTime,
+                geoblock = geoblock
             )
         }
     }

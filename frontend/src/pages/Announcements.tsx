@@ -6,7 +6,6 @@ import { apiService } from '../services/api'
 import { useMediaQuery } from 'react-responsive'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-
 const { Title, Text } = Typography
 
 interface Reactions {

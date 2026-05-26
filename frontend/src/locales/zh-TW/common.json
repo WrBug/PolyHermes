@@ -381,7 +381,21 @@
     "saveSuccess": "保存配置成功",
     "saveFailed": "保存配置失敗",
     "getFailed": "獲取代理配置失敗",
-    "latency": "延遲"
+    "latency": "延遲",
+    "checkResult": {
+      "connection": "代理連線",
+      "connected": "正常",
+      "failed": "失敗",
+      "latency": "回應延遲",
+      "detail": "詳情",
+      "geoblockOk": "可下單",
+      "geoblockBlocked": "地域受限",
+      "geoblockUnknown": "檢測異常"
+    },
+    "checkSuccessWithGeoblockWarning": "代理可用，但地域受限",
+    "geoblockTitle": "地域檢測",
+    "geoblockAvailable": "出口 IP 可下單（{{location}}）",
+    "geoblockBlocked": "出口 IP 受限，無法下單（{{location}}）"
   },
   "configPage": {
     "title": "全局配置",
@@ -1285,6 +1299,36 @@
     "webhookUrl": "Webhook URL",
     "webhookUrlPlaceholder": "Webhook URL（從 Slack App 設置中獲取）",
     "webhookUrlRequired": "請輸入 Webhook URL"
+  },
+  "geoblock": {
+    "title": "交易地域檢查",
+    "checking": "正在檢測交易伺服器出口 IP 的地域限制…",
+    "checkingShort": "正在檢測伺服器地域…",
+    "ip": "檢測 IP",
+    "location": "地區",
+    "refresh": "刷新",
+    "viewDocs": "查看官方地域限制說明",
+    "viewDocsShort": "說明",
+    "sourceServer": "檢測對象：交易伺服器",
+    "menu": {
+      "ok": "地域可用 · {{location}}",
+      "blocked": "地域受限 · {{location}}"
+    },
+    "available": {
+      "title": "當前伺服器網路可向 Polymarket 提交訂單",
+      "description": "檢測 IP：{{ip}}，地區：{{location}}",
+      "short": "伺服器可交易 · {{location}} · {{ip}}"
+    },
+    "blocked": {
+      "title": "當前伺服器 IP 所在地區無法向 Polymarket 下單",
+      "description": "Polymarket 會拒絕來自受限地區的訂單。請為交易伺服器配置合規的網路或代理環境後再進行跟單。",
+      "short": "伺服器 IP 受限（{{location}} · {{ip}}），無法下單"
+    },
+    "unknown": {
+      "title": "無法完成地域檢測",
+      "description": "請檢查伺服器網路、代理配置或稍後重試。檢測失敗不會阻止您查看公告，但跟單前請自行確認網路環境。",
+      "short": "地域檢測失敗"
+    }
   },
   "announcements": {
     "title": "公告",

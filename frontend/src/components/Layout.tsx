@@ -31,6 +31,7 @@ import { removeToken, getVersionText, getVersionInfo } from '../utils'
 import { wsManager } from '../services/websocket'
 import { apiClient } from '../services/api'
 import Logo from './Logo'
+import GeoblockStatusTrigger from './GeoblockStatusTrigger'
 
 const { Header, Content, Sider } = AntLayout
 
@@ -346,6 +347,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             >
               <SendOutlined />
             </a>
+            <GeoblockStatusTrigger iconSize={16} dotSize={10} />
             <Button
               type="text"
               icon={<MenuOutlined />}
@@ -393,7 +395,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           position: 'fixed',
           left: 0,
           top: 0,
-          overflow: 'hidden'
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column'
         }}
       >
         <div style={{ 
@@ -473,6 +477,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             >
               <SendOutlined />
             </a>
+            <GeoblockStatusTrigger iconSize={18} dotSize={12} />
           </div>
         </div>
         <Menu
@@ -483,7 +488,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           items={menuItems}
           onClick={handleMenuClick}
           style={{ 
-            height: 'calc(100vh - 100px)', 
+            flex: 1,
+            minHeight: 0,
             borderRight: 0,
             overflowY: 'auto'
           }}

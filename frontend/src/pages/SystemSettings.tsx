@@ -7,7 +7,7 @@ import { useMediaQuery } from 'react-responsive'
 import { useTranslation } from 'react-i18next'
 import type { SystemConfig, BuilderApiKeyUpdateRequest } from '../types'
 import SystemUpdate from './SystemUpdate'
-
+import ProxyCheckResultAlert, { type ProxyCheckResponse } from '../components/ProxyCheckResultAlert'
 const { Title, Text, Paragraph } = Typography
 
 interface ProxyConfig {
@@ -21,13 +21,6 @@ interface ProxyConfig {
   lastSubscriptionUpdate?: number
   createdAt: number
   updatedAt: number
-}
-
-interface ProxyCheckResponse {
-  success: boolean
-  message: string
-  responseTime?: number
-  latency?: number
 }
 
 const SystemSettings: React.FC = () => {
@@ -228,7 +221,12 @@ const SystemSettings: React.FC = () => {
         const result = response.data.data
         setProxyCheckResult(result)
         if (result.success) {
-          message.success(`代理检查成功：${result.message}${result.responseTime ? ` (响应时间: ${result.responseTime}ms)` : ''}`)
+          const geoblockHint = result.geoblock?.blocked
+            ? `；${result.geoblock.message ?? t('proxySettings.geoblockBlocked', { location: `${result.geoblock.country}/${result.geoblock.region}` })}`
+            : result.geoblock?.message
+              ? `；${result.geoblock.message}`
+              : ''
+          message.success(`代理检查成功：${result.message}${result.responseTime ? ` (响应时间: ${result.responseTime}ms)` : ''}${geoblockHint}`)
         } else {
           message.warning(`代理检查失败：${result.message}`)
         }
@@ -576,24 +574,7 @@ const SystemSettings: React.FC = () => {
         </Form>
 
         {proxyCheckResult && (
-          <Alert
-            type={proxyCheckResult.success ? 'success' : 'error'}
-            message={proxyCheckResult.success ? (t('proxySettings.checkSuccess') || '代理检查成功') : (t('proxySettings.checkFailed') || '代理检查失败')}
-            description={
-              <div>
-                <Text>{proxyCheckResult.message}</Text>
-                {(proxyCheckResult.responseTime !== undefined || proxyCheckResult.latency !== undefined) && (
-                  <div style={{ marginTop: '8px' }}>
-                    <Text type="secondary">
-                      {t('proxySettings.latency') || '延迟'}: {(proxyCheckResult.latency ?? proxyCheckResult.responseTime) ?? 0}ms
-                    </Text>
-                  </div>
-                )}
-              </div>
-            }
-            style={{ marginTop: '16px' }}
-            showIcon
-          />
+          <ProxyCheckResultAlert result={proxyCheckResult} style={{ marginTop: '16px' }} />
         )}
 
       </Card>
