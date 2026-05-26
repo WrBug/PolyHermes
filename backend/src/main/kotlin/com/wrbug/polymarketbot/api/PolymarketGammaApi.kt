@@ -25,8 +25,30 @@ interface PolymarketGammaApi {
     suspend fun listMarkets(
         @Query("condition_ids") conditionIds: List<String>? = null,
         @Query("clob_token_ids") clobTokenIds: List<String>? = null,
-        @Query("include_tag") includeTag: Boolean? = null
+        @Query("include_tag") includeTag: Boolean? = null,
+        @Query("tag_id") tagId: String? = null,
+        @Query("title") title: String? = null,
+        @Query("closed") closed: Boolean? = null,
+        @Query("limit") limit: Int? = null,
+        @Query("active") active: Boolean? = null
     ): Response<List<MarketResponse>>
+
+    /**
+     * 按系列/标签列出事件（体育单场比赛市场嵌套在 events.markets 中）
+     * 文档: https://docs.polymarket.com/market-data/fetching-markets
+     */
+    @GET("/events")
+    suspend fun listEvents(
+        @Query("series_id") seriesId: String? = null,
+        @Query("tag_id") tagId: String? = null,
+        @Query("title") title: String? = null,
+        @Query("closed") closed: Boolean? = null,
+        @Query("limit") limit: Int? = null,
+        @Query("offset") offset: Int? = null,
+        @Query("active") active: Boolean? = null,
+        @Query("order") order: String? = null,
+        @Query("ascending") ascending: Boolean? = null
+    ): Response<List<GammaEventListItem>>
 
     /**
      * 根据 slug 获取事件（用于 5/15 分钟加密市场）
@@ -35,6 +57,13 @@ interface PolymarketGammaApi {
      */
     @GET("/events/slug/{slug}")
     suspend fun getEventBySlug(@Path("slug") slug: String): Response<GammaEventBySlugResponse>
+
+    /**
+     * 获取体育联赛列表
+     * GET /sports 返回所有可用的体育分类（NBA、MLB、EPL 等）
+     */
+    @GET("/sports")
+    suspend fun listSports(): Response<List<GammaSportItem>>
 }
 
 /**
@@ -77,6 +106,30 @@ data class EventResponse(
     val endDate: String? = null,
     val createdAt: String? = null,
     val negRisk: Boolean? = null
+)
+
+/**
+ * 体育联赛项（来自 /sports 端点）
+ */
+data class GammaSportItem(
+    val id: Int? = null,
+    val sport: String? = null,
+    val image: String? = null,
+    val tags: String? = null,
+    val series: String? = null
+)
+
+/**
+ * Gamma /events 列表项（含嵌套 markets，用于体育联赛单场比赛）
+ */
+data class GammaEventListItem(
+    val id: String? = null,
+    val title: String? = null,
+    val slug: String? = null,
+    val category: String? = null,
+    val image: String? = null,
+    val icon: String? = null,
+    val markets: List<MarketResponse>? = null
 )
 
 /**

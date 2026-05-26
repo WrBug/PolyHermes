@@ -5,6 +5,9 @@ import com.wrbug.polymarketbot.dto.*
 import com.wrbug.polymarketbot.enums.ErrorCode
 import com.wrbug.polymarketbot.service.accounts.AccountService
 import com.wrbug.polymarketbot.service.common.MarketPriceService
+import com.wrbug.polymarketbot.service.common.MarketSearchResult
+import com.wrbug.polymarketbot.service.common.MarketService
+import com.wrbug.polymarketbot.service.common.SportCategoryResult
 import com.wrbug.polymarketbot.service.common.PolymarketClobService
 import kotlinx.coroutines.runBlocking
 import java.math.BigDecimal
@@ -23,6 +26,7 @@ class MarketController(
     private val accountService: AccountService,
     private val clobService: PolymarketClobService,
     private val marketPriceService: MarketPriceService,
+    private val marketService: MarketService,
     private val messageSource: MessageSource
 ) {
     
@@ -81,6 +85,42 @@ class MarketController(
         } catch (e: Exception) {
             logger.error("获取最新价异常: ${e.message}", e)
             ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_MARKET_LATEST_PRICE_FETCH_FAILED, e.message, messageSource))
+        }
+    }
+
+    /**
+     * 搜索市场（按标题关键词和/或分类标签，调用 Gamma API）
+     */
+    @PostMapping("/search")
+    fun searchMarkets(@RequestBody request: Map<String, Any>): ResponseEntity<ApiResponse<List<MarketSearchResult>>> {
+        return try {
+            val keyword = (request["keyword"] as? String)?.trim() ?: ""
+            val tagId = request["tagId"] as? String
+            val seriesId = request["seriesId"] as? String
+            val sportSlug = request["sportSlug"] as? String
+            val limit = (request["limit"] as? Number)?.toInt() ?: 50
+            if (keyword.length < 2 && tagId.isNullOrBlank() && seriesId.isNullOrBlank() && sportSlug.isNullOrBlank()) {
+                return ResponseEntity.ok(ApiResponse.success(emptyList()))
+            }
+            val results = runBlocking { marketService.searchMarkets(keyword, tagId, seriesId, sportSlug, limit) }
+            ResponseEntity.ok(ApiResponse.success(results))
+        } catch (e: Exception) {
+            logger.error("搜索市场异常: ${e.message}", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
+        }
+    }
+
+    /**
+     * 获取体育联赛子分类列表（NBA、MLB、EPL 等）
+     */
+    @PostMapping("/sports-categories")
+    fun getSportsCategories(): ResponseEntity<ApiResponse<List<SportCategoryResult>>> {
+        return try {
+            val results = runBlocking { marketService.listSportsCategories() }
+            ResponseEntity.ok(ApiResponse.success(results))
+        } catch (e: Exception) {
+            logger.error("获取体育分类异常: ${e.message}", e)
+            ResponseEntity.ok(ApiResponse.error(ErrorCode.SERVER_ERROR, e.message, messageSource))
         }
     }
 }

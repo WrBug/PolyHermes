@@ -158,6 +158,14 @@ enum class ErrorCode(
     ACCOUNT_BALANCE_FETCH_FAILED(4707, "查询账户余额失败", "error.account_balance_fetch_failed"),
     ACCOUNT_POSITIONS_FETCH_FAILED(4708, "查询仓位列表失败", "error.account_positions_fetch_failed"),
     
+    // 大单监听策略 (4730-4739)
+    WHALE_MONITOR_STRATEGY_NOT_FOUND(4730, "大单监听策略不存在", "error.whale_monitor_strategy_not_found"),
+    WHALE_MONITOR_STRATEGY_CONDITION_IDS_EMPTY(4731, "监听市场不能为空", "error.whale_monitor_strategy_condition_ids_empty"),
+    WHALE_MONITOR_STRATEGY_WINDOW_INVALID(4732, "时间窗口无效", "error.whale_monitor_strategy_window_invalid"),
+    WHALE_MONITOR_STRATEGY_THRESHOLD_INVALID(4733, "触发阈值无效", "error.whale_monitor_strategy_threshold_invalid"),
+    WHALE_MONITOR_STRATEGY_AMOUNT_INVALID(4734, "下单金额无效", "error.whale_monitor_strategy_amount_invalid"),
+    WHALE_MONITOR_STRATEGY_PRICE_INVALID(4735, "价格区间无效", "error.whale_monitor_strategy_price_invalid"),
+
     // 加密价差策略 (4710-4729)
     CRYPTO_TAIL_STRATEGY_NOT_FOUND(4710, "加密价差策略不存在", "error.crypto_tail_strategy_not_found"),
     CRYPTO_TAIL_STRATEGY_WINDOW_INVALID(4711, "时间区间开始不能大于结束", "error.crypto_tail_strategy_window_invalid"),
@@ -264,7 +272,14 @@ enum class ErrorCode(
     SERVER_CRYPTO_TAIL_STRATEGY_UPDATE_FAILED(5621, "更新加密价差策略失败", "error.server.crypto_tail_strategy_update_failed"),
     SERVER_CRYPTO_TAIL_STRATEGY_DELETE_FAILED(5622, "删除加密价差策略失败", "error.server.crypto_tail_strategy_delete_failed"),
     SERVER_CRYPTO_TAIL_STRATEGY_LIST_FETCH_FAILED(5623, "查询加密价差策略列表失败", "error.server.crypto_tail_strategy_list_fetch_failed"),
-    SERVER_CRYPTO_TAIL_STRATEGY_TRIGGERS_FETCH_FAILED(5624, "查询触发记录失败", "error.server.crypto_tail_strategy_triggers_fetch_failed");
+    SERVER_CRYPTO_TAIL_STRATEGY_TRIGGERS_FETCH_FAILED(5624, "查询触发记录失败", "error.server.crypto_tail_strategy_triggers_fetch_failed"),
+
+    // 大单监听策略服务 (5630-5639)
+    SERVER_WHALE_MONITOR_STRATEGY_CREATE_FAILED(5630, "创建大单监听策略失败", "error.server.whale_monitor_strategy_create_failed"),
+    SERVER_WHALE_MONITOR_STRATEGY_UPDATE_FAILED(5631, "更新大单监听策略失败", "error.server.whale_monitor_strategy_update_failed"),
+    SERVER_WHALE_MONITOR_STRATEGY_DELETE_FAILED(5632, "删除大单监听策略失败", "error.server.whale_monitor_strategy_delete_failed"),
+    SERVER_WHALE_MONITOR_STRATEGY_LIST_FETCH_FAILED(5633, "查询大单监听策略列表失败", "error.server.whale_monitor_strategy_list_fetch_failed"),
+    SERVER_WHALE_MONITOR_STRATEGY_TRIGGERS_FETCH_FAILED(5634, "查询大单监听触发记录失败", "error.server.whale_monitor_strategy_triggers_fetch_failed");
     
     companion object {
         /**

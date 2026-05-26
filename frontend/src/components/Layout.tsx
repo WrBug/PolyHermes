@@ -23,7 +23,8 @@ import {
   NotificationOutlined,
   LineChartOutlined,
   RocketOutlined,
-  DashboardOutlined
+  DashboardOutlined,
+  EyeOutlined
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 import type { ReactNode } from 'react'
@@ -81,14 +82,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     if (path.startsWith('/crypto-tail-strategy') || path.startsWith('/crypto-tail-monitor')) {
       keys.push('/crypto-tail-management')
     }
+    if (path.startsWith('/whale-monitor-strategy')) {
+      keys.push('/whale-monitor-management')
+    }
     if (path.startsWith('/system-settings')) {
       keys.push('/system-settings')
     }
     return keys
   }
-  
+
   const [openKeys, setOpenKeys] = useState<string[]>(getInitialOpenKeys())
-  
+
   // 当路径变化时，自动打开对应的父菜单
   useEffect(() => {
     const path = location.pathname
@@ -98,6 +102,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     }
     if (path.startsWith('/crypto-tail-strategy') || path.startsWith('/crypto-tail-monitor')) {
       keys.push('/crypto-tail-management')
+    }
+    if (path.startsWith('/whale-monitor-strategy')) {
+      keys.push('/whale-monitor-management')
     }
     if (path.startsWith('/system-settings')) {
       keys.push('/system-settings')
@@ -180,6 +187,18 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           key: '/crypto-tail-monitor',
           icon: <DashboardOutlined />,
           label: t('menu.cryptoTailMonitor')
+        }
+      ]
+    },
+    {
+      key: '/whale-monitor-management',
+      icon: <EyeOutlined />,
+      label: t('menu.whaleMonitorStrategy'),
+      children: [
+        {
+          key: '/whale-monitor-strategy',
+          icon: <DashboardOutlined />,
+          label: t('menu.whaleMonitorStrategyConfig')
         }
       ]
     },

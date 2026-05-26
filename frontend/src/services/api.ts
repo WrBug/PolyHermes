@@ -314,8 +314,39 @@ export const apiService = {
     /**
      * 获取最新价（从订单表获取，供前端下单时显示）
      */
-    getLatestPrice: (data: { tokenId: string }) => 
-      apiClient.post<ApiResponse<any>>('/markets/latest-price', data)
+    getLatestPrice: (data: { tokenId: string }) =>
+      apiClient.post<ApiResponse<any>>('/markets/latest-price', data),
+
+    /**
+     * 搜索市场（按标题关键词）
+     */
+    search: (data: { keyword: string; tagId?: string; seriesId?: string; sportSlug?: string; limit?: number }) =>
+      apiClient.post<ApiResponse<Array<{
+        conditionId: string
+        title: string
+        slug?: string
+        category?: string
+        volume?: string
+        outcomes?: string
+        eventTitle?: string
+        marketType?: 'game' | 'season'
+        image?: string
+        icon?: string
+        eventImage?: string
+      }>>>('/markets/search', data),
+
+    /**
+     * 获取体育联赛子分类列表
+     */
+    sportsCategories: () =>
+      apiClient.post<ApiResponse<Array<{
+        id: number
+        slug: string
+        label: string
+        tagId: string
+        seriesId?: string
+        image?: string
+      }>>>('/markets/sports-categories', {})
   },
   
   /**
@@ -524,6 +555,51 @@ export const apiService = {
       tokenIds: string[]
     }) =>
       apiClient.post<ApiResponse<import('../types').CryptoTailManualOrderResponse>>('/crypto-tail-strategy/manual-order', data)
+  },
+
+  /**
+   * 大单监听策略 API
+   */
+  whaleMonitorStrategy: {
+    list: (data: { accountId?: number; enabled?: boolean } = {}) =>
+      apiClient.post<ApiResponse<{ list: import('../types').WhaleMonitorStrategyDto[] }>>('/whale-monitor-strategy/list', data),
+    create: (data: {
+      accountId: number
+      name?: string
+      conditionIds: string[]
+      windowSeconds?: number
+      thresholdAmount: string
+      orderAmount: string
+      minPrice?: string
+      maxPrice?: string
+      cooldownSeconds?: number
+      enabled?: boolean
+    }) =>
+      apiClient.post<ApiResponse<import('../types').WhaleMonitorStrategyDto>>('/whale-monitor-strategy/create', data),
+    update: (data: {
+      strategyId: number
+      name?: string
+      conditionIds?: string[]
+      windowSeconds?: number
+      thresholdAmount?: string
+      orderAmount?: string
+      minPrice?: string
+      maxPrice?: string
+      cooldownSeconds?: number
+      enabled?: boolean
+    }) =>
+      apiClient.post<ApiResponse<import('../types').WhaleMonitorStrategyDto>>('/whale-monitor-strategy/update', data),
+    delete: (data: { strategyId: number }) =>
+      apiClient.post<ApiResponse<void>>('/whale-monitor-strategy/delete', data),
+    triggers: (data: {
+      strategyId: number
+      page?: number
+      pageSize?: number
+      status?: string
+      startDate?: number
+      endDate?: number
+    }) =>
+      apiClient.post<ApiResponse<{ list: import('../types').WhaleMonitorTriggerDto[]; total: number }>>('/whale-monitor-strategy/triggers', data)
   },
 
   /**

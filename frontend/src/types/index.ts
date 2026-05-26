@@ -1309,3 +1309,71 @@ export interface TemplateVariablesResponse {
   categories: TemplateVariableCategory[]  // 分类列表
   variables: TemplateVariable[]  // 变量列表
 }
+
+// ==================== 大单监听策略 ====================
+
+export type WhaleMonitorMarketType = 'game' | 'season'
+
+export interface WhaleMonitorMarketItem {
+  conditionId: string
+  title: string
+  slug?: string
+  category?: string
+  volume?: string
+  outcomes?: string
+  /** 体育对阵/赛事名，如 Spurs vs. Thunder */
+  eventTitle?: string
+  /** game=单场赛事，season=长期/赛季市场 */
+  marketType?: WhaleMonitorMarketType
+  image?: string
+  icon?: string
+  eventImage?: string
+}
+
+export interface WhaleMonitorFormDraft {
+  formValues: Record<string, unknown>
+  selectedMarkets: WhaleMonitorMarketItem[]
+  editingStrategyId?: number
+}
+
+export interface WhaleMonitorMarketSelectLocationState {
+  selectedMarkets?: WhaleMonitorMarketItem[]
+}
+
+export interface WhaleMonitorStrategyListLocationState {
+  selectedMarkets?: WhaleMonitorMarketItem[]
+}
+
+export interface WhaleMonitorStrategyDto {
+  id: number
+  accountId: number
+  name?: string
+  conditionIds: string[]
+  windowSeconds: number
+  thresholdAmount: string
+  orderAmount: string
+  minPrice: string
+  maxPrice: string
+  cooldownSeconds: number
+  enabled: boolean
+  lastTriggerAt?: number
+  triggerCount: number
+  createdAt: number
+  updatedAt: number
+}
+
+export interface WhaleMonitorTriggerDto {
+  id: number
+  strategyId: number
+  conditionId: string
+  tokenId: string
+  side: string
+  triggerVolume: string
+  orderPrice: string
+  orderSize: string
+  orderAmount: string
+  orderId?: string
+  status: string
+  failReason?: string
+  createdAt: number
+}
