@@ -10,7 +10,8 @@ import {
   clearWhaleMonitorFormDraft,
   conditionIdsToMarkets,
   loadWhaleMonitorFormDraft,
-  saveWhaleMonitorFormDraft
+  saveWhaleMonitorFormDraft,
+  strategyMarketsToItems
 } from '../constants/whaleMonitor'
 import type {
   WhaleMonitorStrategyDto,
@@ -90,7 +91,19 @@ const WhaleMonitorStrategyList: React.FC = () => {
     } else {
       setEditingStrategy(null)
     }
-    setSelectedMarkets(pendingFormDraft.selectedMarkets)
+    const draftStrategy = pendingFormDraft.editingStrategyId
+      ? strategies.find(s => s.id === pendingFormDraft.editingStrategyId)
+      : undefined
+    const knownMarkets =
+      draftStrategy?.markets && draftStrategy.markets.length > 0
+        ? strategyMarketsToItems(draftStrategy.markets)
+        : pendingFormDraft.selectedMarkets
+    setSelectedMarkets(
+      conditionIdsToMarkets(
+        draftStrategy?.conditionIds ?? knownMarkets.map(m => m.conditionId),
+        knownMarkets
+      )
+    )
     form.setFieldsValue(pendingFormDraft.formValues)
     setFormVisible(true)
     setPendingFormDraft(null)
@@ -173,7 +186,11 @@ const WhaleMonitorStrategyList: React.FC = () => {
 
   const showEditModal = (strategy: WhaleMonitorStrategyDto) => {
     setEditingStrategy(strategy)
-    setSelectedMarkets(conditionIdsToMarkets(strategy.conditionIds))
+    const known =
+      strategy.markets && strategy.markets.length > 0
+        ? strategyMarketsToItems(strategy.markets)
+        : []
+    setSelectedMarkets(conditionIdsToMarkets(strategy.conditionIds, known))
     form.setFieldsValue({
       accountId: strategy.accountId,
       name: strategy.name,

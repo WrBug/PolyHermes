@@ -7,6 +7,7 @@ import com.wrbug.polymarketbot.enums.ErrorCode
 import com.wrbug.polymarketbot.event.WhaleMonitorStrategyChangedEvent
 import com.wrbug.polymarketbot.repository.WhaleMonitorStrategyRepository
 import com.wrbug.polymarketbot.repository.WhaleMonitorTriggerRepository
+import com.wrbug.polymarketbot.service.common.MarketService
 import com.wrbug.polymarketbot.util.fromJson
 import com.wrbug.polymarketbot.util.gt
 import com.wrbug.polymarketbot.util.toSafeBigDecimal
@@ -26,6 +27,7 @@ import java.time.format.DateTimeFormatter
 class WhaleMonitorStrategyService(
     private val strategyRepository: WhaleMonitorStrategyRepository,
     private val triggerRepository: WhaleMonitorTriggerRepository,
+    private val marketService: MarketService,
     private val eventPublisher: ApplicationEventPublisher
 ) {
 
@@ -63,6 +65,7 @@ class WhaleMonitorStrategyService(
             validatePriceDecimalPlaces(maxPrice, "maxPrice")
 
             val conditionIdsJson = request.conditionIds.toJson()
+            cacheMarkets(request.conditionIds)
             val nameToSave = request.name?.takeIf { it.isNotBlank() }
                 ?: generateStrategyName()
 
@@ -95,10 +98,13 @@ class WhaleMonitorStrategyService(
             val existing = strategyRepository.findById(request.strategyId).orElse(null)
                 ?: return Result.failure(IllegalArgumentException(ErrorCode.WHALE_MONITOR_STRATEGY_NOT_FOUND.messageKey))
 
-            val conditionIdsJson = request.conditionIds?.let {
+            val updatedConditionIds = request.conditionIds?.also {
                 if (it.isEmpty()) return Result.failure(IllegalArgumentException(ErrorCode.WHALE_MONITOR_STRATEGY_CONDITION_IDS_EMPTY.messageKey))
-                it.toJson()
-            } ?: existing.conditionIds
+            }
+            val conditionIdsJson = updatedConditionIds?.toJson() ?: existing.conditionIds
+            if (updatedConditionIds != null) {
+                cacheMarkets(updatedConditionIds)
+            }
 
             val windowSeconds = request.windowSeconds ?: existing.windowSeconds
             if (windowSeconds <= 0) {
@@ -251,6 +257,32 @@ class WhaleMonitorStrategyService(
         return "大单监听策略-$suffix"
     }
 
+    /** 将 conditionId 对应市场写入 markets 表（复用 MarketService 缓存与 Gamma 拉取） */
+    private fun cacheMarkets(conditionIds: List<String>) {
+        if (conditionIds.isEmpty()) return
+        marketService.getMarkets(conditionIds)
+    }
+
+    private fun buildMarketDtos(conditionIds: List<String>): List<WhaleMonitorMarketDto> {
+        if (conditionIds.isEmpty()) return emptyList()
+        val cached = marketService.getMarkets(conditionIds)
+        return conditionIds.map { id ->
+            val market = cached[id]
+            if (market != null) {
+                WhaleMonitorMarketDto(
+                    conditionId = id,
+                    title = market.title,
+                    slug = market.slug,
+                    category = market.category,
+                    image = market.image,
+                    icon = market.icon
+                )
+            } else {
+                WhaleMonitorMarketDto(conditionId = id, title = id)
+            }
+        }
+    }
+
     private fun entityToDto(e: WhaleMonitorStrategy, lastTriggerAt: Long?, triggerCount: Long): WhaleMonitorStrategyDto {
         val conditionIdList: List<String> = try {
             e.conditionIds.fromJson<List<String>>() ?: emptyList()
@@ -262,6 +294,7 @@ class WhaleMonitorStrategyService(
             accountId = e.accountId,
             name = e.name,
             conditionIds = conditionIdList,
+            markets = buildMarketDtos(conditionIdList),
             windowSeconds = e.windowSeconds,
             thresholdAmount = e.thresholdAmount.toPlainString(),
             orderAmount = e.orderAmount.toPlainString(),

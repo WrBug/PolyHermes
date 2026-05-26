@@ -30,6 +30,27 @@ export function conditionIdsToMarkets(
   })
 }
 
+/** 策略列表/详情中的 markets 字段转为表单展示项 */
+export function strategyMarketsToItems(
+  markets: Array<{
+    conditionId: string
+    title: string
+    slug?: string
+    category?: string
+    image?: string
+    icon?: string
+  }>
+): WhaleMonitorMarketItem[] {
+  return markets.map(m => ({
+    conditionId: m.conditionId,
+    title: m.title,
+    slug: m.slug,
+    category: m.category,
+    image: m.image,
+    icon: m.icon
+  }))
+}
+
 /** 解析 Gamma 返回的 outcomes JSON 字符串 */
 export function parseMarketOutcomes(outcomes?: string): string[] {
   if (!outcomes?.trim()) return []

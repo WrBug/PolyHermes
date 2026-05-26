@@ -1344,11 +1344,21 @@ export interface WhaleMonitorStrategyListLocationState {
   selectedMarkets?: WhaleMonitorMarketItem[]
 }
 
+export interface WhaleMonitorStrategyMarketDto {
+  conditionId: string
+  title: string
+  slug?: string
+  category?: string
+  image?: string
+  icon?: string
+}
+
 export interface WhaleMonitorStrategyDto {
   id: number
   accountId: number
   name?: string
   conditionIds: string[]
+  markets?: WhaleMonitorStrategyMarketDto[]
   windowSeconds: number
   thresholdAmount: string
   orderAmount: string

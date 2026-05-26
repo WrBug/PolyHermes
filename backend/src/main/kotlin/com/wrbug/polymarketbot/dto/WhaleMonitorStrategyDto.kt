@@ -45,6 +45,18 @@ data class WhaleMonitorStrategyListRequest(
 )
 
 /**
+ * 策略关联市场展示信息（来自 markets 表缓存）
+ */
+data class WhaleMonitorMarketDto(
+    val conditionId: String = "",
+    val title: String = "",
+    val slug: String? = null,
+    val category: String? = null,
+    val image: String? = null,
+    val icon: String? = null
+)
+
+/**
  * 大单监听策略 DTO（列表与详情）
  */
 data class WhaleMonitorStrategyDto(
@@ -52,6 +64,8 @@ data class WhaleMonitorStrategyDto(
     val accountId: Long = 0L,
     val name: String? = null,
     val conditionIds: List<String> = emptyList(),
+    /** 监听市场展示信息（与 conditionIds 顺序一致，保存时写入 markets 缓存） */
+    val markets: List<WhaleMonitorMarketDto> = emptyList(),
     val windowSeconds: Int = 10,
     val thresholdAmount: String = "0",
     val orderAmount: String = "0",
