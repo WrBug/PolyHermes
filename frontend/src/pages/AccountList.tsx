@@ -9,6 +9,7 @@ import { formatUSDC } from '../utils'
 import AccountImportForm from '../components/AccountImportForm'
 import AccountSetupStatusBlock from '../components/AccountSetupStatusBlock'
 import apiService from '../services/api'
+import { walletTypeColor, walletTypeLabel } from '../utils/walletType'
 
 const { Title } = Typography
 
@@ -354,10 +355,9 @@ const AccountList: React.FC = () => {
       key: 'walletType',
       render: (walletType: string) => {
         if (!walletType) return '-'
-        const type = walletType.toLowerCase()
         return (
-          <Tag color={type === 'magic' ? 'purple' : 'blue'}>
-            {type === 'magic' ? 'Magic' : 'Safe'}
+          <Tag color={walletTypeColor(walletType)}>
+            {walletTypeLabel(walletType)}
           </Tag>
         )
       }
@@ -612,8 +612,8 @@ const AccountList: React.FC = () => {
                           </div>
                           <div style={{ fontSize: '12px' }}>
                             {account.walletType ? (
-                              <Tag color={account.walletType.toLowerCase() === 'magic' ? 'purple' : 'blue'} style={{ margin: 0 }}>
-                                {account.walletType.toLowerCase() === 'magic' ? 'Magic' : 'Safe'}
+                              <Tag color={walletTypeColor(account.walletType)} style={{ margin: 0 }}>
+                                {walletTypeLabel(account.walletType)}
                               </Tag>
                             ) : '-'}
                           </div>
@@ -827,8 +827,8 @@ const AccountList: React.FC = () => {
               </Descriptions.Item>
               {detailAccount.walletType && (
                 <Descriptions.Item label={t('accountList.walletType')}>
-                  <Tag color={detailAccount.walletType.toLowerCase() === 'magic' ? 'purple' : 'blue'}>
-                    {detailAccount.walletType.toLowerCase() === 'magic' ? 'Magic' : 'Safe'}
+                  <Tag color={walletTypeColor(detailAccount.walletType)}>
+                    {walletTypeLabel(detailAccount.walletType)}
                   </Tag>
                 </Descriptions.Item>
               )}

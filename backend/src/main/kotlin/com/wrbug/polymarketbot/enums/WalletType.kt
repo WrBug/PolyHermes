@@ -14,7 +14,15 @@ enum class WalletType(val value: String, val description: String) {
      * Safe 钱包（MetaMask 等 Web3 钱包）
      * 使用 Gnosis Safe 代理合约，支持 Builder Relayer Gasless 或手动交易
      */
-    SAFE("safe", "Safe（Web3钱包）");
+    SAFE("safe", "Safe（Web3钱包）"),
+
+    /**
+     * Deposit Wallet（Polymarket 新版账户，2026 年起新注册账户默认使用）
+     * 由 DepositWalletFactory 以 CREATE2 部署的 beacon 代理，owner 为签名 EOA；
+     * 下单使用 signatureType 3（POLY_1271，ERC-7739 嵌套签名），
+     * 链上操作通过 Relayer 的 WALLET 类型批量执行（Gasless）
+     */
+    DEPOSIT("deposit", "Deposit Wallet（新版账户）");
     
     companion object {
         /**

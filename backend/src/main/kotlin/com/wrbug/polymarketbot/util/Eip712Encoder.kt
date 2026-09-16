@@ -270,6 +270,149 @@ object Eip712Encoder {
         return keccak256(encoded)
     }
     
+    // ==================== Deposit Wallet（signatureType 3 / ERC-7739）====================
+
+    /** Deposit Wallet 合约的 EIP-712 域名称与版本（参考 ts-sdk exchange.ts / gasless.ts） */
+    const val DEPOSIT_WALLET_DOMAIN_NAME = "DepositWallet"
+    const val DEPOSIT_WALLET_DOMAIN_VERSION = "1"
+
+    /** V2 Order 结构的完整类型字符串（ERC-7739 contentsType，长度 186） */
+    const val EXCHANGE_ORDER_TYPE_STRING =
+        "Order(uint256 salt,address maker,address signer,uint256 tokenId,uint256 makerAmount,uint256 takerAmount,uint8 side,uint8 signatureType,uint256 timestamp,bytes32 metadata,bytes32 builder)"
+
+    private const val ZERO_BYTES32 = "0x0000000000000000000000000000000000000000000000000000000000000000"
+
+    /**
+     * Deposit Wallet 合约自身的域分隔符
+     * Domain: { name: "DepositWallet", version: "1", chainId, verifyingContract: depositWallet }
+     */
+    fun encodeDepositWalletDomain(chainId: Long, depositWallet: String): ByteArray {
+        val domainTypeHash = encodeType(
+            "EIP712Domain",
+            listOf(
+                "name" to "string",
+                "version" to "string",
+                "chainId" to "uint256",
+                "verifyingContract" to "address"
+            )
+        )
+        val encoded = domainTypeHash +
+                encodeString(DEPOSIT_WALLET_DOMAIN_NAME) +
+                encodeString(DEPOSIT_WALLET_DOMAIN_VERSION) +
+                encodeUint256(BigInteger.valueOf(chainId)) +
+                encodeAddress(depositWallet)
+        return keccak256(encoded)
+    }
+
+    /**
+     * ERC-7739 TypedDataSign 结构哈希（嵌套签名：应用域为 CTF Exchange，账户域为 Deposit Wallet）
+     *
+     * TypedDataSign(Order contents,string name,string version,uint256 chainId,address verifyingContract,bytes32 salt)
+     * 后接 Order(...) 类型定义（EIP-712 引用类型按名称排序追加）。
+     *
+     * @param contentsHash hashStruct(Order)，即 [encodeExchangeOrder] 的结果
+     * @param depositWallet 账户合约地址（verifyingContract）
+     * @param salt 账户域 salt，Deposit Wallet 使用全零
+     */
+    fun encodeTypedDataSign(
+        contentsHash: ByteArray,
+        chainId: Long,
+        depositWallet: String,
+        salt: String = ZERO_BYTES32
+    ): ByteArray {
+        require(contentsHash.size == 32) { "contentsHash 必须为 32 字节" }
+        val saltBytes = Numeric.hexStringToByteArray(salt.removePrefix("0x"))
+        require(saltBytes.size == 32) { "salt 必须为 32 字节" }
+        val typeString = "TypedDataSign(Order contents,string name,string version,uint256 chainId,address verifyingContract,bytes32 salt)" +
+                EXCHANGE_ORDER_TYPE_STRING
+        val typeHash = keccak256(typeString.toByteArray(StandardCharsets.UTF_8))
+        val encoded = typeHash +
+                contentsHash +
+                encodeString(DEPOSIT_WALLET_DOMAIN_NAME) +
+                encodeString(DEPOSIT_WALLET_DOMAIN_VERSION) +
+                encodeUint256(BigInteger.valueOf(chainId)) +
+                encodeAddress(depositWallet) +
+                saltBytes
+        return keccak256(encoded)
+    }
+
+    /**
+     * 按 ERC-7739 拼接最终签名：
+     * innerSignature(65) ++ appDomainSeparator(32) ++ contentsHash(32) ++ contentsType(bytes) ++ uint16(contentsType 长度)
+     *
+     * @param innerSignature EOA 对 keccak256(0x1901 ++ appDomainSeparator ++ hashStruct(TypedDataSign)) 的 65 字节签名
+     * @param appDomainSeparator 应用（CTF Exchange）域分隔符
+     * @param contentsHash hashStruct(Order)
+     * @param contentsType 内容类型字符串，默认 [EXCHANGE_ORDER_TYPE_STRING]
+     */
+    fun wrapErc7739Signature(
+        innerSignature: String,
+        appDomainSeparator: ByteArray,
+        contentsHash: ByteArray,
+        contentsType: String = EXCHANGE_ORDER_TYPE_STRING
+    ): String {
+        val sig = innerSignature.removePrefix("0x").lowercase()
+        require(sig.length == 130 && sig.all { it in "0123456789abcdef" }) { "innerSignature 必须为 65 字节十六进制" }
+        require(appDomainSeparator.size == 32) { "appDomainSeparator 必须为 32 字节" }
+        require(contentsHash.size == 32) { "contentsHash 必须为 32 字节" }
+        val typeBytes = contentsType.toByteArray(StandardCharsets.UTF_8)
+        require(typeBytes.isNotEmpty() && typeBytes.size <= 0xFFFF) { "contentsType 长度非法" }
+        val hex = StringBuilder("0x")
+        hex.append(sig)
+        hex.append(Numeric.toHexStringNoPrefix(appDomainSeparator))
+        hex.append(Numeric.toHexStringNoPrefix(contentsHash))
+        hex.append(Numeric.toHexStringNoPrefix(typeBytes))
+        hex.append("%04x".format(typeBytes.size))
+        return hex.toString()
+    }
+
+    /**
+     * Deposit Wallet 批量调用中的单个调用
+     */
+    data class DepositWalletCall(
+        val target: String,
+        val value: BigInteger,
+        val data: String
+    )
+
+    /**
+     * Deposit Wallet Batch 结构哈希（Relayer WALLET 类型执行时签名）
+     *
+     * Batch(address wallet,uint256 nonce,uint256 deadline,Call[] calls)
+     * Call(address target,uint256 value,bytes data)
+     */
+    fun encodeDepositWalletBatch(
+        wallet: String,
+        nonce: BigInteger,
+        deadline: BigInteger,
+        calls: List<DepositWalletCall>
+    ): ByteArray {
+        require(calls.isNotEmpty()) { "calls 不能为空" }
+        val callTypeString = "Call(address target,uint256 value,bytes data)"
+        val batchTypeString = "Batch(address wallet,uint256 nonce,uint256 deadline,Call[] calls)$callTypeString"
+        val callTypeHash = keccak256(callTypeString.toByteArray(StandardCharsets.UTF_8))
+        val batchTypeHash = keccak256(batchTypeString.toByteArray(StandardCharsets.UTF_8))
+
+        // Call[] 的编码：各元素 hashStruct 拼接后取 keccak256
+        val callHashes = calls.map { call ->
+            val dataHash = keccak256(hexToBytesOrEmpty(call.data))
+            keccak256(callTypeHash + encodeAddress(call.target) + encodeUint256(call.value) + dataHash)
+        }
+        val callsHash = keccak256(callHashes.fold(ByteArray(0)) { acc, h -> acc + h })
+
+        val encoded = batchTypeHash +
+                encodeAddress(wallet) +
+                encodeUint256(nonce) +
+                encodeUint256(deadline) +
+                callsHash
+        return keccak256(encoded)
+    }
+
+    private fun hexToBytesOrEmpty(hex: String): ByteArray {
+        val clean = hex.removePrefix("0x")
+        return if (clean.isEmpty()) ByteArray(0) else Numeric.hexStringToByteArray(clean)
+    }
+
     /**
      * 编码 Gnosis Safe 域分隔符
      * Domain: { chainId: uint256, verifyingContract: address }

@@ -8,6 +8,7 @@ import type { Account } from '../types'
 import { useMediaQuery } from 'react-responsive'
 import { formatUSDC } from '../utils'
 import AccountSetupStatusBlock from '../components/AccountSetupStatusBlock'
+import { walletTypeColor, walletTypeLabel } from '../utils/walletType'
 
 const { Title } = Typography
 
@@ -181,8 +182,8 @@ const AccountDetail: React.FC = () => {
           </Descriptions.Item>
           {account.walletType && (
             <Descriptions.Item label={t('account.walletType')}>
-              <Tag color={account.walletType.toLowerCase() === 'magic' ? 'purple' : 'blue'}>
-                {account.walletType.toLowerCase() === 'magic' ? 'Magic' : 'Safe'}
+              <Tag color={walletTypeColor(account.walletType)}>
+                {walletTypeLabel(account.walletType)}
               </Tag>
             </Descriptions.Item>
           )}

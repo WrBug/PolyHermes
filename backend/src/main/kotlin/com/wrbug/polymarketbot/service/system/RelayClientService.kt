@@ -7,6 +7,7 @@ import com.wrbug.polymarketbot.constants.PolymarketConstants
 import com.wrbug.polymarketbot.enums.WalletType
 import com.wrbug.polymarketbot.util.Eip712Encoder
 import com.wrbug.polymarketbot.util.EthereumUtils
+import com.wrbug.polymarketbot.util.PolymarketWalletDerivation
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.createClient
 import kotlinx.coroutines.delay
@@ -68,6 +69,18 @@ class RelayClientService(
     private val RELAYER_TYPE_PROXY = "PROXY"
     private val RELAYER_TYPE_SAFE = "SAFE"
     private val RELAYER_TYPE_SAFE_CREATE = "SAFE-CREATE"
+    private val RELAYER_TYPE_WALLET = "WALLET"
+    private val RELAYER_TYPE_WALLET_CREATE = "WALLET-CREATE"
+
+    // Deposit Wallet 工厂地址（WALLET / WALLET-CREATE 的 to 字段）
+    private val depositWalletFactoryAddress = PolymarketWalletDerivation.DEPOSIT_WALLET_FACTORY
+
+    // Deposit Wallet 批量签名有效期（秒），参考 ts-sdk DEPOSIT_WALLET_DEFAULT_DEADLINE_SECONDS
+    private val depositWalletDeadlineSeconds = 600L
+
+    // 提交后等待 Relayer 返回交易哈希的轮询次数与间隔
+    private val relayerHashPollAttempts = 15
+    private val relayerHashPollIntervalMs = 2000L
 
     // Safe 代理工厂（用于 SAFE-CREATE 部署）
     private val safeProxyFactoryAddress = PolymarketConstants.SAFE_PROXY_FACTORY_ADDRESS
@@ -458,6 +471,13 @@ class RelayClientService(
             val builderSecret = systemConfigService.getBuilderSecret()
             val builderPassphrase = systemConfigService.getBuilderPassphrase()
 
+            if (walletType == WalletType.DEPOSIT) {
+                if (safeTx.operation == 1) {
+                    return Result.failure(IllegalArgumentException("Deposit Wallet 不支持 MultiSend delegatecall，请使用 executeCalls 批量执行"))
+                }
+                return executeCalls(privateKey, proxyAddress, listOf(safeTx), walletType)
+            }
+
             if (walletType == WalletType.MAGIC) {
                 if (!isBuilderRelayerEnabled(builderApiKey, builderSecret, builderPassphrase)) {
                     return Result.failure(IllegalStateException("Magic 账户赎回必须配置 Builder API Key（Gasless）"))
@@ -489,6 +509,274 @@ class RelayClientService(
             return executeManually(privateKey, proxyAddress, safeTx)
         } catch (e: Exception) {
             logger.error("执行交易失败: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 批量执行多笔调用，按钱包类型选择最合适的方式：
+     * - DEPOSIT：一次 WALLET 批量提交（原生支持 calls[]）
+     * - SAFE：MultiSend 合并为一笔 execTransaction
+     * - MAGIC：PROXY 不支持 delegatecall MultiSend，逐笔顺序执行
+     *
+     * @return 最后一笔交易的哈希
+     */
+    suspend fun executeCalls(
+        privateKey: String,
+        proxyAddress: String,
+        txs: List<SafeTransaction>,
+        walletType: WalletType
+    ): Result<String> {
+        if (txs.isEmpty()) {
+            return Result.failure(IllegalArgumentException("txs 不能为空"))
+        }
+        return try {
+            when (walletType) {
+                WalletType.DEPOSIT -> {
+                    if (txs.any { it.operation == 1 }) {
+                        return Result.failure(IllegalArgumentException("Deposit Wallet 不支持 delegatecall 调用"))
+                    }
+                    val builderApiKey = systemConfigService.getBuilderApiKey()
+                    val builderSecret = systemConfigService.getBuilderSecret()
+                    val builderPassphrase = systemConfigService.getBuilderPassphrase()
+                    if (!isBuilderRelayerEnabled(builderApiKey, builderSecret, builderPassphrase)) {
+                        return Result.failure(IllegalStateException("Deposit Wallet 账户链上操作必须配置 Builder API Key（Gasless）"))
+                    }
+                    logger.info("使用 Builder Relayer WALLET 批量执行 Deposit Wallet 调用: calls=${txs.size}")
+                    executeDepositWalletBatch(
+                        privateKey, proxyAddress, txs, builderApiKey!!, builderSecret!!, builderPassphrase!!
+                    )
+                }
+                WalletType.SAFE -> {
+                    val tx = if (txs.size == 1) txs.first() else createMultiSendTx(txs)
+                    execute(privateKey, proxyAddress, tx, walletType)
+                }
+                WalletType.MAGIC -> {
+                    var lastHash = ""
+                    for (tx in txs) {
+                        val result = execute(privateKey, proxyAddress, tx, walletType)
+                        lastHash = result.getOrElse { return Result.failure(it) }
+                    }
+                    Result.success(lastHash)
+                }
+            }
+        } catch (e: Exception) {
+            logger.error("批量执行交易失败: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 查询 Deposit Wallet 的批量签名 nonce（Relayer GET /nonce?type=WALLET，address 为 owner EOA）
+     */
+    private suspend fun getDepositWalletNonce(
+        relayerApi: BuilderRelayerApi,
+        ownerAddress: String
+    ): Result<BigInteger> {
+        val nonceResponse = withBuilderRelayerRateLimitRetry { relayerApi.getNonce(ownerAddress, RELAYER_TYPE_WALLET) }
+        if (!nonceResponse.isSuccessful || nonceResponse.body() == null) {
+            val errorBody = nonceResponse.errorBody()?.string() ?: "未知错误"
+            updateQuotaBlockedFromErrorBody(errorBody)
+            logger.error("获取 Deposit Wallet nonce 失败: code=${nonceResponse.code()}, body=$errorBody")
+            return Result.failure(Exception("获取 Deposit Wallet nonce 失败: ${nonceResponse.code()} - $errorBody"))
+        }
+        return Result.success(BigInteger(nonceResponse.body()!!.nonce))
+    }
+
+    /**
+     * 通过 Builder Relayer 执行 Deposit Wallet 批量调用（WALLET 类型，Gasless）
+     * 参考: ts-sdk actions/gasless.ts buildDepositWalletExecuteRequest
+     *
+     * 签名为标准 EIP-712（signTypedData）：
+     * domain = { name: "DepositWallet", version: "1", chainId: 137, verifyingContract: depositWallet }
+     * message = Batch { wallet, nonce, deadline, calls[{target, value, data}] }
+     * 若 Relayer 返回 nonce 与链上不一致，按其提示的链上 nonce 重签一次。
+     */
+    private suspend fun executeDepositWalletBatch(
+        privateKey: String,
+        depositWallet: String,
+        txs: List<SafeTransaction>,
+        builderApiKey: String,
+        builderSecret: String,
+        builderPassphrase: String
+    ): Result<String> {
+        val relayerApi = retrofitFactory.createBuilderRelayerApi(
+            relayerUrl = PolymarketConstants.BUILDER_RELAYER_URL,
+            apiKey = builderApiKey,
+            secret = builderSecret,
+            passphrase = builderPassphrase
+        )
+
+        val cleanPrivateKey = privateKey.removePrefix("0x")
+        val privateKeyBigInt = BigInteger(cleanPrivateKey, 16)
+        val ecKeyPair = org.web3j.crypto.ECKeyPair.create(privateKeyBigInt)
+        val fromAddress = org.web3j.crypto.Credentials.create(ecKeyPair).address
+
+        val calls = txs.map { tx ->
+            Eip712Encoder.DepositWalletCall(
+                target = tx.to,
+                value = BigInteger(tx.value.ifBlank { "0" }),
+                data = if (tx.data.startsWith("0x")) tx.data else "0x${tx.data}"
+            )
+        }
+        val deadline = BigInteger.valueOf(System.currentTimeMillis() / 1000 + depositWalletDeadlineSeconds)
+
+        var nonce = getDepositWalletNonce(relayerApi, fromAddress).getOrElse { return Result.failure(it) }
+
+        // 最多两次：第二次用于 Relayer 提示 nonce 不匹配时按链上 nonce 重签
+        repeat(2) { attempt ->
+            val signature = signDepositWalletBatch(ecKeyPair, depositWallet, nonce, deadline, calls)
+            val request = BuilderRelayerApi.DepositWalletTransactionRequest(
+                type = RELAYER_TYPE_WALLET,
+                from = fromAddress,
+                to = depositWalletFactoryAddress,
+                nonce = nonce.toString(),
+                signature = signature,
+                depositWalletParams = BuilderRelayerApi.DepositWalletParams(
+                    calls = calls.map {
+                        BuilderRelayerApi.DepositWalletCallRequest(
+                            target = it.target,
+                            value = it.value.toString(),
+                            data = it.data
+                        )
+                    },
+                    deadline = deadline.toString(),
+                    depositWallet = depositWallet
+                ),
+                metadata = "PolyHermes deposit wallet batch (${calls.size} calls)"
+            )
+            logger.debug(
+                "Deposit Wallet 批量提交: wallet={}, nonce={}, deadline={}, calls={}",
+                depositWallet, nonce, deadline, calls.size
+            )
+
+            val response = withBuilderRelayerRateLimitRetry { relayerApi.submitDepositWalletTransaction(request) }
+            if (response.isSuccessful && response.body() != null) {
+                val relayerResponse = response.body()!!
+                val txHash = relayerResponse.transactionHash ?: relayerResponse.hash
+                    ?: waitForRelayerTransactionHash(relayerApi, relayerResponse.transactionID).getOrElse { return Result.failure(it) }
+                logger.info("Builder Relayer WALLET 执行成功: transactionID=${relayerResponse.transactionID}, txHash=$txHash")
+                return Result.success(txHash)
+            }
+
+            val errorBody = response.errorBody()?.string() ?: "未知错误"
+            updateQuotaBlockedFromErrorBody(errorBody)
+            val onChainNonce = extractOnChainNonceFromError(errorBody)
+            if (attempt == 0 && response.code() == 400 && onChainNonce != null && onChainNonce != nonce) {
+                logger.warn("Deposit Wallet nonce 不匹配（提交 $nonce，链上 $onChainNonce），按链上 nonce 重签")
+                nonce = onChainNonce
+            } else {
+                logger.error("Builder Relayer WALLET 调用失败: code=${response.code()}, body=$errorBody")
+                return Result.failure(Exception("Builder Relayer WALLET 调用失败: ${response.code()} - $errorBody"))
+            }
+        }
+        return Result.failure(Exception("Deposit Wallet 批量提交失败：nonce 重试后仍不匹配"))
+    }
+
+    /**
+     * 对 Deposit Wallet Batch 做标准 EIP-712 签名，返回 0x + r + s + v（v 为 27/28）
+     */
+    internal fun signDepositWalletBatch(
+        ecKeyPair: org.web3j.crypto.ECKeyPair,
+        depositWallet: String,
+        nonce: BigInteger,
+        deadline: BigInteger,
+        calls: List<Eip712Encoder.DepositWalletCall>
+    ): String {
+        val domainSeparator = Eip712Encoder.encodeDepositWalletDomain(
+            chainId = 137L,
+            depositWallet = depositWallet
+        )
+        val batchHash = Eip712Encoder.encodeDepositWalletBatch(
+            wallet = depositWallet,
+            nonce = nonce,
+            deadline = deadline,
+            calls = calls
+        )
+        val digest = Eip712Encoder.hashStructuredData(domainSeparator, batchHash)
+        val signature = org.web3j.crypto.Sign.signMessage(digest, ecKeyPair, false)
+        return signatureToStandardHex(signature)
+    }
+
+    /**
+     * 从 Relayer 400 响应中解析 "batch nonce X does not match on-chain nonce Y" 的链上 nonce
+     * 参考 ts-sdk gasless.ts extractOnChainNonceFromSubmitError
+     */
+    internal fun extractOnChainNonceFromError(errorBody: String): BigInteger? {
+        val regex = Regex("batch nonce\\s+\\d+\\s+does not match on-chain nonce\\s+(\\d+)", RegexOption.IGNORE_CASE)
+        return regex.find(errorBody)?.groupValues?.getOrNull(1)?.let { BigInteger(it) }
+    }
+
+    /**
+     * 提交后 Relayer 可能尚未返回交易哈希（STATE_NEW），轮询交易状态直到拿到哈希或失败
+     */
+    private suspend fun waitForRelayerTransactionHash(
+        relayerApi: BuilderRelayerApi,
+        transactionId: String
+    ): Result<String> {
+        repeat(relayerHashPollAttempts) {
+            delay(relayerHashPollIntervalMs)
+            val response = try {
+                relayerApi.getTransactionById(transactionId)
+            } catch (e: Exception) {
+                logger.warn("查询 Relayer 交易状态异常: ${e.message}")
+                null
+            }
+            val status = response?.body()
+            if (response != null && response.isSuccessful && status != null) {
+                val hash = status.transactionHash
+                if (!hash.isNullOrBlank()) {
+                    return Result.success(hash)
+                }
+                if (status.state == "STATE_FAILED" || status.state == "STATE_INVALID") {
+                    return Result.failure(Exception("Relayer 交易失败: state=${status.state}, ${status.errorMsg ?: ""}"))
+                }
+            }
+        }
+        return Result.failure(Exception("Relayer 交易 $transactionId 在 ${relayerHashPollAttempts * relayerHashPollIntervalMs / 1000} 秒内未返回交易哈希"))
+    }
+
+    /**
+     * 通过 Builder Relayer 部署 Deposit Wallet（WALLET-CREATE，无需签名）
+     * 参考: ts-sdk actions/gasless.ts deployDepositWallet
+     *
+     * @param fromAddress owner EOA 地址
+     * @return 交易哈希
+     */
+    suspend fun deployDepositWalletViaBuilderRelayer(fromAddress: String): Result<String> {
+        return try {
+            val builderApiKey = systemConfigService.getBuilderApiKey()
+            val builderSecret = systemConfigService.getBuilderSecret()
+            val builderPassphrase = systemConfigService.getBuilderPassphrase()
+            if (!isBuilderRelayerEnabled(builderApiKey, builderSecret, builderPassphrase)) {
+                return Result.failure(IllegalStateException("Builder API Key 未配置，无法部署 Deposit Wallet"))
+            }
+            val relayerApi = retrofitFactory.createBuilderRelayerApi(
+                relayerUrl = PolymarketConstants.BUILDER_RELAYER_URL,
+                apiKey = builderApiKey!!,
+                secret = builderSecret!!,
+                passphrase = builderPassphrase!!
+            )
+            val request = BuilderRelayerApi.DepositWalletCreateRequest(
+                type = RELAYER_TYPE_WALLET_CREATE,
+                from = fromAddress,
+                to = depositWalletFactoryAddress,
+                metadata = "Deploy Deposit Wallet"
+            )
+            val response = withBuilderRelayerRateLimitRetry { relayerApi.submitDepositWalletCreate(request) }
+            if (!response.isSuccessful || response.body() == null) {
+                val errorBody = response.errorBody()?.string() ?: "未知错误"
+                updateQuotaBlockedFromErrorBody(errorBody)
+                logger.error("Builder Relayer WALLET-CREATE 失败: code=${response.code()}, body=$errorBody")
+                return Result.failure(Exception("部署 Deposit Wallet 失败: ${response.code()} - $errorBody"))
+            }
+            val relayerResponse = response.body()!!
+            val txHash = relayerResponse.transactionHash ?: relayerResponse.hash
+                ?: waitForRelayerTransactionHash(relayerApi, relayerResponse.transactionID).getOrElse { return Result.failure(it) }
+            logger.info("Deposit Wallet 部署成功: owner=$fromAddress, txHash=$txHash")
+            Result.success(txHash)
+        } catch (e: Exception) {
+            logger.error("部署 Deposit Wallet 失败: ${e.message}", e)
             Result.failure(e)
         }
     }

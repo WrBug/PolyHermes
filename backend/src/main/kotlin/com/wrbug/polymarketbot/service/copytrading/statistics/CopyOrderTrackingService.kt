@@ -1155,7 +1155,7 @@ open class CopyOrderTrackingService(
      * @param owner API Key（用于owner字段）
      * @param copyTradingId 跟单配置ID（用于日志）
      * @param tradeId Leader 交易ID（用于日志）
-     * @param signatureType 签名类型（1=Magic, 2=Safe）
+     * @param signatureType 签名类型（1=Magic, 2=Safe, 3=Deposit Wallet）
      * @return 成功返回订单ID，失败返回异常
      */
     private suspend fun createOrderWithRetry(
@@ -1191,7 +1191,9 @@ open class CopyOrderTrackingService(
                 )
 
                 // 校验 signer 与账户 walletAddress 一致，否则服务端会返回 invalid signature（POLY_ADDRESS 与 order.signer 需一致）
-                if (signedOrder.signer.lowercase() != walletAddress.lowercase()) {
+                // Deposit Wallet（signatureType 3）的 signer 为钱包合约本身（= maker），由 owner EOA 做 ERC-1271 签名，不适用此校验
+                val expectedSigner = if (signatureType == OrderSigningService.SIGNATURE_TYPE_POLY_1271) makerAddress else walletAddress
+                if (signedOrder.signer.lowercase() != expectedSigner.lowercase()) {
                     val msg = "订单 signer 与账户 walletAddress 不一致，会导致 invalid signature。请确认该账户的私钥与 walletAddress 对应同一 EOA，且 API 密钥由该 EOA 创建。signer=${signedOrder.signer.take(10)}..., walletAddress=${walletAddress.take(10)}..."
                     logger.error(msg)
                     return Result.failure(IllegalStateException(msg))

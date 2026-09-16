@@ -24,7 +24,7 @@ data class CheckProxyOptionsRequest(
  * 代理地址选项信息
  */
 data class ProxyOptionDto(
-    val walletType: String,  // "magic" 或 "safe"
+    val walletType: String,  // "deposit"、"safe" 或 "magic"
     val proxyAddress: String,  // 代理地址
     val descriptionKey: String,  // 说明文案的多语言 key（如 "accountImport.proxyOption.magic.description"）
     val availableBalance: String,  // 可用余额
@@ -32,14 +32,16 @@ data class ProxyOptionDto(
     val totalBalance: String,  // 总余额
     val positionCount: Int,  // 持仓数量
     val hasAssets: Boolean,  // 是否有资产（余额>0 或持仓>0）
-    val error: String? = null  // 获取失败时的错误信息（可选）
+    val error: String? = null,  // 获取失败时的错误信息（可选）
+    val recommended: Boolean = false,  // 与 Polymarket 档案中的实际 proxyWallet 一致（推荐选择）
+    val deployed: Boolean? = null  // 代理合约是否已部署（链上有代码）
 )
 
 /**
  * 检查代理地址选项响应
  */
 data class CheckProxyOptionsResponse(
-    val options: List<ProxyOptionDto>  // 代理地址选项列表（私钥导入返回2个，助记词返回1个）
+    val options: List<ProxyOptionDto>  // 代理地址选项列表（私钥导入返回3个，助记词返回2个），推荐项排在最前
 )
 
 /**

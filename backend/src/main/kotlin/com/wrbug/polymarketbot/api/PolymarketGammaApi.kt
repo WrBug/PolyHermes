@@ -35,7 +35,25 @@ interface PolymarketGammaApi {
      */
     @GET("/events/slug/{slug}")
     suspend fun getEventBySlug(@Path("slug") slug: String): Response<GammaEventBySlugResponse>
+
+    /**
+     * 查询公开档案（按 EOA 或代理地址）
+     * GET /public-profile?address={address}
+     * 返回的 proxyWallet 即该账户在 Polymarket 上实际使用的资金钱包地址
+     */
+    @GET("/public-profile")
+    suspend fun getPublicProfile(@Query("address") address: String): Response<GammaPublicProfileResponse>
 }
+
+/**
+ * 公开档案响应（仅保留需要的字段）
+ */
+data class GammaPublicProfileResponse(
+    val proxyWallet: String? = null,
+    val createdAt: String? = null,
+    val name: String? = null,
+    val pseudonym: String? = null
+)
 
 /**
  * Gamma 按 slug 返回的事件结构

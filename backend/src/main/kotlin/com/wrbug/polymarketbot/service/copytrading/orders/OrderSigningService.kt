@@ -33,12 +33,26 @@ class OrderSigningService {
 
     /**
      * 根据钱包类型返回 CLOB 订单签名类型
-     * @param walletType Magic=邮箱/社交登录, Safe=Web3 钱包
-     * @return 1=POLY_PROXY(Magic), 2=POLY_GNOSIS_SAFE(Safe), 默认 2
+     * @param walletType Magic=邮箱/社交登录, Safe=Web3 钱包, Deposit=新版 Deposit Wallet
+     * @return 1=POLY_PROXY(Magic), 2=POLY_GNOSIS_SAFE(Safe), 3=POLY_1271(Deposit Wallet), 默认 2
      */
     fun getSignatureTypeForWalletType(walletType: String?): Int {
-        val walletTypeEnum = com.wrbug.polymarketbot.enums.WalletType.fromStringOrDefault(walletType, com.wrbug.polymarketbot.enums.WalletType.SAFE)
-        return if (walletTypeEnum == com.wrbug.polymarketbot.enums.WalletType.MAGIC) 1 else 2
+        return when (com.wrbug.polymarketbot.enums.WalletType.fromStringOrDefault(walletType, com.wrbug.polymarketbot.enums.WalletType.SAFE)) {
+            com.wrbug.polymarketbot.enums.WalletType.MAGIC -> SIGNATURE_TYPE_POLY_PROXY
+            com.wrbug.polymarketbot.enums.WalletType.DEPOSIT -> SIGNATURE_TYPE_POLY_1271
+            else -> SIGNATURE_TYPE_POLY_GNOSIS_SAFE
+        }
+    }
+
+    companion object {
+        /** EIP-712 签名，EOA 直接作为 maker */
+        const val SIGNATURE_TYPE_EOA = 0
+        /** EIP-712 签名，EOA 拥有 Magic Proxy */
+        const val SIGNATURE_TYPE_POLY_PROXY = 1
+        /** EIP-712 签名，EOA 拥有 Gnosis Safe */
+        const val SIGNATURE_TYPE_POLY_GNOSIS_SAFE = 2
+        /** ERC-1271 签名（ERC-7739 嵌套），maker/signer 均为 Deposit Wallet 合约，由 owner EOA 签名 */
+        const val SIGNATURE_TYPE_POLY_1271 = 3
     }
 
     // V2 合约地址
@@ -163,7 +177,7 @@ class OrderSigningService {
      * @param side BUY 或 SELL
      * @param price 价格
      * @param size 数量
-     * @param signatureType 签名类型（1: Email/Magic, 2: Browser Wallet, 0: EOA）
+     * @param signatureType 签名类型（0: EOA, 1: Email/Magic, 2: Browser Wallet/Safe, 3: Deposit Wallet，见 [SIGNATURE_TYPE_POLY_1271]）
      * @param exchangeContract 签约用 exchange 合约地址；null 时用标准 CTF Exchange，neg risk 市场需传 Neg Risk Exchange
      * @return 签名的订单对象
      */
@@ -179,10 +193,15 @@ class OrderSigningService {
     ): SignedOrderObject {
         try {
             // 1. 从私钥获取签名地址
+            //    POLY_1271（Deposit Wallet）：订单 signer 为钱包合约本身（= maker），EOA 只作为 ERC-1271 校验时的 owner
             val cleanPrivateKey = privateKey.removePrefix("0x")
             val privateKeyBigInt = BigInteger(cleanPrivateKey, 16)
             val credentials = Credentials.create(privateKeyBigInt.toString(16))
-            val signerAddress = credentials.address.lowercase()
+            val signerAddress = if (signatureType == SIGNATURE_TYPE_POLY_1271) {
+                makerAddress.lowercase()
+            } else {
+                credentials.address.lowercase()
+            }
 
             // 2. 计算订单金额
             val amounts = calculateOrderAmounts(side, size, price)
@@ -293,24 +312,68 @@ class OrderSigningService {
                 builder = builder
             )
 
+            if (signatureType == SIGNATURE_TYPE_POLY_1271) {
+                return signOrderErc7739(
+                    ecKeyPair = ecKeyPair,
+                    exchangeDomainSeparator = domainSeparator,
+                    orderHash = orderHash,
+                    depositWallet = maker,
+                    chainId = chainId
+                )
+            }
+
             val structuredHash = com.wrbug.polymarketbot.util.Eip712Encoder.hashStructuredData(
                 domainSeparator = domainSeparator,
                 messageHash = orderHash
             )
 
             val signature = org.web3j.crypto.Sign.signMessage(structuredHash, ecKeyPair, false)
-
-            val rHex = org.web3j.utils.Numeric.toHexString(signature.r).removePrefix("0x").padStart(64, '0')
-            val sHex = org.web3j.utils.Numeric.toHexString(signature.s).removePrefix("0x").padStart(64, '0')
-            val vBytes = signature.v
-            val vInt = if (vBytes.isNotEmpty()) vBytes[0].toInt() and 0xff else 0
-            val vHex = "%02x".format(vInt)
-
-            return "0x$rHex$sHex$vHex"
+            return signatureToHex(signature)
         } catch (e: Exception) {
             logger.error("订单签名失败 (V2)", e)
             throw RuntimeException("订单签名失败 (V2): ${e.message}", e)
         }
+    }
+
+    /**
+     * Deposit Wallet（signatureType 3）订单签名：ERC-7739 TypedDataSign 嵌套签名
+     * 参考 ts-sdk exchange.ts createExchangeOrderTypedDataPayload / createExchangeOrderSignature
+     *
+     * 1. digest = keccak256(0x1901 ++ exchangeDomainSeparator ++ hashStruct(TypedDataSign{contents=order, DepositWallet 域}))
+     * 2. owner EOA 对 digest 做 ECDSA 签名（65 字节）
+     * 3. 最终签名 = inner ++ exchangeDomainSeparator ++ hashStruct(Order) ++ contentsType ++ uint16(len)
+     */
+    internal fun signOrderErc7739(
+        ecKeyPair: org.web3j.crypto.ECKeyPair,
+        exchangeDomainSeparator: ByteArray,
+        orderHash: ByteArray,
+        depositWallet: String,
+        chainId: Long
+    ): String {
+        val typedDataSignHash = com.wrbug.polymarketbot.util.Eip712Encoder.encodeTypedDataSign(
+            contentsHash = orderHash,
+            chainId = chainId,
+            depositWallet = depositWallet.lowercase()
+        )
+        val digest = com.wrbug.polymarketbot.util.Eip712Encoder.hashStructuredData(
+            domainSeparator = exchangeDomainSeparator,
+            messageHash = typedDataSignHash
+        )
+        val innerSignature = signatureToHex(org.web3j.crypto.Sign.signMessage(digest, ecKeyPair, false))
+        return com.wrbug.polymarketbot.util.Eip712Encoder.wrapErc7739Signature(
+            innerSignature = innerSignature,
+            appDomainSeparator = exchangeDomainSeparator,
+            contentsHash = orderHash
+        )
+    }
+
+    /** 将 web3j 签名转为 0x + r(64) + s(64) + v(2) 的 65 字节十六进制（v 为 27/28） */
+    private fun signatureToHex(signature: org.web3j.crypto.Sign.SignatureData): String {
+        val rHex = org.web3j.utils.Numeric.toHexString(signature.r).removePrefix("0x").padStart(64, '0')
+        val sHex = org.web3j.utils.Numeric.toHexString(signature.s).removePrefix("0x").padStart(64, '0')
+        val vBytes = signature.v
+        val vInt = if (vBytes.isNotEmpty()) vBytes[0].toInt() and 0xff else 0
+        return "0x$rHex$sHex${"%02x".format(vInt)}"
     }
     
     /** 并发安全：确保同一毫秒内多次调用生成唯一 salt，避免 FIXED 模式预签双单等场景的 salt 碰撞 */

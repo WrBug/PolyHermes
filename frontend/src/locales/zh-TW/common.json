@@ -218,13 +218,17 @@
     "addressError": "無法從私鑰推導地址",
     "addressErrorMnemonic": "無法從助記詞推導地址",
     "walletType": "錢包類型",
-    "walletTypeHelp": "Web3錢包：使用 MetaMask 等瀏覽器錢包連接的 Polymarket 帳戶\nMagic：透過郵箱或社群帳號（如 Google、Twitter）登入的 Polymarket 帳戶",
+    "walletTypeHelp": "Deposit Wallet：2026 年起新註冊的 Polymarket 帳戶（Polymarket 網站「匯出私鑰」的新帳戶）\nWeb3錢包：使用 MetaMask 等瀏覽器錢包連接的 Polymarket 帳戶\nMagic：早期透過郵箱或社群帳號（如 Google、Twitter）登入的 Polymarket 帳戶",
     "loadingProxyOptions": "正在獲取代理地址和資產信息...",
     "selectProxyOption": "請選擇帳戶類型",
     "proxyOptionRequired": "請選擇一個代理地址",
     "proxyOption": {
+      "deposit": {
+        "description": "新版 Polymarket 帳戶（Deposit Wallet），2026 年起新註冊帳戶預設使用",
+        "title": "Deposit Wallet 地址"
+      },
       "magic": {
-        "description": "郵箱/社群帳號登入帳戶（Magic）",
+        "description": "早期郵箱/社群帳號登入帳戶（Magic）",
         "title": "Magic 代理地址"
       },
       "safe": {
@@ -232,7 +236,7 @@
         "title": "Safe 代理地址"
       },
       "proxyAddress": "代理地址",
-      "proxyAddressHelp": "代理地址是您在 Polymarket 上實際使用的錢包地址：Magic 為郵箱/社群登入帳戶，Safe 為瀏覽器錢包（如 MetaMask）帳戶。請選擇與您 Polymarket 登入方式一致的一項。",
+      "proxyAddressHelp": "代理地址是您在 Polymarket 上實際使用的資金錢包地址。系統已查詢 Polymarket 檔案，與您帳戶一致的選項會標記為「推薦」；請選擇與 Polymarket 設定頁顯示地址相同的一項。",
       "availableBalance": "可用餘額",
       "positionBalance": "倉位餘額",
       "totalBalance": "總餘額",
@@ -240,7 +244,9 @@
       "noAssets": "無資產",
       "hasAssets": "有資產",
       "error": "獲取失敗",
-      "select": "選擇此代理地址"
+      "select": "選擇此代理地址",
+      "recommended": "Polymarket 目前使用",
+      "notDeployed": "未部署"
     }
   },
   "accountSetup": {

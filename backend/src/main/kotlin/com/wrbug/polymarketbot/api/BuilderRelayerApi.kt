@@ -31,6 +31,26 @@ interface BuilderRelayerApi {
     suspend fun submitTransaction(
         @Body request: TransactionRequest
     ): Response<RelayerTransactionResponse>
+
+    /**
+     * 提交 Deposit Wallet 批量调用（WALLET 类型，Gasless）
+     * POST /submit
+     * 参考: ts-sdk bindings/relayer/transaction.ts RelayerDepositWalletExecuteRequestSchema
+     */
+    @POST("/submit")
+    suspend fun submitDepositWalletTransaction(
+        @Body request: DepositWalletTransactionRequest
+    ): Response<RelayerTransactionResponse>
+
+    /**
+     * 部署 Deposit Wallet（WALLET-CREATE 类型，无需签名）
+     * POST /submit
+     * 参考: ts-sdk bindings/relayer/transaction.ts RelayerDepositWalletCreateRequestSchema
+     */
+    @POST("/submit")
+    suspend fun submitDepositWalletCreate(
+        @Body request: DepositWalletCreateRequest
+    ): Response<RelayerTransactionResponse>
     
     /**
      * 获取 nonce
@@ -63,12 +83,14 @@ interface BuilderRelayerApi {
     ): Response<List<RelayerTransaction>>
     
     /**
-     * 检查 Safe 是否已部署
-     * GET /deployed?address={address}
+     * 检查代理钱包是否已部署
+     * GET /deployed?address={address}[&type=WALLET]
+     * Safe/Proxy 不传 type；Deposit Wallet 需传 type=WALLET
      */
     @GET("/deployed")
     suspend fun getDeployed(
-        @Query("address") address: String
+        @Query("address") address: String,
+        @Query("type") type: String? = null
     ): Response<GetDeployedResponse>
     
     /**
@@ -104,6 +126,78 @@ interface BuilderRelayerApi {
         val metadata: String? = null  // 元数据（可选，最多 500 字符）
     )
     
+    /**
+     * Deposit Wallet 批量调用请求（type = WALLET）
+     * 由 owner EOA 对 Batch(wallet, nonce, deadline, calls) 做 EIP-712 签名
+     */
+    data class DepositWalletTransactionRequest(
+        @SerializedName("type")
+        val type: String = "WALLET",
+
+        @SerializedName("from")
+        val from: String,  // 签名 EOA
+
+        @SerializedName("to")
+        val to: String,  // DepositWalletFactory 地址
+
+        @SerializedName("nonce")
+        val nonce: String,  // 钱包 nonce（GET /nonce?type=WALLET）
+
+        @SerializedName("signature")
+        val signature: String,  // 标准 65 字节 EIP-712 签名
+
+        @SerializedName("depositWalletParams")
+        val depositWalletParams: DepositWalletParams,
+
+        @SerializedName("metadata")
+        val metadata: String? = null
+    )
+
+    /**
+     * Deposit Wallet 批量调用参数
+     */
+    data class DepositWalletParams(
+        @SerializedName("calls")
+        val calls: List<DepositWalletCallRequest>,
+
+        @SerializedName("deadline")
+        val deadline: String,  // unix 秒
+
+        @SerializedName("depositWallet")
+        val depositWallet: String
+    )
+
+    /**
+     * Deposit Wallet 单个调用
+     */
+    data class DepositWalletCallRequest(
+        @SerializedName("target")
+        val target: String,
+
+        @SerializedName("value")
+        val value: String,  // 十进制字符串，通常 "0"
+
+        @SerializedName("data")
+        val data: String  // 带 0x 前缀
+    )
+
+    /**
+     * Deposit Wallet 部署请求（type = WALLET-CREATE），无需签名
+     */
+    data class DepositWalletCreateRequest(
+        @SerializedName("type")
+        val type: String = "WALLET-CREATE",
+
+        @SerializedName("from")
+        val from: String,  // owner EOA
+
+        @SerializedName("to")
+        val to: String,  // DepositWalletFactory 地址
+
+        @SerializedName("metadata")
+        val metadata: String? = null
+    )
+
     /**
      * 签名参数
      * 参考: builder-relayer-client/src/types.ts 的 SignatureParams
@@ -167,6 +261,28 @@ interface BuilderRelayerApi {
         
         @SerializedName("hash")
         val hash: String?  // 同 transactionHash
+    )
+
+    /**
+     * 单笔交易查询响应（GET /v1/account/transactions/{id}），字段为下划线命名
+     */
+    @GET("/v1/account/transactions/{id}")
+    suspend fun getTransactionById(
+        @retrofit2.http.Path("id") transactionId: String
+    ): Response<RelayerTransactionStatus>
+
+    data class RelayerTransactionStatus(
+        @SerializedName("transaction_id")
+        val transactionId: String?,
+
+        @SerializedName("state")
+        val state: String?,
+
+        @SerializedName("transaction_hash")
+        val transactionHash: String?,
+
+        @SerializedName("error_msg")
+        val errorMsg: String?
     )
     
     /**

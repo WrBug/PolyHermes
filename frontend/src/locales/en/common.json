@@ -218,13 +218,17 @@
     "addressError": "Cannot derive address from private key",
     "addressErrorMnemonic": "Cannot derive address from mnemonic",
     "walletType": "Wallet Type",
-    "walletTypeHelp": "Web3 Wallet: Polymarket accounts connected via browser wallets like MetaMask\nMagic: Polymarket accounts logged in via email or social accounts (Google, Twitter, etc.)",
+    "walletTypeHelp": "Deposit Wallet: Polymarket accounts created since 2026 (new accounts exporting a private key from polymarket.com)\nWeb3 Wallet: Polymarket accounts connected via browser wallets like MetaMask\nMagic: legacy Polymarket accounts logged in via email or social accounts (Google, Twitter, etc.)",
     "loadingProxyOptions": "Loading proxy addresses and asset information...",
     "selectProxyOption": "Please select account type",
     "proxyOptionRequired": "Please select a proxy address",
     "proxyOption": {
+      "deposit": {
+        "description": "New-style Polymarket account (Deposit Wallet), default for accounts created since 2026",
+        "title": "Deposit Wallet Address"
+      },
       "magic": {
-        "description": "Email/Social Login Account (Magic)",
+        "description": "Legacy Email/Social Login Account (Magic)",
         "title": "Magic Proxy Address"
       },
       "safe": {
@@ -232,7 +236,7 @@
         "title": "Safe Proxy Address"
       },
       "proxyAddress": "Proxy Address",
-      "proxyAddressHelp": "The proxy address is the wallet address you actually use on Polymarket: Magic for email/social login accounts, Safe for browser wallet (e.g. MetaMask) accounts. Please select the one that matches how you log in to Polymarket.",
+      "proxyAddressHelp": "The proxy address is the funding wallet you actually use on Polymarket. Your Polymarket profile has been looked up and the matching option is tagged as recommended; pick the address shown on your Polymarket settings page.",
       "availableBalance": "Available Balance",
       "positionBalance": "Position Balance",
       "totalBalance": "Total Balance",
@@ -240,7 +244,9 @@
       "noAssets": "No Assets",
       "hasAssets": "Has Assets",
       "error": "Failed to fetch",
-      "select": "Select this proxy address"
+      "select": "Select this proxy address",
+      "recommended": "Used by Polymarket",
+      "notDeployed": "Not deployed"
     }
   },
   "accountSetup": {

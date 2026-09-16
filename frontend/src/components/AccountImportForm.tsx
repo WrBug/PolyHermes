@@ -16,6 +16,7 @@ import { useMediaQuery } from 'react-responsive'
 import { apiService } from '../services/api'
 import type { ProxyOption } from '../types'
 import AccountSetupGuideModal from './AccountSetupGuideModal'
+import { walletTypeColor, walletTypeLabel } from '../utils/walletType'
 
 type ImportType = 'privateKey' | 'mnemonic'
 
@@ -163,12 +164,14 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
         // 如果有选项，进入选择步骤
         if (options.length > 0) {
           setStep('select')
-          // 如果有资产，默认选择第一个有资产的选项
+          // 优先选择与 Polymarket 档案一致的推荐项，其次选择第一个有资产的选项，否则选第一个
+          const recommendedOption = options.find((opt: ProxyOption) => opt.recommended)
           const hasAssetsOption = options.find((opt: ProxyOption) => opt.hasAssets)
-          if (hasAssetsOption) {
+          if (recommendedOption) {
+            setSelectedProxyType(recommendedOption.walletType)
+          } else if (hasAssetsOption) {
             setSelectedProxyType(hasAssetsOption.walletType)
           } else {
-            // 否则选择第一个选项
             setSelectedProxyType(options[0].walletType)
           }
         } else {
@@ -488,9 +491,15 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
               </div>
             ) : (
               <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                <Alert
+                  type="info"
+                  showIcon
+                  message={t('accountImport.proxyOption.proxyAddressHelp')}
+                  style={{ fontSize: 12 }}
+                />
                 {proxyOptions.map((option) => {
                   const isSelected = selectedProxyType === option.walletType
-                  const typeLabel = option.walletType.toLowerCase() === 'magic' ? 'Magic' : 'Safe'
+                  const typeLabel = walletTypeLabel(option.walletType)
                   return (
                     <Card
                       key={option.walletType}
@@ -508,9 +517,19 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
                         <Space size="middle">
                           <Radio checked={isSelected} />
-                          <Tag color={option.walletType.toLowerCase() === 'magic' ? 'purple' : 'blue'}>
+                          <Tag color={walletTypeColor(option.walletType)}>
                             {typeLabel}
                           </Tag>
+                          {option.recommended && (
+                            <Tag color="gold" style={{ margin: 0 }}>
+                              {t('accountImport.proxyOption.recommended')}
+                            </Tag>
+                          )}
+                          {!option.error && option.proxyAddress && option.deployed === false && (
+                            <span style={{ color: 'var(--ant-color-text-secondary)', fontSize: 12 }}>
+                              {t('accountImport.proxyOption.notDeployed')}
+                            </span>
+                          )}
                           {option.hasAssets && (
                             <span style={{ color: '#52c41a', fontSize: 12 }}>
                               <CheckCircleOutlined /> {t('accountImport.proxyOption.hasAssets')}
@@ -539,7 +558,7 @@ const AccountImportForm: React.FC<AccountImportFormProps> = ({
                         )}
                       </div>
                       <div style={{ marginTop: 8, marginLeft: 28, fontSize: 12, color: 'var(--ant-color-text-secondary)', lineHeight: 1.5 }}>
-                        {t('accountImport.proxyOption.proxyAddressHelp')}
+                        {t(option.descriptionKey)}
                       </div>
                     </Card>
                   )

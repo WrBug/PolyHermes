@@ -11,6 +11,7 @@ import com.wrbug.polymarketbot.constants.PolymarketConstants
 import com.wrbug.polymarketbot.dto.PositionDto
 import com.wrbug.polymarketbot.dto.WalletBalanceResponse
 import com.wrbug.polymarketbot.enums.WalletType
+import com.wrbug.polymarketbot.util.PolymarketWalletDerivation
 import com.wrbug.polymarketbot.util.EthereumUtils
 import com.wrbug.polymarketbot.util.RetrofitFactory
 import com.wrbug.polymarketbot.util.createClient
@@ -93,12 +94,13 @@ class BlockchainService(
      * 获取 Polymarket 代理钱包地址
      * 根据指定的钱包类型返回对应的代理地址
      *
-     * Polymarket 有两种代理钱包类型：
-     * 1. Magic Proxy（邮箱/OAuth 登录用户）- 使用 CREATE2 计算地址
+     * Polymarket 有三种代理钱包类型：
+     * 1. Magic Proxy（邮箱/OAuth 登录的旧版账户）- 使用 CREATE2 计算地址
      * 2. Safe Proxy（MetaMask 钱包用户）- 通过合约调用获取地址
+     * 3. Deposit Wallet（新版账户）- DepositWalletFactory CREATE2 计算地址，见 [resolveDepositWalletAddress]
      *
      * @param walletAddress 用户的钱包地址（EOA）
-     * @param walletType 钱包类型：MAGIC（默认）或 SAFE
+     * @param walletType 钱包类型：MAGIC（默认）、SAFE 或 DEPOSIT
      * @return 代理钱包地址
      */
     suspend fun getProxyAddress(walletAddress: String, walletType: WalletType = WalletType.MAGIC): Result<String> {
@@ -121,10 +123,90 @@ class BlockchainService(
                     logger.debug("使用 Magic Proxy 地址: $magicProxyAddress")
                     Result.success(magicProxyAddress)
                 }
+                WalletType.DEPOSIT -> {
+                    val depositWalletAddress = resolveDepositWalletAddress(walletAddress)
+                    logger.debug("使用 Deposit Wallet 地址: $depositWalletAddress")
+                    Result.success(depositWalletAddress)
+                }
             }
         } catch (e: Exception) {
             logger.error("获取代理地址失败: ${e.message}", e)
             Result.failure(e)
+        }
+    }
+
+    /**
+     * 计算 Deposit Wallet 地址
+     * 参考 ts-sdk wallet.ts deriveCurrentDepositWalletAddress：
+     * 调用工厂 beacon() 判断当前工厂类型，非零地址使用 beacon 代理推导，否则使用 UUPS 代理推导；
+     * RPC 不可用时回退为 beacon 推导（当前生产工厂）。
+     */
+    suspend fun resolveDepositWalletAddress(walletAddress: String): String {
+        val useBeacon = try {
+            isBeaconDepositWalletFactory()
+        } catch (e: Exception) {
+            logger.warn("查询 DepositWalletFactory beacon 失败，默认按 beacon 推导: ${e.message}")
+            true
+        }
+        return if (useBeacon) {
+            PolymarketWalletDerivation.deriveBeaconDepositWalletAddress(walletAddress)
+        } else {
+            PolymarketWalletDerivation.deriveUupsDepositWalletAddress(walletAddress)
+        }
+    }
+
+    private suspend fun isBeaconDepositWalletFactory(): Boolean {
+        val rpcRequest = JsonRpcRequest(
+            method = "eth_call",
+            params = listOf(
+                mapOf(
+                    "to" to PolymarketWalletDerivation.DEPOSIT_WALLET_FACTORY,
+                    "data" to PolymarketWalletDerivation.FACTORY_BEACON_SELECTOR
+                ),
+                "latest"
+            )
+        )
+        val response = polygonRpcApi.call(rpcRequest)
+        if (!response.isSuccessful || response.body() == null) {
+            throw Exception("RPC 请求失败: ${response.code()} ${response.message()}")
+        }
+        val body = response.body()!!
+        if (body.error != null) {
+            // 合约 revert（旧版工厂无 beacon()）视为非 beacon
+            return false
+        }
+        val hex = body.result?.asString ?: return false
+        if (hex.removePrefix("0x").length < 64) return false
+        val beacon = EthereumUtils.decodeAddress(hex)
+        return beacon.removePrefix("0x").any { it != '0' }
+    }
+
+    /**
+     * 查询 Deposit Wallet 的 owner()（仅已部署钱包有效）
+     * @return owner 地址（小写）；未部署或调用失败返回 null
+     */
+    suspend fun getDepositWalletOwner(depositWallet: String): String? {
+        return try {
+            val rpcRequest = JsonRpcRequest(
+                method = "eth_call",
+                params = listOf(
+                    mapOf(
+                        "to" to depositWallet,
+                        "data" to EthereumUtils.getFunctionSelector("owner()")
+                    ),
+                    "latest"
+                )
+            )
+            val response = polygonRpcApi.call(rpcRequest)
+            if (!response.isSuccessful || response.body() == null) return null
+            val body = response.body()!!
+            if (body.error != null) return null
+            val hex = body.result?.asString ?: return null
+            if (hex.removePrefix("0x").length < 64) return null
+            EthereumUtils.decodeAddress(hex).lowercase()
+        } catch (e: Exception) {
+            logger.warn("查询 Deposit Wallet owner 失败: ${e.message}")
+            null
         }
     }
 
@@ -679,13 +761,13 @@ class BlockchainService(
     }
 
     /**
-     * 批量赎回多个市场的仓位（使用 MultiSend 合并为一笔交易）
-     * 仅支持 Safe 钱包类型，Magic 钱包不支持 MultiSend
+     * 批量赎回多个市场的仓位（合并为一笔交易）
+     * Safe 使用 MultiSend，Deposit Wallet 使用原生批量调用；Magic 钱包不支持
      *
      * @param privateKey 私钥（原始钱包的私钥，用于签名交易）
-     * @param proxyAddress 代理地址（Safe 代理钱包地址）
+     * @param proxyAddress 代理地址（Safe 或 Deposit Wallet 地址）
      * @param redeemRequests 赎回请求列表，每个元素是 (conditionId, indexSets, isNegRisk)
-     * @param walletType 钱包类型：仅支持 SAFE
+     * @param walletType 钱包类型：SAFE 或 DEPOSIT
      * @return 交易哈希
      */
     suspend fun redeemPositionsBatch(
@@ -699,7 +781,7 @@ class BlockchainService(
                 return Result.failure(IllegalArgumentException("redeemRequests 不能为空"))
             }
 
-            // Magic 钱包不支持 MultiSend
+            // Magic 钱包不支持 MultiSend（Deposit Wallet 原生支持批量调用，Safe 使用 MultiSend）
             if (walletType == WalletType.MAGIC) {
                 return Result.failure(IllegalArgumentException("Magic 钱包不支持 MultiSend 批量赎回，请使用逐笔赎回"))
             }
@@ -723,12 +805,10 @@ class BlockchainService(
                 relayClientService.createRedeemTx(conditionId, indexSets, isNegRisk)
             }
 
-            // 使用 MultiSend 合并所有交易
-            val multiSendTx = relayClientService.createMultiSendTx(redeemTxs)
-
             logger.info("批量赎回: 合并 ${redeemRequests.size} 个市场为一笔交易")
 
-            relayClientService.execute(privateKey, proxyAddress, multiSendTx, walletType)
+            // Safe 使用 MultiSend 合并，Deposit Wallet 使用原生 calls[] 批量提交
+            relayClientService.executeCalls(privateKey, proxyAddress, redeemTxs, walletType)
         } catch (e: Exception) {
             logger.error("批量赎回仓位失败: ${e.message}", e)
             Result.failure(e)
@@ -929,8 +1009,8 @@ class BlockchainService(
                     }
                 )
             } else {
-                val safeTx = relayClientService.createMultiSendTx(listOf(approveTx, wrapTx))
-                val executeResult = relayClientService.execute(privateKey, proxyAddress, safeTx, walletType)
+                // SAFE 走 MultiSend，DEPOSIT 走原生批量调用
+                val executeResult = relayClientService.executeCalls(privateKey, proxyAddress, listOf(approveTx, wrapTx), walletType)
                 executeResult.fold(
                     onSuccess = { txHash ->
                         logger.info("USDC.e → pUSD wrap 成功: txHash=$txHash")
